@@ -1,0 +1,356 @@
+{
+  "tables": [
+    {
+      "id": "tjk16b3x45t",
+      "sdkName": "kegiatanHarian",
+      "name": "Kegiatan Harian",
+      "primaryFieldId": "ffBzRNKknMU",
+      "fields": [
+        {
+          "id": "ffBzRNKknMU",
+          "sdkName": "idKegiatan",
+          "definition": {
+            "name": "ID Kegiatan",
+            "type": "autonumber",
+            "template": {}
+          }
+        },
+        {
+          "id": "fr4HpUFenQG",
+          "sdkName": "namaPelapor",
+          "definition": {
+            "name": "Nama Pelapor",
+            "type": "single_line_text",
+            "template": {
+              "defaultValue": "A. Zainudin Sholeh, S.A.P."
+            }
+          }
+        },
+        {
+          "id": "fr8gTf9Gd33",
+          "sdkName": "nip",
+          "definition": {
+            "name": "NIP",
+            "type": "single_line_text",
+            "template": {
+              "defaultValue": "198810082026221001"
+            }
+          }
+        },
+        {
+          "id": "frAN74ZuEkH",
+          "sdkName": "tanggal",
+          "definition": {
+            "name": "Tanggal",
+            "type": "date",
+            "template": {
+              "dateFormat": "european"
+            }
+          }
+        },
+        {
+          "id": "f66JnQmpFcq",
+          "sdkName": "waktuMulai",
+          "definition": {
+            "name": "Waktu Mulai",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fapnNz7buPp",
+          "sdkName": "waktuSelesai",
+          "definition": {
+            "name": "Waktu Selesai",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f3dAnq1KHUf",
+          "sdkName": "kataKunciKegiatan",
+          "definition": {
+            "name": "Kata Kunci Kegiatan",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f8DKb96pHJD",
+          "sdkName": "deskripsiKegiatan",
+          "definition": {
+            "name": "Deskripsi Kegiatan",
+            "type": "long_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f5URDptiTFm",
+          "sdkName": "rhkKategori",
+          "definition": {
+            "name": "RHK Kategori",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f1bodpK31go",
+          "sdkName": "fotoKegiatan",
+          "definition": {
+            "name": "Foto Kegiatan",
+            "type": "attachments",
+            "template": {}
+          }
+        },
+        {
+          "id": "ffKN8uwAquX",
+          "sdkName": "tandaTangan",
+          "definition": {
+            "name": "Tanda Tangan",
+            "type": "attachments",
+            "template": {}
+          }
+        },
+        {
+          "id": "f9z3ENcymwP",
+          "sdkName": "unitKerja",
+          "definition": {
+            "name": "Unit Kerja",
+            "type": "single_line_text",
+            "template": {
+              "defaultValue": "SRMA 24 KEDIRI"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "tt9kWLoNGwr",
+      "sdkName": "laporanRhk",
+      "name": "Laporan RHK",
+      "primaryFieldId": "fxdkfts69if",
+      "fields": [
+        {
+          "id": "fxdkfts69if",
+          "sdkName": "idLaporan",
+          "definition": {
+            "name": "ID Laporan",
+            "type": "autonumber",
+            "template": {}
+          }
+        },
+        {
+          "id": "fpyXfkBtcZz",
+          "sdkName": "judulLaporan",
+          "definition": {
+            "name": "Judul Laporan",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f6PTSn7MN5C",
+          "sdkName": "rhkNomor",
+          "definition": {
+            "name": "RHK Nomor",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fnYM1quDfUs",
+          "sdkName": "namaPelapor",
+          "definition": {
+            "name": "Nama Pelapor",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fex4cqS6xUf",
+          "sdkName": "nip",
+          "definition": {
+            "name": "NIP",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f7KjBtzr3ZP",
+          "sdkName": "tanggalMulai",
+          "definition": {
+            "name": "Tanggal Mulai",
+            "type": "date",
+            "template": {
+              "dateFormat": "european"
+            }
+          }
+        },
+        {
+          "id": "fk8Ci2mTM3c",
+          "sdkName": "tanggalSelesai",
+          "definition": {
+            "name": "Tanggal Selesai",
+            "type": "date",
+            "template": {
+              "dateFormat": "european"
+            }
+          }
+        },
+        {
+          "id": "fvn6uZCt5YG",
+          "sdkName": "isiLaporan",
+          "definition": {
+            "name": "Isi Laporan",
+            "type": "long_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fn5ep5NUjNv",
+          "sdkName": "pdfUrl",
+          "definition": {
+            "name": "PDF URL",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "f7fQkA8Nwzn",
+          "sdkName": "dibuatPada",
+          "definition": {
+            "name": "Dibuat Pada",
+            "type": "datetime",
+            "template": {
+              "timezone": "",
+              "dateFormat": "local",
+              "timeFormat": "12h",
+              "displayTimeZone": false
+            }
+          }
+        },
+        {
+          "id": "ft5gnCxdNm6",
+          "sdkName": "tandaTangan",
+          "definition": {
+            "name": "Tanda Tangan",
+            "type": "attachments",
+            "template": {}
+          }
+        }
+      ]
+    },
+    {
+      "id": "tvSnddoZ7YC",
+      "sdkName": "riwayatFile",
+      "name": "Riwayat File",
+      "primaryFieldId": "fat5aF63nvn",
+      "fields": [
+        {
+          "id": "fat5aF63nvn",
+          "sdkName": "idFile",
+          "definition": {
+            "name": "ID File",
+            "type": "autonumber",
+            "template": {}
+          }
+        },
+        {
+          "id": "fw9KRUyZmun",
+          "sdkName": "namaFile",
+          "definition": {
+            "name": "Nama File",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fuwqZ36CEkd",
+          "sdkName": "jenisLaporan",
+          "definition": {
+            "name": "Jenis Laporan",
+            "type": "single_select",
+            "template": {
+              "options": [
+                {
+                  "value": "fq5U",
+                  "label": "Kinerja Harian",
+                  "color": "purple"
+                },
+                {
+                  "value": "aXoR",
+                  "label": "Laporan RHK",
+                  "color": "orange"
+                }
+              ],
+              "disableColors": false
+            }
+          }
+        },
+        {
+          "id": "fdZLG312dXo",
+          "sdkName": "namaPelapor",
+          "definition": {
+            "name": "Nama Pelapor",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fpJQ2KkV6BB",
+          "sdkName": "pdfUrl",
+          "definition": {
+            "name": "PDF URL",
+            "type": "single_line_text",
+            "template": {}
+          }
+        },
+        {
+          "id": "fm37ko8HBxd",
+          "sdkName": "dibuatPada",
+          "definition": {
+            "name": "Dibuat Pada",
+            "type": "datetime",
+            "template": {
+              "timezone": "",
+              "dateFormat": "local",
+              "timeFormat": "12h",
+              "displayTimeZone": false
+            }
+          }
+        },
+        {
+          "id": "fhJAh8DoC1n",
+          "sdkName": "tanggalMulai",
+          "definition": {
+            "name": "Tanggal Mulai",
+            "type": "date",
+            "template": {
+              "dateFormat": "local"
+            }
+          }
+        },
+        {
+          "id": "fb3zg8dyX6k",
+          "sdkName": "tanggalSelesai",
+          "definition": {
+            "name": "Tanggal Selesai",
+            "type": "date",
+            "template": {
+              "dateFormat": "local"
+            }
+          }
+        },
+        {
+          "id": "fup7DLLQSoY",
+          "sdkName": "rhkNomor",
+          "definition": {
+            "name": "RHK Nomor",
+            "type": "single_line_text",
+            "template": {}
+          }
+        }
+      ]
+    }
+  ]
+}

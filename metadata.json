@@ -1,0 +1,8 @@
+{
+  "name": "Bimbingan dan Pembinaan Peserta Didik 24 Kediri",
+  "description": "Sistem pelaporan kinerja harian dan RHK wali asuh Sekolah Rakyat Terintegrasi 1 Kabupaten Kediri beserta jadwal shift wali asuh.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

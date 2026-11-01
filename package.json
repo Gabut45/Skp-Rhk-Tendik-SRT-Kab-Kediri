@@ -1,0 +1,24 @@
+{
+  "name": "bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "start": "node --experimental-strip-types server.ts",
+    "preview": "npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "lint": "npm run build"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "@google/genai": "^2.32.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
+    "typescript": "~5.7.3",
+    "vite": "^8.1.0",
+    "zitejs": "0.9.148"
+  }
+}

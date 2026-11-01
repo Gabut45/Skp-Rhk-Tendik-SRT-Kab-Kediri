@@ -1,0 +1,12 @@
+{
+  "accessMode": "external",
+  "authentication": {
+    "signup": "disabled",
+    "authenticationMethods": {
+      "emailSignIn": true,
+      "googleSignIn": true,
+      "sso": false
+    }
+  },
+  "id": "j9anpelbvb"
+}

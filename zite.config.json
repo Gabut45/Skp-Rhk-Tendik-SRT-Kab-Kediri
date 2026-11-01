@@ -1,0 +1,12 @@
+{
+  "project": {
+    "name": "Bimbingan dan Pembinaan Peserta Didik 24 Kediri",
+    "basePublicIdentifier": "3430f61a52e9c704"
+  },
+  "integrations": {
+    "github": {
+      "type": "github",
+      "connectionId": "svc_574299"
+    }
+  }
+}
