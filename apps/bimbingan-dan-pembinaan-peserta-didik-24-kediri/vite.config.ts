@@ -2,7 +2,6 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { ziteId } from 'zitejs/vite-plugin';
-import { insertHtml, h } from 'vite-plugin-insert-html';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { geminiServerPlugin } from './src/server/vitePluginGemini.ts';
