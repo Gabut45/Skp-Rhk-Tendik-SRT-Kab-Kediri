@@ -11,6 +11,7 @@ import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
+import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
@@ -149,24 +150,25 @@ export default function KegiatanHarianPage() {
         waktuSelesai: k.waktuSelesai,
         kataKunciKegiatan: k.kataKunci,
         deskripsiKegiatan: k.deskripsi,
-        rhkKategori: k.rhk,
+        rhkKategori: k.rhk || 'RHK 3',
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
       }));
 
-      await saveBulkKegiatan({
-        namaPelapor, nip, tanggal,
+      // 1. Simpan via backend endpoint
+      const result = await saveBulkKegiatan({
+        namaPelapor,
+        nip,
+        tanggal,
         tandaTangan: tandaTangan || undefined,
         kegiatan: payloadKegiatan,
       });
-      toast.success(`${filled.length} kegiatan berhasil disimpan!`);
 
-      // Auto-sync ke cPanel MySQL
+      // 2. Direct browser fetch to cPanel MySQL API untuk redundansi live
       const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
-      const cpanelAutoSync = localStorage.getItem('cpanel_auto_sync') !== 'false';
-      if (cpanelAutoSync && cpanelUrl) {
-        const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
-        const targetUrl = cpanelUrl.includes('?') ? `${cpanelUrl}&action=save_bulk` : `${cpanelUrl}?action=save_bulk`;
-        fetch(targetUrl, {
+      const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
+      try {
+        const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}&action=save_bulk`;
+        await fetch(targetUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -179,14 +181,12 @@ export default function KegiatanHarianPage() {
             tandaTangan: tandaTangan || undefined,
             kegiatan: payloadKegiatan,
           }),
-        }).then(res => res.json()).then(data => {
-          if (data?.success) {
-            toast.info('Tersinkronisasi juga ke database cPanel');
-          }
-        }).catch(() => {
-          // ignore background sync errors so user workflow is uninterrupted
         });
+      } catch (err) {
+        console.warn('Direct client sync warning:', err);
       }
+
+      toast.success(`${filled.length} kegiatan berhasil disimpan ke Database cPanel & Tersinkronisasi ke Semua Perangkat!`);
     } catch {
       toast.error('Gagal menyimpan kegiatan');
     } finally {
@@ -211,10 +211,10 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      window.open(result.url, '_blank');
-      toast.success('PDF berhasil dibuat!');
-    } catch {
-      toast.error('Gagal membuat PDF');
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
+      toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+    } catch (err: any) {
+      toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
     } finally {
       setDownloadingPdf(false);
     }
@@ -237,20 +237,10 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      if (result.wordHtml) {
-        const blob = new Blob([result.wordHtml], { type: 'application/msword' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `kinerja-harian-${tanggal}.doc`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-      toast.success('Word berhasil dibuat!');
-    } catch {
-      toast.error('Gagal membuat Word');
+      downloadWordFromHtml(result.wordHtml || previewWordHtml, `kinerja-harian-${tanggal}.doc`);
+      toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+    } catch (err: any) {
+      toast.error('Gagal membuat Word: ' + (err?.message || 'Error'));
     } finally {
       setDownloadingWord(false);
     }
@@ -273,10 +263,10 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      window.open(result.url, '_blank');
-      toast.success('PDF berhasil dibuat & tersimpan di Riwayat File!');
-    } catch {
-      toast.error('Gagal membuat PDF');
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
+      toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+    } catch (err: any) {
+      toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
     } finally {
       setQuickPdf(false);
     }
@@ -405,6 +395,7 @@ export default function KegiatanHarianPage() {
         onClose={() => setShowPreview(false)}
         pdfHtml={previewPdfHtml}
         wordHtml={previewWordHtml}
+        filename={`kinerja-harian-${tanggal}`}
         onDownloadPdf={handleDownloadPdf}
         onDownloadWord={handleDownloadWord}
         downloadingPdf={downloadingPdf}

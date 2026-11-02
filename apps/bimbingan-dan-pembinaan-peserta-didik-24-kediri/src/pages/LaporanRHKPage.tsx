@@ -4,7 +4,7 @@ import { Input } from '@project/components/ui/input';
 import { Button } from '@project/components/ui/button';
 import { Label } from '@project/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@project/components/ui/select';
-import { Eye, Loader2, Upload, X } from 'lucide-react';
+import { Eye, Loader2, Upload, X, FileDown, FileText } from 'lucide-react';
 import { generatePdfRhk, previewRhk } from 'zitejs/api';
 import { uploadFile } from 'zitejs/upload';
 import { toast } from 'sonner';
@@ -12,6 +12,7 @@ import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
+import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 export default function LaporanRHKPage() {
   const now = new Date();
@@ -76,7 +77,10 @@ export default function LaporanRHKPage() {
     }
   };
 
+  const reportFilename = `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}`;
+
   const handleDownloadPdf = async () => {
+    if (!rhkNomor) return toast.error('Pilih RHK terlebih dahulu');
     setDownloadingPdf(true);
     try {
       const result = await generatePdfRhk({
@@ -85,16 +89,17 @@ export default function LaporanRHKPage() {
         tandaTangan: tandaTangan || undefined,
         format: 'pdf',
       });
-      window.open(result.url, '_blank');
-      toast.success('PDF berhasil dibuat!');
-    } catch {
-      toast.error('Gagal membuat PDF');
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${reportFilename}.pdf`);
+      toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+    } catch (err: any) {
+      toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
     } finally {
       setDownloadingPdf(false);
     }
   };
 
   const handleDownloadWord = async () => {
+    if (!rhkNomor) return toast.error('Pilih RHK terlebih dahulu');
     setDownloadingWord(true);
     try {
       const result = await generatePdfRhk({
@@ -103,20 +108,10 @@ export default function LaporanRHKPage() {
         tandaTangan: tandaTangan || undefined,
         format: 'word',
       });
-      if (result.wordHtml) {
-        const blob = new Blob([result.wordHtml], { type: 'application/msword' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `laporan-rhk${rhkNomor}-${tanggalMulai}-${tanggalSelesai}.doc`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-      toast.success('Word berhasil dibuat!');
-    } catch {
-      toast.error('Gagal membuat Word');
+      downloadWordFromHtml(result.wordHtml || previewWordHtml, `${reportFilename}.doc`);
+      toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+    } catch (err: any) {
+      toast.error('Gagal membuat Word: ' + (err?.message || 'Error'));
     } finally {
       setDownloadingWord(false);
     }
@@ -213,16 +208,27 @@ export default function LaporanRHKPage() {
         </CardContent>
       </Card>
 
-      <Button onClick={handlePreview} disabled={previewing} className="w-full gap-2 h-12 text-base">
-        {previewing ? <Loader2 size={18} className="animate-spin" /> : <Eye size={18} />}
-        Preview Laporan RHK
-      </Button>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Button onClick={handlePreview} disabled={previewing} variant="outline" className="gap-2 h-12 text-sm sm:text-base">
+          {previewing ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+          Preview Laporan
+        </Button>
+        <Button onClick={handleDownloadPdf} disabled={downloadingPdf} className="gap-2 h-12 text-sm sm:text-base bg-primary hover:bg-primary/90 text-primary-foreground">
+          {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+          Unduh PDF (.pdf)
+        </Button>
+        <Button onClick={handleDownloadWord} disabled={downloadingWord} variant="secondary" className="gap-2 h-12 text-sm sm:text-base border">
+          {downloadingWord ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />}
+          Unduh Word (.doc)
+        </Button>
+      </div>
 
       <PreviewDialog
         open={showPreview}
         onClose={() => setShowPreview(false)}
         pdfHtml={previewPdfHtml}
         wordHtml={previewWordHtml}
+        filename={reportFilename}
         onDownloadPdf={handleDownloadPdf}
         onDownloadWord={handleDownloadWord}
         downloadingPdf={downloadingPdf}

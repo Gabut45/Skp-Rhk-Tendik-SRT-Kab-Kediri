@@ -17,31 +17,41 @@ import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
 type Activity = GetKegiatanOutputType['records'][0];
 
 export default function DaftarKegiatanPage() {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const startOfMonth = `${year}-${month}-01`;
+  const today = now.toISOString().split('T')[0];
+
   const navigate = useNavigate();
   const [records, setRecords] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tanggalMulai, setTanggalMulai] = useState(today);
+  const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
   const [tanggalSelesai, setTanggalSelesai] = useState(today);
-  const [namaPelapor, setNamaPelapor] = useState(DEFAULT_PELAPOR.nama);
+  const [namaPelapor, setNamaPelapor] = useState('Semua Pelapor');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setSelectedIds(new Set());
     try {
-      // 1. Data dari storage lokal
-      const localData = await getKegiatan({ tanggalMulai, tanggalSelesai, namaPelapor });
-      let combined = [...localData.records];
+      // 1. Data dari storage lokal & backend cPanel merge
+      const data = await getKegiatan({
+        tanggalMulai: tanggalMulai || undefined,
+        tanggalSelesai: tanggalSelesai || undefined,
+        namaPelapor: (namaPelapor && namaPelapor !== 'Semua Pelapor') ? namaPelapor : undefined,
+      });
 
-      // 2. Data dari cPanel MySQL
+      // 2. Fetch cPanel langsung untuk memastikan data paling segar
       const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+      let combined = [...data.records];
+
       if (cpanelUrl) {
         try {
           const params = new URLSearchParams({ action: 'get_kegiatan' });
           if (tanggalMulai) params.append('tanggalMulai', tanggalMulai);
           if (tanggalSelesai) params.append('tanggalSelesai', tanggalSelesai);
-          if (namaPelapor) params.append('namaPelapor', namaPelapor);
+          if (namaPelapor && namaPelapor !== 'Semua Pelapor') params.append('namaPelapor', namaPelapor);
 
           const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
           const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}${params.toString()}`;
@@ -54,7 +64,7 @@ export default function DaftarKegiatanPage() {
             const json = await res.json();
             if (json.success && Array.isArray(json.records)) {
               const remoteRecords: Activity[] = json.records.map((r: any) => ({
-                id: r.id || `keg_${r.id_kegiatan}`,
+                id: String(r.id || `keg_${r.id_kegiatan}`),
                 namaPelapor: r.nama_pelapor || r.namaPelapor,
                 nip: r.nip,
                 tanggal: r.tanggal,
@@ -68,20 +78,39 @@ export default function DaftarKegiatanPage() {
                 unitKerja: r.unit_kerja || r.unitKerja,
               }));
 
-              // Gabungkan tanpa duplikat ID
-              const remoteMap = new Map(remoteRecords.map(r => [r.id, r]));
-              combined.forEach(loc => {
-                if (!remoteMap.has(loc.id)) {
-                  remoteRecords.push(loc);
-                }
-              });
-              combined = remoteRecords;
+              const map = new Map<string, Activity>();
+              for (const r of remoteRecords) map.set(r.id, r);
+              for (const r of combined) {
+                if (!map.has(r.id)) map.set(r.id, r);
+              }
+              combined = Array.from(map.values());
             }
           }
         } catch (cpanelErr) {
-          console.warn('Gagal memuat cPanel, menggunakan data lokal:', cpanelErr);
+          console.warn('Direct cPanel fetch fallback:', cpanelErr);
         }
       }
+
+      // Filter out manually deleted IDs
+      try {
+        const deletedRaw = localStorage.getItem('cpanel_deleted_ids');
+        if (deletedRaw) {
+          const deletedSet = new Set(JSON.parse(deletedRaw));
+          combined = combined.filter(r => !deletedSet.has(r.id));
+        }
+      } catch {
+        // ignore
+      }
+
+      // Sort by date DESC then time DESC for comfortable overview
+      combined.sort((a, b) => {
+        const dateA = a.tanggal || '';
+        const dateB = b.tanggal || '';
+        if (dateA !== dateB) return dateB.localeCompare(dateA);
+        const timeA = a.waktuMulai || '';
+        const timeB = b.waktuMulai || '';
+        return timeB.localeCompare(timeA);
+      });
 
       setRecords(combined);
     } catch {
@@ -96,6 +125,19 @@ export default function DaftarKegiatanPage() {
   const handleDelete = async (id: string) => {
     try {
       await deleteKegiatan({ id });
+
+      // Mark in local deleted store
+      try {
+        const deletedRaw = localStorage.getItem('cpanel_deleted_ids');
+        const deletedArr: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+        if (!deletedArr.includes(id)) {
+          deletedArr.push(id);
+          localStorage.setItem('cpanel_deleted_ids', JSON.stringify(deletedArr));
+        }
+      } catch {
+        // ignore
+      }
+
       setRecords(prev => prev.filter(r => r.id !== id));
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
 
@@ -165,8 +207,16 @@ export default function DaftarKegiatanPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-foreground">Daftar Kegiatan Harian</h2>
-          <p className="text-sm text-muted-foreground">Lihat dan kelola semua kegiatan yang sudah diinput</p>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-2xl font-bold text-foreground">Daftar Kegiatan Harian</h2>
+            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 gap-1.5 py-1 px-2.5 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Database MySQL cPanel (game.gabutgame.my.id)
+            </Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Lihat, kelola, dan salin kegiatan yang sudah diinput dari semua perangkat secara langsung
+          </p>
         </div>
         {selectedIds.size > 0 && (
           <Button onClick={handleCopyToInput} className="gap-2">
@@ -182,7 +232,8 @@ export default function DaftarKegiatanPage() {
               value={namaPelapor}
               onChange={(nama) => setNamaPelapor(nama)}
               label="Pelapor"
-              className="min-w-[200px]"
+              className="min-w-[240px]"
+              allowAll
             />
             <div className="space-y-1">
               <Label className="text-xs">Dari Tanggal</Label>

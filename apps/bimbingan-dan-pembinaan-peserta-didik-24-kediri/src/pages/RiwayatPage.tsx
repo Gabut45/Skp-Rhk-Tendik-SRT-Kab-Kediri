@@ -9,11 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@project/components/ui/label';
 import { Textarea } from '@project/components/ui/textarea';
 import { Input } from '@project/components/ui/input';
-import { Trash2, ExternalLink, Loader2, Pencil, Copy, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, ExternalLink, Loader2, Pencil, Copy, Search, X, ArrowUpDown, ArrowUp, ArrowDown, FileDown, FileText, Eye } from 'lucide-react';
 import { getRiwayat, deleteRiwayat, getKegiatan, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
+import PreviewDialog from '@/components/PreviewDialog';
+import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 type FileRecord = GetRiwayatOutputType['records'][0];
 type Activity = GetKegiatanOutputType['records'][0];
@@ -43,6 +45,67 @@ export default function RiwayatPage() {
   const [editRecord, setEditRecord] = useState<FileRecord | null>(null);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
   const [loadingEdit, setLoadingEdit] = useState(false);
+
+  // Preview and direct download dialog state
+  const [previewState, setPreviewState] = useState<{
+    open: boolean;
+    title: string;
+    pdfHtml: string;
+    wordHtml: string;
+    filename: string;
+  } | null>(null);
+
+  const getHtmlFromRecord = async (r: FileRecord): Promise<string> => {
+    if (!r.pdfUrl) throw new Error('URL file tidak tersedia');
+    if (r.pdfUrl.startsWith('data:text/html;charset=utf-8,')) {
+      return decodeURIComponent(r.pdfUrl.slice('data:text/html;charset=utf-8,'.length));
+    }
+    if (r.pdfUrl.startsWith('data:')) {
+      const commaIndex = r.pdfUrl.indexOf(',');
+      return decodeURIComponent(r.pdfUrl.slice(commaIndex + 1));
+    }
+    const res = await fetch(r.pdfUrl);
+    return await res.text();
+  };
+
+  const handleViewPreview = async (r: FileRecord) => {
+    try {
+      const html = await getHtmlFromRecord(r);
+      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      setPreviewState({
+        open: true,
+        title: r.namaFile || 'Preview Laporan',
+        pdfHtml: html,
+        wordHtml: html,
+        filename: fname,
+      });
+    } catch (err: any) {
+      toast.error('Gagal membuka preview: ' + (err?.message || 'Error'));
+    }
+  };
+
+  const handleDownloadPdfRecord = async (r: FileRecord) => {
+    try {
+      toast.info('Menyiapkan unduhan PDF...');
+      const html = await getHtmlFromRecord(r);
+      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      await downloadPdfFromHtml(html, `${fname}.pdf`);
+      toast.success('File PDF berhasil diunduh!');
+    } catch (err: any) {
+      toast.error('Gagal mengunduh PDF: ' + (err?.message || 'Error'));
+    }
+  };
+
+  const handleDownloadWordRecord = async (r: FileRecord) => {
+    try {
+      const html = await getHtmlFromRecord(r);
+      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      downloadWordFromHtml(html, `${fname}.doc`);
+      toast.success('File Word (.doc) berhasil diunduh!');
+    } catch (err: any) {
+      toast.error('Gagal mengunduh Word: ' + (err?.message || 'Error'));
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -235,18 +298,47 @@ export default function RiwayatPage() {
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">{formatDateTime(r.dibuatPada)}</TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           {r.pdfUrl && (
-                            <Button variant="ghost" size="sm" onClick={() => window.open(r.pdfUrl!, '_blank')}>
-                              <ExternalLink size={14} />
-                            </Button>
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewPreview(r)}
+                                title="Buka Preview & Cetak Laporan"
+                                className="h-8 gap-1 px-2.5 text-xs font-medium"
+                              >
+                                <Eye size={13} />
+                                <span>Preview</span>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadPdfRecord(r)}
+                                title="Unduh File PDF (.pdf)"
+                                className="h-8 gap-1 px-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <FileDown size={13} />
+                                <span>PDF</span>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadWordRecord(r)}
+                                title="Unduh File Word (.doc)"
+                                className="h-8 gap-1 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <FileText size={13} />
+                                <span>Word</span>
+                              </Button>
+                            </>
                           )}
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="Edit & Salin">
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="Edit & Salin" className="h-8 w-8 p-0">
                             <Pencil size={14} />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus File">
                                 <Trash2 size={14} className="text-destructive" />
                               </Button>
                             </AlertDialogTrigger>
@@ -354,6 +446,17 @@ export default function RiwayatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {previewState && (
+        <PreviewDialog
+          open={previewState.open}
+          onClose={() => setPreviewState(null)}
+          pdfHtml={previewState.pdfHtml}
+          wordHtml={previewState.wordHtml}
+          filename={previewState.filename}
+          title={previewState.title}
+        />
+      )}
     </div>
   );
 }

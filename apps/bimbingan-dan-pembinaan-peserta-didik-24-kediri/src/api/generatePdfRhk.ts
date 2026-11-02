@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { zite } from 'zitejs/db';
 import { createEndpoint } from 'zitejs/backend';
 import { ZitePdf } from 'zitejs/pdf';
+import { LOGO_BASE64 } from '@/lib/assets-base64';
 
-const LOGO_URL = 'https://images.fillout.com/orgid-722247/flowpublicid-j9anpelbvb/widgetid-default/mWbhCCsXJ6gShTNzJpdBuZ/pasted-image-1782612017460-iq4f615d.png';
+const LOGO_URL = LOGO_BASE64;
 
 const RHK_INFO: Record<string, { judulLaporan: string; maksudTujuan: string; ruangLingkup: string }> = {
   '1': { judulLaporan: 'BIMBINGAN DAN PENGAJARAN KEPADA SISWA PESERTA DIDIK', maksudTujuan: 'Bimbingan dan pengajaran kepada siswa peserta didik SRMA 24 Kediri bertujuan memberikan pendampingan belajar yang terarah dan kondusif, menumbuhkan kedisiplinan, kemandirian, dan tanggungjawab siswa dalam menciptakan lingkungan asrama yang baik.', ruangLingkup: 'Kegiatan bimbingan dan pengajaran yang dilaksanakan di SRMA 24 Kediri meliputi sharing bersama, refleksi malam setelah kegiatan, pendampingan dan bimbingan belajar yang dilaksanakan oleh wali asuh dan wali asrama yang diikuti oleh seluruh siswa SRMA 24 Kediri.' },
@@ -102,6 +103,47 @@ function buildDocTable(records: any[]): string {
   </table>`;
 }
 
+const DEFAULT_CPANEL_URL = 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+
+async function fetchCpanelForRhk(params: { tanggalMulai: string; tanggalSelesai: string; namaPelapor: string; rhkLabel: string }) {
+  try {
+    const query = new URLSearchParams({
+      action: 'get_kegiatan',
+      tanggalMulai: params.tanggalMulai,
+      tanggalSelesai: params.tanggalSelesai,
+      namaPelapor: params.namaPelapor,
+    });
+    const res = await fetch(`${DEFAULT_CPANEL_URL}?${query.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.records)) {
+        return data.records
+          .filter((r: any) => {
+            const rhk = r.rhk_kategori || r.rhkKategori || '';
+            return rhk.includes(params.rhkLabel);
+          })
+          .map((r: any) => ({
+            id: String(r.id || `keg_${r.id_kegiatan}`),
+            namaPelapor: r.nama_pelapor || r.namaPelapor,
+            nip: r.nip,
+            tanggal: r.tanggal,
+            waktuMulai: r.waktu_mulai || r.waktuMulai,
+            waktuSelesai: r.waktu_selesai || r.waktuSelesai,
+            kataKunciKegiatan: r.kata_kunci_kegiatan || r.kataKunciKegiatan,
+            deskripsiKegiatan: r.deskripsi_kegiatan || r.deskripsiKegiatan,
+            rhkKategori: r.rhk_kategori || r.rhkKategori,
+            fotoKegiatan: Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (r.fotoKegiatan || []),
+            tandaTangan: Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (r.tandaTangan || []),
+            unitKerja: r.unit_kerja || r.unitKerja,
+          }));
+      }
+    }
+  } catch (err) {
+    console.warn('[generatePdfRhk] cPanel fetch warning:', err);
+  }
+  return [];
+}
+
 export default createEndpoint({
   inputSchema: z.object({
     rhkNomor: z.string(),
@@ -112,13 +154,20 @@ export default createEndpoint({
     tandaTangan: z.string().optional(),
     format: z.enum(['pdf', 'word']).optional(),
   }),
-  outputSchema: z.object({ url: z.string(), id: z.string(), wordHtml: z.string().optional() }),
+  outputSchema: z.object({ url: z.string(), id: z.string(), wordHtml: z.string(), pdfHtml: z.string() }),
   async execute({ input }) {
     const rhkInfo = RHK_INFO[input.rhkNomor];
     if (!rhkInfo) throw new Error('RHK tidak ditemukan');
 
     const rhkLabel = `RHK ${input.rhkNomor}`;
-    const { records } = await zite.kegiatanHarian.findAll({
+    const cpanelRecs = await fetchCpanelForRhk({
+      tanggalMulai: input.tanggalMulai,
+      tanggalSelesai: input.tanggalSelesai,
+      namaPelapor: input.namaPelapor,
+      rhkLabel,
+    });
+
+    const { records: localRecs } = await zite.kegiatanHarian.findAll({
       filters: {
         tanggal: { gte: input.tanggalMulai, lte: input.tanggalSelesai },
         rhkKategori: { contains: rhkLabel },
@@ -126,6 +175,13 @@ export default createEndpoint({
       },
       limit: 500,
     });
+
+    const combinedMap = new Map<string, any>();
+    for (const r of cpanelRecs) combinedMap.set(r.id, r);
+    for (const r of localRecs) {
+      if (!combinedMap.has(r.id)) combinedMap.set(r.id, r);
+    }
+    const records = Array.from(combinedMap.values());
 
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     const endDate = new Date(input.tanggalSelesai + 'T00:00:00');
@@ -140,8 +196,8 @@ export default createEndpoint({
     const docTable = buildDocTable(records);
 
     const ttdHtml = input.tandaTangan
-      ? `<img src="${esc(input.tandaTangan)}" style="height:60px;" />`
-      : '<br/><br/>';
+      ? `<img class="signature-img" src="${esc(input.tandaTangan)}" alt="Tanda Tangan" style="max-height:52px;max-width:135px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;" />`
+      : '<div style="height:52px;"></div>';
 
     const html = `<!doctype html>
 <html><head><meta charset="utf-8"/>
@@ -154,25 +210,28 @@ h2 { font-size: 12pt; margin: 16px 0 8px; }
 .section p { text-indent: 40px; margin: 4px 0; }
 .doc-title { text-align: center; font-weight: bold; font-size: 11pt; margin: 2px 0; }
 .page-break { page-break-before: always; }
+.signature-block { page-break-inside: avoid !important; break-inside: avoid !important; margin-top: 28px; width: 100%; }
+.signature-img { max-height: 52px !important; max-width: 135px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.kop-line { border-top: 2.5px solid #000; border-bottom: 1px solid #000; height: 3px; margin: 6px 0 16px 0; }
 </style>
 </head>
 <body>
 
 <table style="width:100%;border-collapse:collapse;margin-bottom:0;">
   <tr>
-    <td style="width:90px;vertical-align:middle;padding-left:10px;padding-right:12px;">
+    <td style="width:85px;vertical-align:middle;padding-left:6px;padding-right:12px;">
       <img src="${LOGO_URL}" style="width:72px;height:auto;" />
     </td>
     <td style="text-align:center;vertical-align:middle;">
-      <div style="font-weight:bold;font-size:11pt;margin:0;">KEMENTERIAN SOSIAL REPUBLIK INDONESIA</div>
-      <div style="font-weight:bold;font-size:10.5pt;margin:0;">PUSAT PENDIDIKAN PELATIHAN DAN PENGEMBANGAN PROFESI</div>
-      <div style="font-weight:bold;font-size:10.5pt;margin:0;">KESEJAHTERAAN SOSIAL</div>
-      <div style="font-weight:bold;font-size:13pt;margin:2px 0;">SEKOLAH RAKYAT TERINTEGRASI 1 KABUPATEN KEDIRI</div>
+      <div style="font-weight:bold;font-size:11pt;margin:0;letter-spacing:0.3px;">KEMENTERIAN SOSIAL REPUBLIK INDONESIA</div>
+      <div style="font-weight:bold;font-size:10pt;margin:0;letter-spacing:0.2px;">PUSAT PENDIDIKAN PELATIHAN DAN PENGEMBANGAN PROFESI</div>
+      <div style="font-weight:bold;font-size:10pt;margin:0;letter-spacing:0.2px;">KESEJAHTERAAN SOSIAL</div>
+      <div style="font-weight:bold;font-size:12.5pt;margin:2px 0;letter-spacing:0.4px;">SEKOLAH RAKYAT TERINTEGRASI 1 KABUPATEN KEDIRI</div>
       <div style="font-size:8.5pt;margin:1px 0;">Desa Plosokidul Kecamatan Plosoklaten, Kab. Kediri, Jawa Timur</div>
     </td>
   </tr>
 </table>
-<hr style="border:none;border-top:3px solid #000;margin:4px 0 16px 0;" />
+<div class="kop-line" style="border-top:2.5px solid #000;border-bottom:1px solid #000;height:3px;margin:6px 0 16px 0;"></div>
 
 <h1>LAPORAN KEGIATAN</h1>
 <p class="doc-title">${esc(rhkInfo.judulLaporan)}</p>
@@ -203,16 +262,22 @@ h2 { font-size: 12pt; margin: 16px 0 8px; }
 <h2>E. PENUTUP</h2>
 <div class="section"><p>Demikian laporan pelaksanaan kegiatan ${esc(rhkInfo.judulLaporan.toLowerCase())} kami laporkan. Selanjutnya, semoga bermanfaat bagi kehidupan di Asrama Sekolah Rakyat Menengah Atas 24 Kediri.</p></div>
 
-<div style="margin-top:40px;width:100%;overflow:hidden;">
-  <div style="float:right;width:260px;text-align:center;">
-    <p style="margin:0 0 2px 0;">Kediri, ${esc(dateStr)}</p>
-    <p style="margin:0 0 4px 0;">Wali Asuh</p>
-    ${ttdHtml}
-    <p style="margin:4px 0 0 0;"><strong><u>${esc(input.namaPelapor)}</u></strong></p>
-    <p style="margin:2px 0 0 0;">NIP. ${esc(input.nip)}</p>
-  </div>
+<div class="signature-block" style="margin-top:28px;margin-bottom:20px;width:100%;page-break-inside:avoid;break-inside:avoid;overflow:visible;">
+  <table style="width:100%;border-collapse:collapse;border:none;">
+    <tr>
+      <td style="width:50%;border:none;background:transparent;"></td>
+      <td style="width:50%;text-align:center;border:none;background:transparent;vertical-align:top;padding:0 0 16px 0;overflow:visible;">
+        <p style="margin:0 0 4px 0;font-size:11pt;line-height:1.5;">Kediri, ${esc(dateStr)}</p>
+        <p style="margin:0 0 6px 0;font-size:11pt;line-height:1.5;">Wali Asuh,</p>
+        <div style="height:55px;min-height:55px;display:flex;align-items:center;justify-content:center;margin:3px auto;text-align:center;">
+          ${ttdHtml}
+        </div>
+        <p style="margin:6px 0 2px 0;font-size:11pt;line-height:1.5;"><strong><u>${esc(input.namaPelapor)}</u></strong></p>
+        <p class="signature-nip" style="margin:2px 0 0 0;font-size:11pt;line-height:1.6;padding-bottom:10px;white-space:nowrap;letter-spacing:0.4px;">NIP. ${esc(input.nip)}</p>
+      </td>
+    </tr>
+  </table>
 </div>
-<div style="clear:both;"></div>
 
 <div class="page-break"></div>
 
@@ -223,14 +288,13 @@ ${docTable}
 </body></html>`;
 
     const isWord = input.format === 'word';
-    const wordHtml = isWord ? html
+    const wordHtml = html
       .replace('<html>', '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">')
-      .replace('<meta charset="utf-8"/>', '<meta charset="utf-8"/><meta http-equiv="Content-Type" content="application/vnd.ms-word; charset=utf-8" />')
-      : undefined;
+      .replace('<meta charset="utf-8"/>', '<meta charset="utf-8"/><meta http-equiv="Content-Type" content="application/vnd.ms-word; charset=utf-8" />');
 
     const { url } = await ZitePdf.renderHtml({
-      html,
-      filename: `laporan-rhk${input.rhkNomor}-${input.tanggalMulai}-${input.tanggalSelesai}.pdf`,
+      html: isWord ? wordHtml : html,
+      filename: `laporan-rhk${input.rhkNomor}-${input.tanggalMulai}-${input.tanggalSelesai}.${isWord ? 'doc' : 'pdf'}`,
     });
 
     const formatLabel = isWord ? 'WORD' : 'PDF';
@@ -247,6 +311,6 @@ ${docTable}
       },
     });
 
-    return { url, id: riwayat.id, wordHtml };
+    return { url, id: riwayat.id, wordHtml, pdfHtml: html };
   },
 });

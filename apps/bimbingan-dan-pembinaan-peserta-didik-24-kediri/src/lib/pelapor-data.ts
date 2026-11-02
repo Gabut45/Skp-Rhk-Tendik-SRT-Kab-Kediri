@@ -22,9 +22,11 @@ export function findPelaporByNama(nama: string): PelaporInfo | undefined {
   return PELAPOR_LIST.find(p => p.nama === nama);
 }
 
+import { DEFAULT_TTD_BASE64 } from './assets-base64';
+
 // --- Pre-configured TTD URLs per pelapor ---
 const PRESET_TTD: Record<string, string> = {
-  'A. Zainudin Sholeh, S.A.P.': 'https://images.fillout.com/orgid-722247/flowpublicid-j9anpelbvb/widgetid-default/iScw8GkACqaf89MJQhsZDZ/pasted-image-1785765839992-22iezw3b.png',
+  'A. Zainudin Sholeh, S.A.P.': DEFAULT_TTD_BASE64,
 };
 
 // --- Saved TTD per pelapor (localStorage) ---

@@ -8,46 +8,10 @@ import { geminiServerPlugin } from './src/server/vitePluginGemini.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-const pkg = JSON.parse(
-  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
-);
-
-const pkgDeps = Object.keys(pkg.dependencies).filter(d => d !== 'zitejs')
-  // Need to exclude @tiptap/pm from optimization, since it doesn't have a top level entry point
-  .filter(dep => dep !== '@tiptap/pm');
-
-/**
- * Vite's main focus is on startup speed, so it doesn't check your package.json to see which dependencies you have at startup.
- * When it spots a file that imports a dependency, it optimizes that dependency on the fly and reloads the page. If I use something
- * that relies on another dependency, like lucide-react depending on react, it has to optimize lucide first and then reoptimize react
- * since lucide depends on react. It might have tree-shaken something lucide was using.
- *
- * This works fine in local development because it sends the websocket events quickly. But I noticed that if there's a decent gap
- * between the HMR update event and the HMR full-reload event (over ~500ms), it tries to use the new dependencies before the page reloads.
- * React throws an "invalid hook call" error in this case because there are now two different versions of react in play—the one it
- * initially rendered with and the newly optimized version.
- *
- * So we force Vite optimize all dependencies upfront at startup. This way, we avoid having to reoptimize dependencies on file
- * changes and reload the page. Since we have so few dependencies, the impact on startup speed is minimal.
- *
- * Belt-and-braces: we also explicitly include `react-dom` (bare) and `react-dom/server` so that subpath imports
- * pulled in by other deps (e.g. SSR-aware libraries, error boundaries) don't trigger a separate re-optimization
- * pass for react-dom, which would land it on a different `?v=` hash than `react` and cause the "two versions of
- * React" race documented above.
- */
-const deps = new Set([
-  'react',
-  'react/jsx-runtime',
-  'react/jsx-dev-runtime',
-  'react-dom',
-  'react-dom/client',
-  'react-dom/server',
-  ...pkgDeps,
-]);
-
 // https://vite.dev/config/
 const __ziteFlowId = (() => { try { return JSON.parse(readFileSync(path.resolve(__dirname, 'zite.config.json'), 'utf-8')).id ?? ''; } catch { return ''; } })();
 export default defineConfig(({ command }) => ({
+  root: __dirname,
   define: { 'import.meta.env.VITE_ZITE_FLOW_ID': JSON.stringify(__ziteFlowId), },
   build: { target: 'esnext', sourcemap: false, reportCompressedSize: false },
   server: {
@@ -64,8 +28,20 @@ export default defineConfig(({ command }) => ({
   },
   optimizeDeps: {
     exclude: ["zitejs/db", "zitejs/api", "zitejs/auth", "zitejs/backend", "zitejs/integrations", "zitejs/email", "zitejs/meta", "zitejs/pdf", "zitejs/upload"],
-    include: [...deps],
-    entries: ['index.html', 'src/**/*.{ts,tsx,js,jsx}'],
+    include: [
+      'react',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      'react-dom',
+      'react-dom/client',
+      'react-dom/server',
+      'react-router-dom',
+      '@tanstack/react-query',
+      'lucide-react',
+      'clsx',
+      'tailwind-merge',
+      'sonner',
+    ],
   },
   plugins: [
     react(),
