@@ -103,7 +103,7 @@
     "@anthropic-ai/sdk": "0.72.1",
     "@babel/parser": "^7.26.10",
     "@babel/types": "^7.26.10",
-    "@google/generative-ai": "0.21.0",
+    "@google/genai": "^2.32.0",
     "@hubspot/api-client": "13.5.0",
     "@linear/sdk": "73.0.0",
     "@mailchimp/mailchimp_marketing": "3.0.80",

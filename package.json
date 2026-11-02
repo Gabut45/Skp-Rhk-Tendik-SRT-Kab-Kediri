@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
-    "start": "node --experimental-strip-types server.ts",
+    "start": "node server.ts",
     "preview": "npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "lint": "npm run build"
   },

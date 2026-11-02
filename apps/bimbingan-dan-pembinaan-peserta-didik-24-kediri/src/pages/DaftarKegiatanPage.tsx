@@ -30,8 +30,60 @@ export default function DaftarKegiatanPage() {
     setLoading(true);
     setSelectedIds(new Set());
     try {
-      const data = await getKegiatan({ tanggalMulai, tanggalSelesai, namaPelapor });
-      setRecords(data.records);
+      // 1. Data dari storage lokal
+      const localData = await getKegiatan({ tanggalMulai, tanggalSelesai, namaPelapor });
+      let combined = [...localData.records];
+
+      // 2. Data dari cPanel MySQL
+      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+      if (cpanelUrl) {
+        try {
+          const params = new URLSearchParams({ action: 'get_kegiatan' });
+          if (tanggalMulai) params.append('tanggalMulai', tanggalMulai);
+          if (tanggalSelesai) params.append('tanggalSelesai', tanggalSelesai);
+          if (namaPelapor) params.append('namaPelapor', namaPelapor);
+
+          const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
+          const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+
+          const res = await fetch(targetUrl, {
+            headers: cpanelKey ? { 'X-API-KEY': cpanelKey } : {},
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && Array.isArray(json.records)) {
+              const remoteRecords: Activity[] = json.records.map((r: any) => ({
+                id: r.id || `keg_${r.id_kegiatan}`,
+                namaPelapor: r.nama_pelapor || r.namaPelapor,
+                nip: r.nip,
+                tanggal: r.tanggal,
+                waktuMulai: r.waktu_mulai || r.waktuMulai,
+                waktuSelesai: r.waktu_selesai || r.waktuSelesai,
+                kataKunciKegiatan: r.kata_kunci_kegiatan || r.kataKunciKegiatan,
+                deskripsiKegiatan: r.deskripsi_kegiatan || r.deskripsiKegiatan,
+                rhkKategori: r.rhk_kategori || r.rhkKategori,
+                fotoKegiatan: Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (r.fotoKegiatan || []),
+                tandaTangan: Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (r.tandaTangan || []),
+                unitKerja: r.unit_kerja || r.unitKerja,
+              }));
+
+              // Gabungkan tanpa duplikat ID
+              const remoteMap = new Map(remoteRecords.map(r => [r.id, r]));
+              combined.forEach(loc => {
+                if (!remoteMap.has(loc.id)) {
+                  remoteRecords.push(loc);
+                }
+              });
+              combined = remoteRecords;
+            }
+          }
+        } catch (cpanelErr) {
+          console.warn('Gagal memuat cPanel, menggunakan data lokal:', cpanelErr);
+        }
+      }
+
+      setRecords(combined);
     } catch {
       toast.error('Gagal memuat data');
     } finally {
@@ -46,6 +98,21 @@ export default function DaftarKegiatanPage() {
       await deleteKegiatan({ id });
       setRecords(prev => prev.filter(r => r.id !== id));
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+
+      // Hapus juga di cPanel jika endpoint tersedia
+      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+      if (cpanelUrl) {
+        const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
+        fetch(`${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}&action=delete_kegiatan`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(cpanelKey ? { 'X-API-KEY': cpanelKey } : {}),
+          },
+          body: JSON.stringify({ id }),
+        }).catch(() => {});
+      }
+
       toast.success('Kegiatan berhasil dihapus');
     } catch {
       toast.error('Gagal menghapus');

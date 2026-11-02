@@ -105,75 +105,14 @@ export interface ZiteAuthUser {
   image: string | null;
 }
 
+import SEED_KEGIATAN from './seed_kegiatan.json';
+import SEED_RIWAYAT from './seed_riwayat.json';
+
+const INITIAL_KEGIATAN: KegiatanHarianRecordType[] = SEED_KEGIATAN as unknown as KegiatanHarianRecordType[];
+
+const INITIAL_RIWAYAT: RiwayatFileRecordType[] = SEED_RIWAYAT as unknown as RiwayatFileRecordType[];
+
 const memoryStore: Record<string, any[]> = {};
-
-const INITIAL_KEGIATAN: KegiatanHarianRecordType[] = [
-  {
-    id: 'keg-01',
-    idKegiatan: 1,
-    namaPelapor: 'A. Zainudin Sholeh, S.A.P.',
-    nip: '198810082026221001',
-    tanggal: '2026-09-01',
-    waktuMulai: '07:00',
-    waktuSelesai: '08:30',
-    kataKunciKegiatan: 'pembiasaan',
-    deskripsiKegiatan: 'Melaksanakan pendampingan kegiatan pembiasaan pagi yang meliputi serangkaian aktivitas rutin seperti merapikan tempat tidur, membersihkan kamar, dan mempersiapkan kebutuhan harian secara mandiri di lingkungan asrama SRMA 24 Kediri.',
-    rhkKategori: 'RHK 3',
-    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-  },
-  {
-    id: 'keg-02',
-    idKegiatan: 2,
-    namaPelapor: 'A. Zainudin Sholeh, S.A.P.',
-    nip: '198810082026221001',
-    tanggal: '2026-09-01',
-    waktuMulai: '15:30',
-    waktuSelesai: '17:00',
-    kataKunciKegiatan: 'olahraga',
-    deskripsiKegiatan: 'Melaksanakan pendampingan kegiatan olahraga pagi bersama peserta didik yang meliputi senam dan permainan tim guna menjaga kebugaran jasmani dan semangat positif di lingkungan asrama SRMA 24 Kediri.',
-    rhkKategori: 'RHK 4',
-    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-  },
-  {
-    id: 'keg-03',
-    idKegiatan: 3,
-    namaPelapor: 'A. Zainudin Sholeh, S.A.P.',
-    nip: '198810082026221001',
-    tanggal: '2026-09-01',
-    waktuMulai: '18:30',
-    waktuSelesai: '19:30',
-    kataKunciKegiatan: 'sholat',
-    deskripsiKegiatan: 'Melaksanakan pendampingan ibadah sholat berjamaah bersama peserta didik di mushola asrama, memastikan ketertiban shaf, kekhusyukan pelaksanaan, serta ketepatan waktu dimulainya sholat.',
-    rhkKategori: 'RHK 3',
-    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-  },
-  {
-    id: 'keg-04',
-    idKegiatan: 4,
-    namaPelapor: 'A. Zainudin Sholeh, S.A.P.',
-    nip: '198810082026221001',
-    tanggal: '2026-09-01',
-    waktuMulai: '19:30',
-    waktuSelesai: '21:00',
-    kataKunciKegiatan: 'belajar',
-    deskripsiKegiatan: 'Melaksanakan pendampingan kegiatan belajar bersama peserta didik dengan menekankan penguasaan materi pelajaran serta teknik belajar yang efektif dan efisien di lingkungan asrama SRMA 24 Kediri.',
-    rhkKategori: 'RHK 1',
-    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-  },
-];
-
-const INITIAL_RIWAYAT: RiwayatFileRecordType[] = [
-  {
-    id: 'riw-01',
-    idFile: 1,
-    namaFile: 'Kinerja Harian - Selasa, 1 September 2026 (PDF)',
-    jenisLaporan: 'Kinerja Harian',
-    namaPelapor: 'A. Zainudin Sholeh, S.A.P.',
-    dibuatPada: '2026-09-01T21:30:00.000Z',
-    tanggalMulai: '2026-09-01',
-    tanggalSelesai: '2026-09-01',
-  },
-];
 
 function getTableRecords(tableName: string): any[] {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -181,7 +120,19 @@ function getTableRecords(tableName: string): any[] {
     const stored = localStorage.getItem(key);
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // If stored has only placeholder 4 items, upgrade to full seed database!
+          if (tableName === 'KegiatanHarian' && parsed.length <= 4 && parsed[0]?.id?.startsWith('keg-0')) {
+            localStorage.setItem(key, JSON.stringify(INITIAL_KEGIATAN));
+            return INITIAL_KEGIATAN;
+          }
+          if (tableName === 'RiwayatFile' && parsed.length <= 1) {
+            localStorage.setItem(key, JSON.stringify(INITIAL_RIWAYAT));
+            return INITIAL_RIWAYAT;
+          }
+          return parsed;
+        }
       } catch {
         // parse error, fallback
       }

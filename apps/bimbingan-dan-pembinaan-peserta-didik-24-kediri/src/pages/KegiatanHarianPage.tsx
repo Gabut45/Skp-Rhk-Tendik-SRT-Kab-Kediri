@@ -160,9 +160,9 @@ export default function KegiatanHarianPage() {
       });
       toast.success(`${filled.length} kegiatan berhasil disimpan!`);
 
-      // Auto-sync ke cPanel jika diaktifkan oleh pengguna
-      const cpanelUrl = localStorage.getItem('cpanel_api_url');
-      const cpanelAutoSync = localStorage.getItem('cpanel_auto_sync') === 'true';
+      // Auto-sync ke cPanel MySQL
+      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+      const cpanelAutoSync = localStorage.getItem('cpanel_auto_sync') !== 'false';
       if (cpanelAutoSync && cpanelUrl) {
         const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
         const targetUrl = cpanelUrl.includes('?') ? `${cpanelUrl}&action=save_bulk` : `${cpanelUrl}?action=save_bulk`;

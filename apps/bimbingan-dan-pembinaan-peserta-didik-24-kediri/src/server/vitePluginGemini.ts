@@ -6,28 +6,13 @@ import {
   handleStreamTextServer,
 } from './geminiServer.ts';
 
-function readBody(req: IncomingMessage): Promise<any> {
-  return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', chunk => {
-      data += chunk;
-    });
-    req.on('end', () => {
-      if (!data) return resolve({});
-      try {
-        resolve(JSON.parse(data));
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on('error', reject);
-  });
-}
+import bodyParser from 'body-parser';
 
 export function geminiServerPlugin(): Plugin {
   return {
     name: 'vite-plugin-gemini-server',
     configureServer(server) {
+      server.middlewares.use(bodyParser.json({ limit: '10mb' }));
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const url = req.url ? req.url.split('?')[0] : '';
 
@@ -46,7 +31,7 @@ export function geminiServerPlugin(): Plugin {
         // Endpoint: POST /api/gemini/generate-deskripsi
         if (url === '/api/gemini/generate-deskripsi' && req.method === 'POST') {
           try {
-            const body = await readBody(req);
+            const body = (req as any).body ?? {};
             const kataKunci = body?.kataKunci ?? '';
             const result = await handleGenerateDeskripsiServer(kataKunci);
             res.setHeader('Content-Type', 'application/json');
@@ -64,7 +49,7 @@ export function geminiServerPlugin(): Plugin {
         // Endpoint: POST /api/gemini/generate (generic text)
         if (url === '/api/gemini/generate' && req.method === 'POST') {
           try {
-            const body = await readBody(req);
+            const body = (req as any).body ?? {};
             const prompt = body?.prompt ?? '';
             const systemInstruction = body?.systemInstruction;
             const text = await handleGenerateTextServer(prompt, systemInstruction);
@@ -83,7 +68,7 @@ export function geminiServerPlugin(): Plugin {
         // Endpoint: POST /api/gemini/stream (streaming text via SSE)
         if (url === '/api/gemini/stream' && req.method === 'POST') {
           try {
-            const body = await readBody(req);
+            const body = (req as any).body ?? {};
             const prompt = body?.prompt ?? '';
             const systemInstruction = body?.systemInstruction;
 

@@ -292,10 +292,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit;
     }
+    // Aksi: Hapus Kegiatan
+    if ($action === 'delete_kegiatan') {
+        $delId = $data['id'] ?? ($_GET['id'] ?? '');
+        if ($delId) {
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id");
+            $stmt->execute([':id' => $delId]);
+            echo json_encode([
+                'success' => true,
+                'message' => "Kegiatan berhasil dihapus dari cPanel MySQL!",
+                'id' => $delId
+            ]);
+            exit;
+        }
+    }
 }
 
 echo json_encode(['success' => false, 'message' => 'Action tidak dikenali']);
 `;
+
+export const DEFAULT_CPANEL_URL = 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
 
 export default function CpanelModal({
   open,
@@ -304,9 +320,9 @@ export default function CpanelModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('cpanel_api_url') || '');
+  const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('cpanel_api_url') || DEFAULT_CPANEL_URL);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('cpanel_api_key') || '');
-  const [autoSync, setAutoSync] = useState(() => localStorage.getItem('cpanel_auto_sync') === 'true');
+  const [autoSync, setAutoSync] = useState(() => localStorage.getItem('cpanel_auto_sync') !== 'false');
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
