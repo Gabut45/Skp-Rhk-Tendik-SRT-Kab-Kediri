@@ -91,6 +91,18 @@ CREATE TABLE IF NOT EXISTS \`riwayat_file\` (
   INDEX \`idx_pelapor_file\` (\`nama_pelapor\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 4. Tabel Bank Kosa Kata & Hasil AI (Opsional Sinkronisasi Server)
+CREATE TABLE IF NOT EXISTS \`bank_kosa_kata\` (
+  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
+  \`kata_kunci\` VARCHAR(255) NOT NULL,
+  \`deskripsi\` TEXT NOT NULL,
+  \`rhk_kategori\` VARCHAR(64) DEFAULT 'RHK 3',
+  \`sumber\` VARCHAR(32) DEFAULT 'gemini',
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX \`idx_kata_kunci\` (\`kata_kunci\`),
+  INDEX \`idx_rhk_kosa\` (\`rhk_kategori\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 `;
 

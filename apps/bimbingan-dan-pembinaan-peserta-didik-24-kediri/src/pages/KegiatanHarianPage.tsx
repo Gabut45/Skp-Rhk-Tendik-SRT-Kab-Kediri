@@ -17,8 +17,15 @@ function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
 }
 
+function getLocalDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function KegiatanHarianPage() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString(new Date());
   const [namaPelapor, setNamaPelapor] = useState(DEFAULT_PELAPOR.nama);
   const [nip, setNip] = useState(DEFAULT_PELAPOR.nip);
   const [tanggal, setTanggal] = useState(today);

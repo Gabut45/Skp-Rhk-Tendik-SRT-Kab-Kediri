@@ -7,6 +7,10 @@ import {
   handleGenerateTextServer,
   handleStreamTextServer,
 } from './src/server/geminiServer';
+import {
+  getVocabularyStats,
+  saveLearnedVocabularyServer,
+} from './src/server/vocabularyService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +27,25 @@ app.get('/api/gemini/health', (_req, res) => {
     serverSide: true,
     hasKey: Boolean(process.env.GEMINI_API_KEY),
   });
+});
+
+// Vocabulary stats and management
+app.get('/api/vocabulary/stats', (_req, res) => {
+  res.json(getVocabularyStats());
+});
+
+app.post('/api/vocabulary/save', (req, res) => {
+  try {
+    const { kataKunci, deskripsi, rhk } = req.body;
+    if (kataKunci && deskripsi) {
+      const saved = saveLearnedVocabularyServer(kataKunci, deskripsi, rhk || 'RHK 3', 'manual');
+      res.json({ success: true, item: saved });
+      return;
+    }
+    res.status(400).json({ success: false, message: 'Invalid payload' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // Server-side Deskripsi Generation with Gemini 3.8 Flash

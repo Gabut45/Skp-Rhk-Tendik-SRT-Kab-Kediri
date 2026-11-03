@@ -2,10 +2,10 @@
   "name": "bimbingan-dan-pembinaan-peserta-didik-24-kediri",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "dev": "sh -c 'npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri' --",
     "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "start": "node server.ts",
-    "preview": "npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "preview": "sh -c 'npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri' --",
     "lint": "npm run build"
   },
   "workspaces": [

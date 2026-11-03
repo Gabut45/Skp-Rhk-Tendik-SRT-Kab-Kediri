@@ -5,6 +5,10 @@ import {
   handleGenerateTextServer,
   handleStreamTextServer,
 } from './geminiServer.ts';
+import {
+  getVocabularyStats,
+  saveLearnedVocabularyServer,
+} from './vocabularyService.ts';
 
 import bodyParser from 'body-parser';
 
@@ -25,6 +29,35 @@ export function geminiServerPlugin(): Plugin {
             serverSide: true,
             hasKey: Boolean(process.env.GEMINI_API_KEY),
           }));
+          return;
+        }
+
+        // Endpoint: GET /api/vocabulary/stats
+        if (url === '/api/vocabulary/stats' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'application/json');
+          res.statusCode = 200;
+          res.end(JSON.stringify(getVocabularyStats()));
+          return;
+        }
+
+        // Endpoint: POST /api/vocabulary/save
+        if (url === '/api/vocabulary/save' && req.method === 'POST') {
+          try {
+            const body = (req as any).body ?? {};
+            const { kataKunci, deskripsi, rhk } = body;
+            if (kataKunci && deskripsi) {
+              const saved = saveLearnedVocabularyServer(kataKunci, deskripsi, rhk || 'RHK 3', 'manual');
+              res.setHeader('Content-Type', 'application/json');
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true, item: saved }));
+              return;
+            }
+            res.statusCode = 400;
+            res.end(JSON.stringify({ success: false, message: 'Invalid payload' }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ success: false, error: err?.message }));
+          }
           return;
         }
 

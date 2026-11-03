@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { createEndpoint } from 'zitejs/backend';
+import {
+  searchVocabularyBank,
+  synthesizeFallbackDeskripsi,
+  saveLearnedVocabularyLocal,
+  getLearnedVocabularyLocal,
+  detectTimeContext as detectTime,
+} from '../lib/vocabulary-database.ts';
 
 // Detailed contextual templates organized by precise sub-activity and time-of-day
 const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; timeOfDays?: ('pagi' | 'siang' | 'sore' | 'malam' | 'subuh')[] }> = {
@@ -620,9 +627,15 @@ export default createEndpoint({
       if (response.ok) {
         const data = await response.json();
         if (data.deskripsi && data.rhk) {
+          const deskripsiStr = String(data.deskripsi);
+          const rhkStr = String(data.rhk);
+
+          // Save into browser's local vocabulary bank for offline resilience
+          saveLearnedVocabularyLocal(raw, deskripsiStr, rhkStr);
+
           return {
-            deskripsi: String(data.deskripsi),
-            rhk: String(data.rhk),
+            deskripsi: deskripsiStr,
+            rhk: rhkStr,
           };
         }
       }
@@ -630,7 +643,35 @@ export default createEndpoint({
       console.warn('Call to server /api/gemini/generate-deskripsi failed, using client fallback:', err);
     }
 
-    // High precision contextual fallback in case server is unreachable
+    // High precision fallback tiers:
+    // 1. Check local learned cache in browser
+    try {
+      const learned = getLearnedVocabularyLocal();
+      const cleanRaw = raw.toLowerCase().trim();
+      const timeCtx = detectTime(cleanRaw);
+      const matchedLearned = learned.filter(item => {
+        const kw = item.kataKunci.toLowerCase();
+        return cleanRaw.includes(kw) || kw.includes(cleanRaw);
+      });
+      if (matchedLearned.length > 0) {
+        const pool = matchedLearned.filter(item => {
+          const t = detectTime(item.deskripsi);
+          return !timeCtx || !t || timeCtx === t;
+        });
+        const selected = (pool.length > 0 ? pool : matchedLearned)[0];
+        return { deskripsi: selected.deskripsi, rhk: selected.rhk };
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Check comprehensive pre-seeded vocabulary bank
+    const bankMatch = searchVocabularyBank(raw);
+    if (bankMatch) {
+      return { deskripsi: bankMatch.deskripsi, rhk: bankMatch.rhk };
+    }
+
+    // 3. Fallback to existing detailed templates or synthesizer
     return generateSmartFallback(raw);
   },
 });

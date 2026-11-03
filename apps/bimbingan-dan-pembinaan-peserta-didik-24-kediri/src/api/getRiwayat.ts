@@ -23,7 +23,9 @@ export default createEndpoint({
   }),
   async execute({ input }) {
     const filters: any = {};
-    if (input.namaPelapor) filters.namaPelapor = input.namaPelapor;
+    if (input.namaPelapor && input.namaPelapor !== 'Semua Pelapor') {
+      filters.namaPelapor = input.namaPelapor;
+    }
     if (input.tanggalMulai || input.tanggalSelesai) {
       filters.tanggalMulai = {};
       if (input.tanggalMulai) filters.tanggalMulai.gte = input.tanggalMulai;

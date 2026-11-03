@@ -16,18 +16,27 @@ import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
 
 type Activity = GetKegiatanOutputType['records'][0];
 
+function getLocalDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export default function DaftarKegiatanPage() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
+  const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   const startOfMonth = `${year}-${month}-01`;
-  const today = now.toISOString().split('T')[0];
+  const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+  const today = getLocalDateString(now);
 
   const navigate = useNavigate();
   const [records, setRecords] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
-  const [tanggalSelesai, setTanggalSelesai] = useState(today);
+  const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
   const [namaPelapor, setNamaPelapor] = useState('Semua Pelapor');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -203,6 +212,21 @@ export default function DaftarKegiatanPage() {
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
+  const handleCopySingle = (r: Activity) => {
+    const item = {
+      id: crypto.randomUUID(),
+      waktuMulai: r.waktuMulai || '',
+      waktuSelesai: r.waktuSelesai || '',
+      kataKunci: r.kataKunciKegiatan || '',
+      deskripsi: r.deskripsiKegiatan || '',
+      rhk: r.rhkKategori || '',
+      photos: (r.fotoKegiatan || []).map(f => f.url),
+    };
+    sessionStorage.setItem('__copiedKegiatan', JSON.stringify([item]));
+    toast.success('1 kegiatan disalin ke form Input Kegiatan');
+    navigate('/kegiatan-harian');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -243,8 +267,49 @@ export default function DaftarKegiatanPage() {
               <Label className="text-xs">Sampai Tanggal</Label>
               <Input type="date" value={tanggalSelesai} onChange={e => setTanggalSelesai(e.target.value)} className="w-40" />
             </div>
-            <Button onClick={fetchData} className="gap-2">
-              <Search size={14} /> Cari
+            <div className="flex items-center gap-2">
+              <Button onClick={fetchData} className="gap-2">
+                <Search size={14} /> Cari
+              </Button>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-4 pt-3 border-t text-xs text-muted-foreground flex-wrap">
+            <span className="font-medium text-foreground">Preset Cepat:</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                setTanggalMulai(startOfMonth);
+                setTanggalSelesai(endOfMonth);
+              }}
+            >
+              Bulan Ini (1 - {lastDay} {now.toLocaleString('id-ID', { month: 'short' })})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                setTanggalMulai(today);
+                setTanggalSelesai(today);
+              }}
+            >
+              Hari Ini ({formatDate(today)})
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                setTanggalMulai('');
+                setTanggalSelesai('');
+              }}
+            >
+              Semua Tanggal
             </Button>
           </div>
         </CardContent>
@@ -265,7 +330,10 @@ export default function DaftarKegiatanPage() {
               <Loader2 className="animate-spin text-muted-foreground" size={24} />
             </div>
           ) : records.length === 0 ? (
-            <p className="text-center text-muted-foreground py-12">Belum ada kegiatan di rentang tanggal ini</p>
+            <div className="text-center py-12 space-y-2">
+              <p className="text-muted-foreground">Belum ada kegiatan di rentang tanggal ini</p>
+              <p className="text-xs text-muted-foreground">Coba ubah tanggal atau klik tombol &quot;Bulan Ini&quot; / &quot;Semua Tanggal&quot; di atas.</p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -279,11 +347,12 @@ export default function DaftarKegiatanPage() {
                     </TableHead>
                     <TableHead className="w-10">No</TableHead>
                     <TableHead>Tanggal</TableHead>
+                    <TableHead>Pelapor</TableHead>
                     <TableHead>Waktu</TableHead>
                     <TableHead>Deskripsi</TableHead>
                     <TableHead>RHK</TableHead>
                     <TableHead>Foto</TableHead>
-                    <TableHead className="w-10"></TableHead>
+                    <TableHead className="text-right">Tindakan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -296,8 +365,11 @@ export default function DaftarKegiatanPage() {
                         />
                       </TableCell>
                       <TableCell className="text-center">{i + 1}</TableCell>
-                      <TableCell className="whitespace-nowrap">{formatDate(r.tanggal)}</TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">{r.waktuMulai}-{r.waktuSelesai}</TableCell>
+                      <TableCell className="whitespace-nowrap font-medium">{formatDate(r.tanggal)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-sm text-muted-foreground max-w-[140px] truncate" title={r.namaPelapor}>
+                        {r.namaPelapor || '-'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm font-medium">{r.waktuMulai}-{r.waktuSelesai}</TableCell>
                       <TableCell className="max-w-xs">
                         <p className="text-sm line-clamp-2">{r.deskripsiKegiatan}</p>
                       </TableCell>
@@ -310,22 +382,35 @@ export default function DaftarKegiatanPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="sm"><Trash2 size={14} className="text-destructive" /></Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus Kegiatan?</AlertDialogTitle>
-                              <AlertDialogDescription>Tindakan ini tidak dapat dibatalkan.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Batal</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(r.id)}>Hapus</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopySingle(r)}
+                            title="Salin kegiatan ke Form Input"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Copy size={14} />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus Kegiatan">
+                                <Trash2 size={14} className="text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus Kegiatan?</AlertDialogTitle>
+                                <AlertDialogDescription>Tindakan ini akan menghapus kegiatan dari database.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(r.id)}>Hapus</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

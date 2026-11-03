@@ -18,9 +18,12 @@ export default function LaporanRHKPage() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
+  const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+  const startOfMonth = `${year}-${month}-01`;
+  const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
   const [rhkNomor, setRhkNomor] = useState('');
-  const [tanggalMulai, setTanggalMulai] = useState(`${year}-${month}-01`);
-  const [tanggalSelesai, setTanggalSelesai] = useState(now.toISOString().split('T')[0]);
+  const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
+  const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
   const [namaPelapor, setNamaPelapor] = useState(DEFAULT_PELAPOR.nama);
   const [nip, setNip] = useState(DEFAULT_PELAPOR.nip);
   const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(DEFAULT_PELAPOR.nama));

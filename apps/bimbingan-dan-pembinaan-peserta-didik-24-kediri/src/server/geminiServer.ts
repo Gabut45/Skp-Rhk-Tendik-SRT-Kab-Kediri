@@ -1,5 +1,9 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { IncomingMessage, ServerResponse } from 'http';
+import {
+  saveLearnedVocabularyServer,
+  lookupServerVocabulary,
+} from './vocabularyService.ts';
 
 // Shared server-side Gemini client utility
 // User-Agent must be set to 'aistudio-build' in httpOptions for telemetry
@@ -161,17 +165,32 @@ Instruksi:
       const text = response.text?.trim() || '';
       const parsed = JSON.parse(text);
       if (parsed.deskripsi && parsed.rhk) {
+        const deskripsiStr = String(parsed.deskripsi);
+        const rhkStr = String(parsed.rhk);
+
+        // Auto-save generated description to the persistent vocabulary bank
+        try {
+          saveLearnedVocabularyServer(trimmed, deskripsiStr, rhkStr, 'gemini');
+        } catch (e) {
+          console.warn('[Gemini Server] Auto-save vocabulary notice:', e);
+        }
+
         return {
-          deskripsi: String(parsed.deskripsi),
-          rhk: String(parsed.rhk),
+          deskripsi: deskripsiStr,
+          rhk: rhkStr,
         };
       }
     } catch (err) {
-      console.warn('[Gemini Server] API call fallback to smart heuristics:', err);
+      console.warn('[Gemini Server] API call fallback to server vocabulary bank:', err);
     }
   }
 
-  return generateServerFallback(trimmed);
+  // Gracefully fallback to rich server vocabulary bank (learned + pre-seeded + dynamic synthesizer)
+  const lookup = lookupServerVocabulary(trimmed);
+  return {
+    deskripsi: lookup.deskripsi,
+    rhk: lookup.rhk,
+  };
 }
 
 /**
