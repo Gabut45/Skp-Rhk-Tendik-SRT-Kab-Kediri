@@ -1,5 +1,45 @@
 [
   {
+    "id": "voc_1793810521685_npuyl",
+    "kataKunci": "piket kemandirian mencuci pakaian olahraga",
+    "deskripsi": "Mendampingi dan membimbing peserta didik melaksanakan piket kemandirian mencuci pakaian olahraga sekolah di lingkungan Pakaian & Laundry Mandiri Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.",
+    "rhk": "RHK 2",
+    "source": "manual",
+    "createdAt": "2026-11-04T16:42:01.685Z"
+  },
+  {
+    "id": "voc_1793810521685_o4cfe",
+    "kataKunci": "laundry pakaian olahraga",
+    "deskripsi": "Mendampingi dan membimbing peserta didik melaksanakan piket kemandirian mencuci pakaian olahraga sekolah di lingkungan Pakaian & Laundry Mandiri Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.",
+    "rhk": "RHK 2",
+    "source": "manual",
+    "createdAt": "2026-11-04T16:42:01.685Z"
+  },
+  {
+    "id": "voc_1793810521684_ecwyh",
+    "kataKunci": "piket mencuci pakaian olahraga",
+    "deskripsi": "Mendampingi dan membimbing peserta didik melaksanakan piket kemandirian mencuci pakaian olahraga sekolah di lingkungan Pakaian & Laundry Mandiri Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.",
+    "rhk": "RHK 2",
+    "source": "manual",
+    "createdAt": "2026-11-04T16:42:01.685Z"
+  },
+  {
+    "id": "voc_1793810521684_c40mm",
+    "kataKunci": "mencuci pakaian olahraga",
+    "deskripsi": "Mendampingi dan membimbing peserta didik melaksanakan piket kemandirian mencuci pakaian olahraga sekolah di lingkungan Pakaian & Laundry Mandiri Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.",
+    "rhk": "RHK 2",
+    "source": "manual",
+    "createdAt": "2026-11-04T16:42:01.684Z"
+  },
+  {
+    "id": "voc_1793810521680_cy28l",
+    "kataKunci": "mencuci pakaian olahraga sekolah",
+    "deskripsi": "Mendampingi dan membimbing peserta didik melaksanakan piket kemandirian mencuci pakaian olahraga sekolah di lingkungan Pakaian & Laundry Mandiri Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.",
+    "rhk": "RHK 2",
+    "source": "manual",
+    "createdAt": "2026-11-04T16:42:01.681Z"
+  },
+  {
     "id": "voc_1793662996558_wmtrq",
     "kataKunci": "razia gawai dan barang terlarang",
     "deskripsi": "Melaksanakan pemeriksaan ketertiban gawai dan barang terlarang di asrama secara berkala demi menjamin kenyamanan belajar dan disiplin istirahat siswa.",

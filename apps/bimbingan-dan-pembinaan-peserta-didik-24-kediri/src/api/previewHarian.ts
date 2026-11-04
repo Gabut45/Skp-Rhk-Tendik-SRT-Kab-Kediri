@@ -38,16 +38,37 @@ function expandRhk(rhk: string): string {
 
 function buildPhotosGrid(photos: string[]): string {
   if (!photos || photos.length === 0) return '';
-  const limited = photos.slice(0, 4);
+  const limited = photos.slice(0, 10);
+
+  // Jika hanya ada 1 foto: tampilkan di tengah secara proporsional dan jelas tanpa terpotong
+  if (limited.length === 1) {
+    return `<div style="text-align:center;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid;">
+      <div class="photo-single-box" style="display:inline-block;max-width:100%;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+        <img class="photo-single-img" src="${esc(limited[0])}" style="max-width:100%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+      </div>
+    </div>`;
+  }
+
+  // Jika 2 foto atau lebih: tata berdampingan (2 kolom) dengan rasio aspek utuh
   const rows: string[] = [];
   for (let i = 0; i < limited.length; i += 2) {
-    const left = `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;border:none;"><img src="${esc(limited[i])}" style="width:100%;max-height:120px;object-fit:cover;border-radius:3px;border:1px solid #ccc;display:block;" /></td>`;
-    const right = i + 1 < limited.length
-      ? `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;border:none;"><img src="${esc(limited[i + 1])}" style="width:100%;max-height:120px;object-fit:cover;border-radius:3px;border:1px solid #ccc;display:block;" /></td>`
-      : '<td style="width:50%;padding:3px;border:none;"></td>';
-    rows.push(`<tr>${left}${right}</tr>`);
+    const leftPhoto = `<div class="photo-proof-box" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:block;text-align:center;">
+      <img class="photo-proof-img" src="${esc(limited[i])}" style="max-width:100%;max-height:230px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+    </div>`;
+
+    const rightPhoto = i + 1 < limited.length
+      ? `<div class="photo-proof-box" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:block;text-align:center;">
+          <img class="photo-proof-img" src="${esc(limited[i + 1])}" style="max-width:100%;max-height:230px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+        </div>`
+      : '';
+
+    rows.push(`<tr style="page-break-inside:avoid;break-inside:avoid;">
+      <td style="width:50%;padding:3px;text-align:center;vertical-align:middle;border:none;">${leftPhoto}</td>
+      <td style="width:50%;padding:3px;text-align:center;vertical-align:middle;border:none;">${rightPhoto}</td>
+    </tr>`);
   }
-  return `<table style="width:100%;border-collapse:collapse;margin-bottom:4px;border:none;">${rows.join('')}</table>`;
+
+  return `<table style="width:100%;border-collapse:collapse;margin-bottom:6px;border:none;page-break-inside:avoid;break-inside:avoid;">${rows.join('')}</table>`;
 }
 
 function buildHtml(input: { tanggal: string; namaPelapor: string; nip: string; tandaTangan?: string }, kegiatan: z.infer<typeof kegiatanSchema>[], isWord: boolean) {
@@ -100,6 +121,10 @@ table.main tr { page-break-inside: avoid; break-inside: avoid; }
 .signature-block { page-break-inside: avoid !important; break-inside: avoid !important; margin-top: 14px; margin-bottom: 6px; width: 100%; }
 .signature-img { max-height: 48px !important; max-width: 130px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .kop-line { border-top: 2.5px solid #000; border-bottom: 1px solid #000; height: 3px; margin: 4px 0 10px 0; }
+.photo-proof-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; display: block; text-align: center; }
+.photo-proof-img { max-width: 100% !important; max-height: 230px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.photo-single-box { display: inline-block; max-width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; }
+.photo-single-img { max-width: 100% !important; max-height: 280px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 </style>
 </head>
 <body>

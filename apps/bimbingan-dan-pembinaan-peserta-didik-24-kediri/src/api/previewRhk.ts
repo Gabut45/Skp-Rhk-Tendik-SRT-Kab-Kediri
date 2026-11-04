@@ -54,20 +54,41 @@ function buildDocTable(records: any[]): string {
       const allPhotos = r.fotoKegiatan || [];
       if (allPhotos.length === 0 && !r.deskripsiKegiatan) continue;
 
+      // Build photo grid for this record (adaptive uncropped layout)
       let photosHtml = '';
       if (allPhotos.length > 0) {
         const photos = allPhotos.slice(0, MAX_PHOTOS_PER_RECORD);
-        const photoRows: string[] = [];
-        for (let i = 0; i < photos.length; i += 2) {
-          const left = `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i].url)}" style="width:100%;height:auto;border-radius:4px;border:1px solid #ddd;" /></td>`;
-          const right = i + 1 < photos.length
-            ? `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i + 1].url)}" style="width:100%;height:auto;border-radius:4px;border:1px solid #ddd;" /></td>`
-            : '<td style="width:50%;padding:3px;"></td>';
-          photoRows.push(`<tr>${left}${right}</tr>`);
+        const getUrl = (p: any) => esc(typeof p === 'string' ? p : (p?.url || ''));
+
+        if (photos.length === 1) {
+          photosHtml = `<div style="text-align:center;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid;">
+            <div class="photo-single-box" style="display:inline-block;max-width:100%;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
+              <img class="photo-single-img" src="${getUrl(photos[0])}" style="max-width:100%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+            </div>
+          </div>`;
+        } else {
+          const photoRows: string[] = [];
+          for (let i = 0; i < photos.length; i += 2) {
+            const leftPhoto = `<div class="photo-proof-box" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:block;text-align:center;">
+              <img class="photo-proof-img" src="${getUrl(photos[i])}" style="max-width:100%;max-height:230px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+            </div>`;
+
+            const rightPhoto = i + 1 < photos.length
+              ? `<div class="photo-proof-box" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:block;text-align:center;">
+                  <img class="photo-proof-img" src="${getUrl(photos[i + 1])}" style="max-width:100%;max-height:230px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+                </div>`
+              : '';
+
+            photoRows.push(`<tr style="page-break-inside:avoid;break-inside:avoid;">
+              <td style="width:50%;padding:3px;text-align:center;vertical-align:middle;border:none;">${leftPhoto}</td>
+              <td style="width:50%;padding:3px;text-align:center;vertical-align:middle;border:none;">${rightPhoto}</td>
+            </tr>`);
+          }
+          photosHtml = `<table style="width:100%;border-collapse:collapse;margin-bottom:6px;border:none;page-break-inside:avoid;break-inside:avoid;">${photoRows.join('')}</table>`;
         }
-        photosHtml = `<table style="width:100%;border-collapse:collapse;">${photoRows.join('')}</table>`;
+
         if (allPhotos.length > MAX_PHOTOS_PER_RECORD) {
-          photosHtml += `<p style="text-align:center;font-size:8pt;color:#666;margin:2px 0 0 0;">(Menampilkan ${MAX_PHOTOS_PER_RECORD} dari ${allPhotos.length} foto)</p>`;
+          photosHtml += `<p style="text-align:center;font-size:8pt;color:#64748b;margin:2px 0 0 0;">(Menampilkan ${MAX_PHOTOS_PER_RECORD} dari ${allPhotos.length} foto)</p>`;
         }
       }
 
@@ -209,6 +230,10 @@ h2 { font-size: 12pt; margin: 16px 0 8px; }
 .signature-block { page-break-inside: avoid !important; break-inside: avoid !important; margin-top: 28px; width: 100%; }
 .signature-img { max-height: 52px !important; max-width: 135px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .kop-line { border-top: 2.5px solid #000; border-bottom: 1px solid #000; height: 3px; margin: 6px 0 16px 0; }
+.photo-proof-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; display: block; text-align: center; }
+.photo-proof-img { max-width: 100% !important; max-height: 230px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.photo-single-box { display: inline-block; max-width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; }
+.photo-single-img { max-width: 100% !important; max-height: 280px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 </style>
 </head>
 <body>

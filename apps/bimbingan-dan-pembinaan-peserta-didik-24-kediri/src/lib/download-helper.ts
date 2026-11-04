@@ -210,8 +210,47 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
       }
       .pdf-render-root img {
         max-width: 100% !important;
+        object-fit: contain !important;
+      }
+      .pdf-render-root .photo-proof-box {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 4px !important;
+        padding: 3px !important;
+        display: block !important;
+        text-align: center !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .pdf-render-root .photo-proof-img {
+        max-width: 100% !important;
+        max-height: 230px !important;
+        width: auto !important;
         height: auto !important;
+        object-fit: contain !important;
+        display: block !important;
+        margin: 0 auto !important;
+        border-radius: 2px !important;
+      }
+      .pdf-render-root .photo-single-box {
         display: inline-block !important;
+        max-width: 100% !important;
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 4px !important;
+        padding: 3px !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+      .pdf-render-root .photo-single-img {
+        max-width: 100% !important;
+        max-height: 280px !important;
+        width: auto !important;
+        height: auto !important;
+        object-fit: contain !important;
+        display: block !important;
+        margin: 0 auto !important;
+        border-radius: 2px !important;
       }
       .pdf-render-root .signature-block {
         margin-top: 14px !important;
@@ -295,7 +334,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
     const scale = 2; // high-DPI scale factor
 
     const noBreakElements = Array.from(
-      container.querySelectorAll('tr, .signature-block, .kop-block, .meta-table, h1, h2, .section')
+      container.querySelectorAll('tr, .signature-block, .kop-block, .meta-table, h1, h2, .section, .photo-proof-box, .photo-single-box')
     );
 
     const blocks: { top: number; bottom: number }[] = [];

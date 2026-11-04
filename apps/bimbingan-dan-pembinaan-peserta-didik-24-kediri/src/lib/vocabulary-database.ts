@@ -741,49 +741,157 @@ export function detectTimeContext(text: string): 'pagi' | 'siang' | 'sore' | 'ma
   return null;
 }
 
-// Helper: detect RHK category from string
+// Helper: normalizer for common user typos in Indonesian civil-service keywords
+export function normalizeKeyword(raw: string): string {
+  let s = raw.toLowerCase().trim();
+  // Prefix typos
+  s = s.replace(/\bmendampin[h|g]i\b/g, 'mendampingi');
+  s = s.replace(/\bmendapngi\b/g, 'mendampingi');
+  s = s.replace(/\bmendapingi\b/g, 'mendampingi');
+  s = s.replace(/\bmngawasi\b/g, 'mengawasi');
+  s = s.replace(/\bmengawsi\b/g, 'mengawasi');
+  s = s.replace(/\bmembinbing\b/g, 'membimbing');
+  s = s.replace(/\bmembiimbing\b/g, 'membimbing');
+  s = s.replace(/\bmelaksnakan\b/g, 'melaksanakan');
+  s = s.replace(/\bmelaksankan\b/g, 'melaksanakan');
+  // Common action typos
+  s = s.replace(/\bolhraga\b/g, 'olahraga');
+  s = s.replace(/\bolahrga\b/g, 'olahraga');
+  s = s.replace(/\bsholat\b/g, 'sholat');
+  s = s.replace(/\bsolat\b/g, 'sholat');
+  s = s.replace(/\bsalat\b/g, 'sholat');
+  s = s.replace(/\bdhuhur\b/g, 'dzuhur');
+  s = s.replace(/\bduhur\b/g, 'dzuhur');
+  s = s.replace(/\bzuhur\b/g, 'dzuhur');
+  s = s.replace(/\bmagrib\b/g, 'maghrib');
+  s = s.replace(/\bmahgrib\b/g, 'maghrib');
+  s = s.replace(/\btahfid\b/g, 'tahfidz');
+  s = s.replace(/\btahfiz\b/g, 'tahfidz');
+  s = s.replace(/\bklas\b/g, 'kelas');
+  s = s.replace(/\bkls\b/g, 'kelas');
+  s = s.replace(/\basrma\b/g, 'asrama');
+  s = s.replace(/\bmkn\b/g, 'makan');
+  s = s.replace(/\bsrpan\b/g, 'sarapan');
+  return s;
+}
+
+// Helper: extract target class, room, or group from input (e.g. "kelas 7-4", "kamar 3")
+export function extractTargetEntity(text: string): { targetLabel: string | null; targetPhrase: string } {
+  // Matches "kelas 7-4", "kelas 7 4", "kelas 7A", "kelas 8.2", "kelas VII", "kelas IX"
+  const classMatch = text.match(/\b(kelas\s*[0-9ivx]+[\w\-_./]*)\b/i);
+  if (classMatch) {
+    const rawClass = classMatch[1].trim();
+    return { targetLabel: rawClass, targetPhrase: `peserta didik ${rawClass}` };
+  }
+
+  // Matches "kamar 1", "kamar 3", "kamar melati"
+  const roomMatch = text.match(/\b(kamar\s*[\w\-_]+)\b/i);
+  if (roomMatch) {
+    const rawRoom = roomMatch[1].trim();
+    return { targetLabel: rawRoom, targetPhrase: `santri penghuni ${rawRoom}` };
+  }
+
+  // Matches "asrama putra", "asrama putri"
+  const dormMatch = text.match(/\b(asrama\s*(putra|putri))\b/i);
+  if (dormMatch) {
+    return { targetLabel: dormMatch[1].trim(), targetPhrase: `santri ${dormMatch[1].trim()}` };
+  }
+
+  return { targetLabel: null, targetPhrase: 'peserta didik' };
+}
+
+// Helper: detect RHK category accurately with strict domain separation
 export function detectRhkCategory(text: string): 'RHK 1' | 'RHK 2' | 'RHK 3' | 'RHK 4' | 'RHK 5' | 'RHK 6' | 'RHK 7' {
-  const lower = text.toLowerCase();
-  if (lower.includes('khusus') || lower.includes('disabilitas') || lower.includes('inklusi') || lower.includes('abk')) {
+  const lower = normalizeKeyword(text);
+
+  // 1. Inklusi / Kebutuhan Khusus
+  if (
+    lower.includes('inklusi') || lower.includes('disabilitas') ||
+    lower.includes('berkebutuhan khusus') || lower.includes('abk') ||
+    lower.includes('autis') || lower.includes('slow learner') || lower.includes('tuna')
+  ) {
     return 'RHK 5';
   }
-  if (lower.includes('pelatihan') || lower.includes('workshop') || lower.includes('diklat') || lower.includes('webinar') || lower.includes('kompetensi') || lower.includes('bimtek')) {
+
+  // 2. Pengembangan Profesi Guru & Wali Asuh
+  if (
+    lower.includes('pelatihan') || lower.includes('workshop') || lower.includes('diklat') ||
+    lower.includes('webinar') || lower.includes('kompetensi') || lower.includes('bimtek') ||
+    lower.includes('studi banding')
+  ) {
     return 'RHK 6';
   }
-  if (lower.includes('tugas tambahan') || lower.includes('kepala sekolah') || lower.includes('panitia') || lower.includes('disposisi') || lower.includes('rapat koordinasi')) {
+
+  // 3. Tugas Tambahan / Kepanitiaan Dinas Pimpinan
+  if (
+    lower.includes('tugas tambahan') || lower.includes('kepala sekolah') ||
+    lower.includes('panitia') || lower.includes('disposisi') || lower.includes('anbk') ||
+    lower.includes('ppdb') || lower.includes('satgas')
+  ) {
     return 'RHK 7';
   }
+
+  // 4. Kemandirian & Tata Graha (RHK 2)
+  // Check laundry/cleaning FIRST only if washing/cleaning actions are explicitly mentioned
   if (
-    lower.includes('mengaji') || lower.includes('sholat') || lower.includes('solat') || lower.includes('kajian') ||
-    lower.includes('doa') || lower.includes('spiritual') || lower.includes('sakit') || lower.includes('uks') ||
-    lower.includes('kesehatan') || lower.includes('olahraga') || lower.includes('senam') || lower.includes('futsal') ||
-    lower.includes('konseling') || lower.includes('disiplin') || lower.includes('tata tertib') ||
-    lower.includes('apel') || lower.includes('setor') || lower.includes('hafalan') || lower.includes('tahfidz') ||
-    lower.includes('kunjungan') || lower.includes('emosional') || lower.includes('perundungan') || lower.includes('bully')
-  ) {
-    return 'RHK 4';
-  }
-  if (
-    lower.includes('cuci') || lower.includes('bersih') || lower.includes('rapikan') ||
-    lower.includes('merapikan') || lower.includes('piket') || lower.includes('laundry') ||
-    lower.includes('kemandirian') || lower.includes('kebersihan') || lower.includes('masak') ||
-    lower.includes('kasur') || lower.includes('seprai') || lower.includes('lemari') ||
-    lower.includes('setrika') || lower.includes('jemur')
+    lower.includes('cuci') || lower.includes('mencuci') || lower.includes('laundry') ||
+    lower.includes('setrika') || lower.includes('menyetrika') || lower.includes('jemur') ||
+    lower.includes('menjemur') || lower.includes('piring') || lower.includes('ompreng') ||
+    lower.includes('kasur') || lower.includes('ranjang') || lower.includes('seprai') ||
+    lower.includes('sprei') || lower.includes('selimut') || lower.includes('kloset') ||
+    lower.includes('kamar mandi') || lower.includes('piket kamar') || lower.includes('piket kebersihan') ||
+    lower.includes('tata graha') || lower.includes('loker') || lower.includes('sandal') ||
+    (lower.includes('sepatu') && !lower.includes('olahraga'))
   ) {
     return 'RHK 2';
   }
+
+  // 5. Olahraga & Kebugaran Jasmani (RHK 4 vs RHK 1)
+  if (
+    lower.includes('olahraga') || lower.includes('senam') || lower.includes('futsal') ||
+    lower.includes('voli') || lower.includes('bulutangkis') || lower.includes('badminton') ||
+    lower.includes('lari') || lower.includes('jogging') || lower.includes('kebugaran')
+  ) {
+    if (lower.includes('pjok') || lower.includes('pelajaran olahraga') || lower.includes('teori olahraga')) {
+      return 'RHK 1';
+    }
+    return 'RHK 4';
+  }
+
+  // 6. Spiritual, Rohani, Konseling & Kesehatan UKS (RHK 4)
+  if (
+    lower.includes('mengaji') || lower.includes('ngaji') || lower.includes('tadarus') ||
+    lower.includes('tahfidz') || lower.includes('tahsin') || lower.includes('hafalan') ||
+    lower.includes('kajian') || lower.includes('spiritual') || lower.includes('rohani') ||
+    lower.includes('doa bersama') || lower.includes('istighosah') || lower.includes('sakit') ||
+    lower.includes('uks') || lower.includes('kesehatan') || lower.includes('demam') ||
+    lower.includes('obat') || lower.includes('konseling') || lower.includes('afektif') ||
+    lower.includes('disiplin') || lower.includes('tata tertib') || lower.includes('razia') ||
+    lower.includes('homesick') || lower.includes('rindu') || lower.includes('kunjungan orang tua') ||
+    lower.includes('wali murid') || lower.includes('emosional') || lower.includes('perundungan') ||
+    lower.includes('bully')
+  ) {
+    return 'RHK 4';
+  }
+
+  // 7. Pembelajaran & Akademik (RHK 1)
   if (
     lower.includes('belajar') || lower.includes('tugas') || lower.includes('materi') ||
     lower.includes('akademik') || lower.includes('jurnal') || lower.includes('laptop') ||
-    lower.includes('refleksi') || lower.includes('sharing') || lower.includes('literasi') ||
-    lower.includes('baca buku') || lower.includes('pr')
+    lower.includes('refleksi') || lower.includes('literasi') || lower.includes('perpustakaan') ||
+    lower.includes('baca buku') || lower.includes('pr') || lower.includes('ulangan') ||
+    lower.includes('ujian') || lower.includes('matematika') || lower.includes('ipa') ||
+    lower.includes('ips') || lower.includes('fisika') || lower.includes('kimia') ||
+    lower.includes('biologi') || lower.includes('bahasa')
   ) {
     return 'RHK 1';
   }
+
+  // 8. Rutinitas Asrama & Ibadah Wajib (RHK 3)
   return 'RHK 3';
 }
 
-// Fast lookup index for massive 5,250+ vocabulary database
+// Fast lookup index for massive 50,000+ vocabulary database
 let _largeBankIndexed = false;
 const _exactLargeMap = new Map<string, CompactVocabItem>();
 const _tokensMap = new Map<string, CompactVocabItem[]>();
@@ -802,7 +910,7 @@ function ensureLargeBankIndex() {
       }
     }
 
-    // Index individual words/tokens for fast partial matching
+    // Index individual words/tokens with broad representation per token
     const words = key.split(/\s+/).filter(w => w.length > 2);
     for (const w of words) {
       let list = _tokensMap.get(w);
@@ -810,7 +918,7 @@ function ensureLargeBankIndex() {
         list = [];
         _tokensMap.set(w, list);
       }
-      if (list.length < 25) { // limit pool per token for speed
+      if (list.length < 80) {
         list.push(item);
       }
     }
@@ -819,28 +927,40 @@ function ensureLargeBankIndex() {
 }
 
 /**
- * Searches the vocabulary bank for matches across standard bank (66+) and massive bank (5,250+)
- * prioritizing exact matches, time-of-day compatibility, and token relevance.
+ * Searches the vocabulary bank with typo tolerance, RHK category enforcement, and situational target integration.
  */
 export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; rhk: string; matchedKeyword: string } | null {
-  const clean = rawKeyword.toLowerCase().trim();
-  if (!clean) return null;
+  const normalized = normalizeKeyword(rawKeyword);
+  if (!normalized) return null;
 
-  const timeContext = detectTimeContext(clean);
+  const { targetLabel } = extractTargetEntity(rawKeyword);
+  const expectedRhk = detectRhkCategory(normalized);
+  const timeContext = detectTimeContext(normalized);
 
-  // 1. Check standard comprehensive bank (rich multi-templates)
+  // If a specific target group (like "kelas 7-4" or "kamar 3") was entered,
+  // prioritize synthesis so the specific class/room is naturally integrated into the description.
+  if (targetLabel) {
+    const synthesized = synthesizeFallbackDeskripsi(rawKeyword);
+    return {
+      deskripsi: synthesized.deskripsi,
+      rhk: synthesized.rhk,
+      matchedKeyword: normalized,
+    };
+  }
+
+  // 1. Check standard comprehensive bank (filtering strictly by matching RHK)
   const sortedBank = [...VOCABULARY_BANK].sort((a, b) => b.keyword.length - a.keyword.length);
 
   for (const entry of sortedBank) {
-    const isKeywordMatched = clean.includes(entry.keyword);
-    const isAliasMatched = entry.aliases?.some(alias => clean.includes(alias.toLowerCase()));
+    if (entry.rhk !== expectedRhk) continue;
+
+    const isKeywordMatched = normalized.includes(entry.keyword);
+    const isAliasMatched = entry.aliases?.some(alias => normalized.includes(alias.toLowerCase()));
 
     if (isKeywordMatched || isAliasMatched) {
       const compatibleTemplates = entry.templates.filter(tpl => {
         const tplTime = detectTimeContext(tpl);
-        if (timeContext && tplTime && timeContext !== tplTime) {
-          return false;
-        }
+        if (timeContext && tplTime && timeContext !== tplTime) return false;
         return true;
       });
 
@@ -855,12 +975,12 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     }
   }
 
-  // 2. Check massive 5,250+ vocabulary database
+  // 2. Check massive 50,000+ vocabulary database
   ensureLargeBankIndex();
 
   // 2a. Direct exact lookup
-  const exactItem = _exactLargeMap.get(clean);
-  if (exactItem) {
+  const exactItem = _exactLargeMap.get(normalized);
+  if (exactItem && exactItem.r === expectedRhk) {
     return {
       deskripsi: exactItem.d,
       rhk: exactItem.r,
@@ -868,15 +988,16 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     };
   }
 
-  // 2b. Token / Word intersection search
-  const cleanTokens = clean.split(/\s+/).filter(w => w.length > 2);
+  // 2b. Token / Word intersection search with strict RHK category matching
+  const cleanTokens = normalized.split(/\s+/).filter(w => w.length > 2 && !['dan', 'yang', 'dari', 'untuk', 'pada', 'dengan'].includes(w));
   const candidates: CompactVocabItem[] = [];
 
   for (const token of cleanTokens) {
     const matchedItems = _tokensMap.get(token);
     if (matchedItems) {
       for (const m of matchedItems) {
-        if (!candidates.includes(m)) {
+        // STRICT SAFETY: candidate RHK MUST match expected RHK!
+        if (m.r === expectedRhk && !candidates.includes(m)) {
           candidates.push(m);
         }
       }
@@ -909,7 +1030,13 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     };
   }
 
-  return null;
+  // 3. Fallback to intelligent contextual synthesizer
+  const synthesized = synthesizeFallbackDeskripsi(rawKeyword);
+  return {
+    deskripsi: synthesized.deskripsi,
+    rhk: synthesized.rhk,
+    matchedKeyword: normalized,
+  };
 }
 
 /**
@@ -943,33 +1070,169 @@ export function getVocabularyBreakdown() {
 }
 
 /**
- * Synthesizes a formal, grammatically polished Indonesian civil-service description
- * if no exact vocabulary entry was found. Guarantees 0% failure rate!
+ * Intelligent contextual synthesizer: Generates precise, formal civil-service descriptions
+ * with exact grammatical matching, typo normalization, and situational target integration.
  */
 export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: string; rhk: string } {
-  const keyword = rawKeyword.toLowerCase().trim();
-  const timeContext = detectTimeContext(keyword);
-  const rhk = detectRhkCategory(keyword);
+  const normalized = normalizeKeyword(rawKeyword);
+  const { targetLabel, targetPhrase } = extractTargetEntity(rawKeyword);
+  const rhk = detectRhkCategory(normalized);
+  const timeContext = detectTimeContext(normalized);
 
-  const cleanKeyword = rawKeyword
-    .trim()
-    .replace(/^(mendampingi|mengawasi|membimbing|melaksanakan|mengikuti)\s+/i, '');
-  const capitalized = cleanKeyword.charAt(0).toUpperCase() + cleanKeyword.slice(1);
+  // 1. Olahraga & Kebugaran Jasmani (RHK 4 atau RHK 1)
+  if (
+    normalized.includes('olahraga') || normalized.includes('senam') ||
+    normalized.includes('futsal') || normalized.includes('voli') ||
+    normalized.includes('bulutangkis') || normalized.includes('badminton') ||
+    normalized.includes('lari') || normalized.includes('jogging') ||
+    normalized.includes('kebugaran')
+  ) {
+    let sportActivity = 'olahraga dan kebugaran jasmani';
+    if (normalized.includes('futsal')) sportActivity = 'olahraga futsal bersama';
+    else if (normalized.includes('voli')) sportActivity = 'olahraga bola voli';
+    else if (normalized.includes('bulutangkis') || normalized.includes('badminton')) sportActivity = 'olahraga bulutangkis';
+    else if (normalized.includes('senam')) sportActivity = 'senam kebugaran jasmani';
+    else if (normalized.includes('lari') || normalized.includes('jogging')) sportActivity = 'olahraga lari dan jalan santai';
 
-  let deskripsi = '';
-  if (timeContext === 'malam') {
-    deskripsi = `Melaksanakan pendampingan kegiatan ${capitalized.toLowerCase()} bersama peserta didik di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan suasana malam hari tetap tertib, aman, kondusif, dan penuh rasa kekeluargaan.`;
-  } else if (timeContext === 'pagi' || timeContext === 'subuh') {
-    deskripsi = `Melaksanakan pendampingan kegiatan ${capitalized.toLowerCase()} peserta didik pada pagi hari di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan disiplin dan tertib guna mempersiapkan siswa mengawali hari dengan penuh semangat.`;
-  } else if (timeContext === 'siang') {
-    deskripsi = `Melaksanakan pendampingan kegiatan ${capitalized.toLowerCase()} peserta didik pada siang hari di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib, terarah, dan bertanggung jawab.`;
-  } else if (timeContext === 'sore') {
-    deskripsi = `Melaksanakan pendampingan kegiatan ${capitalized.toLowerCase()} bersama peserta didik pada sore hari di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan seluruh siswa mengikuti dengan tertib dan antusias.`;
-  } else {
-    deskripsi = `Melaksanakan tugas pendampingan pada kegiatan ${capitalized.toLowerCase()} peserta didik di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib, bertanggung jawab, dan mendukung pembinaan karakter siswa.`;
+    if (rhk === 'RHK 1') {
+      return {
+        deskripsi: `Mendampingi kegiatan pembelajaran dan bimbingan praktik Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK) materi ${sportActivity} ${targetPhrase} di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib dan bersemangat.`,
+        rhk: 'RHK 1',
+      };
+    }
+
+    return {
+      deskripsi: `Mendampingi pelaksanaan kegiatan ${sportActivity} ${targetPhrase} di lapangan Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan seluruh siswa berpartisipasi aktif secara tertib, sportif, dan menjaga keselamatan fisik.`,
+      rhk: 'RHK 4',
+    };
   }
 
-  return { deskripsi, rhk };
+  // 2. Bimbingan Belajar & Akademik (RHK 1)
+  if (rhk === 'RHK 1') {
+    let subject = 'materi pelajaran';
+    if (normalized.includes('matematika')) subject = 'Matematika';
+    else if (normalized.includes('ipa') || normalized.includes('fisika') || normalized.includes('kimia') || normalized.includes('biologi')) subject = 'Ilmu Pengetahuan Alam (IPA)';
+    else if (normalized.includes('ips') || normalized.includes('sejarah') || normalized.includes('geografi') || normalized.includes('ekonomi')) subject = 'Ilmu Pengetahuan Sosial (IPS)';
+    else if (normalized.includes('bahasa indonesia')) subject = 'Bahasa Indonesia';
+    else if (normalized.includes('bahasa inggris')) subject = 'Bahasa Inggris';
+    else if (normalized.includes('bahasa arab')) subject = 'Bahasa Arab';
+    else if (normalized.includes('ppkn') || normalized.includes('pancasila')) subject = 'Pendidikan Pancasila';
+    else if (normalized.includes('tik') || normalized.includes('komputer') || normalized.includes('laptop')) subject = 'Teknologi Informasi & Komputer (TIK)';
+    else if (normalized.includes('literasi') || normalized.includes('buku') || normalized.includes('perpustakaan')) subject = 'Literasi Membaca';
+
+    return {
+      deskripsi: `Mendampingi sesi bimbingan belajar dan pengerjaan tugas sekolah bidang studi ${subject} ${targetPhrase} di ruang belajar asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan setiap siswa memahami konsep materi dengan baik dan bersemangat.`,
+      rhk: 'RHK 1',
+    };
+  }
+
+  // 3. Kemandirian, Kebersihan & Tata Graha (RHK 2)
+  if (rhk === 'RHK 2') {
+    let cleanAction = 'kebersihan dan kerapian';
+    if (normalized.includes('cuci pakaian') || normalized.includes('laundry')) cleanAction = 'mencuci dan menjemur pakaian seragam secara mandiri';
+    else if (normalized.includes('setrika')) cleanAction = 'menyetrika dan merapikan pakaian seragam ke dalam lemari';
+    else if (normalized.includes('cuci piring') || normalized.includes('piring') || normalized.includes('ompreng')) cleanAction = 'mencuci dan merapikan peralatan makan mandiri';
+    else if (normalized.includes('kamar mandi') || normalized.includes('kloset') || normalized.includes('toilet')) cleanAction = 'membersihkan dan menyikat sanitasi kamar mandi asrama';
+    else if (normalized.includes('kamar') || normalized.includes('kasur') || normalized.includes('ranjang') || normalized.includes('sprei')) cleanAction = 'merapikan tempat tidur dan membersihkan kamar asrama';
+    else if (normalized.includes('sepatu') || normalized.includes('sandal')) cleanAction = 'mencuci dan menata alas kaki rapi pada rak sepatu';
+
+    return {
+      deskripsi: `Mendampingi dan membimbing ${targetPhrase} melaksanakan piket kemandirian ${cleanAction} di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.`,
+      rhk: 'RHK 2',
+    };
+  }
+
+  // 4. Spiritual, Rohani, Konseling & Kesehatan (RHK 4)
+  if (rhk === 'RHK 4') {
+    if (normalized.includes('tahfidz') || normalized.includes('hafalan') || normalized.includes('tahsin') || normalized.includes('mengaji') || normalized.includes('tadarus')) {
+      return {
+        deskripsi: `Mendampingi dan menyimak kegiatan setoran hafalan Al-Qur'an (Tahfidz) ${targetPhrase} di mushola asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan lancar, tertib, dan penuh kekhusyukan.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('sakit') || normalized.includes('uks') || normalized.includes('kesehatan') || normalized.includes('demam') || normalized.includes('obat')) {
+      return {
+        deskripsi: `Mendampingi dan memberikan perawatan bagi santri yang mengalami keluhan kesehatan ke ruang UKS asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memberikan pertolongan pertama, serta memantau kondisi fisik secara berkala.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('konseling') || normalized.includes('afektif') || normalized.includes('motivasi') || normalized.includes('homesick') || normalized.includes('rindu')) {
+      return {
+        deskripsi: `Melaksanakan sesi bimbingan konseling dan pendampingan personal bagi ${targetPhrase} di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna memberikan penguatan motivasi belajar dan ketahanan mental.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('disiplin') || normalized.includes('razia') || normalized.includes('tata tertib')) {
+      return {
+        deskripsi: `Melaksanakan pengawasan kedisiplinan dan penegakan tata tertib asrama bagi ${targetPhrase} di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menciptakan lingkungan belajar yang tertib, aman, dan kondusif.`,
+        rhk: 'RHK 4',
+      };
+    }
+    return {
+      deskripsi: `Melaksanakan pembinaan karakter spiritual dan budi pekerti luhur bagi ${targetPhrase} di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib dan berkelanjutan.`,
+      rhk: 'RHK 4',
+    };
+  }
+
+  // 5. Rutinitas Asrama, Ibadah Sholat & Makan (RHK 3)
+  if (normalized.includes('sholat') || normalized.includes('solat') || normalized.includes('jamaah')) {
+    let sholatName = 'sholat';
+    if (normalized.includes('subuh')) sholatName = 'sholat Subuh';
+    else if (normalized.includes('dzuhur') || normalized.includes('duhur')) sholatName = 'sholat Dzuhur';
+    else if (normalized.includes('ashar')) sholatName = 'sholat Ashar';
+    else if (normalized.includes('maghrib')) sholatName = 'sholat Maghrib';
+    else if (normalized.includes('isya')) sholatName = 'sholat Isya';
+    else if (normalized.includes('dhuha')) sholatName = 'sholat Dhuha';
+    else if (normalized.includes('tahajud')) sholatName = 'sholat Tahajud';
+
+    return {
+      deskripsi: `Mendampingi pelaksanaan ibadah ${sholatName} berjamaah bersama ${targetPhrase} di mushola asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, dilanjutkan dengan wirid bersama dan pembinaan karakter santri secara khusyuk.`,
+      rhk: 'RHK 3',
+    };
+  }
+
+  if (normalized.includes('makan') || normalized.includes('sarapan')) {
+    let mealTime = 'bersama';
+    if (normalized.includes('malam')) mealTime = 'makan malam';
+    else if (normalized.includes('siang')) mealTime = 'makan siang';
+    else if (normalized.includes('pagi') || normalized.includes('sarapan')) mealTime = 'sarapan pagi';
+
+    return {
+      deskripsi: `Mendampingi kegiatan ${mealTime} bersama ${targetPhrase} di ruang makan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan ketertiban antrean, penerapan adab makan islami, dan asupan nutrisi tercukupi.`,
+      rhk: 'RHK 3',
+    };
+  }
+
+  if (normalized.includes('tidur') || normalized.includes('patroli')) {
+    return {
+      deskripsi: `Melaksanakan pengawasan jam istirahat malam santri dan patroli keliling lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan seluruh peserta didik telah beristirahat di kamar secara aman, tertib, dan kondusif.`,
+      rhk: 'RHK 3',
+    };
+  }
+
+  if (normalized.includes('apel') || normalized.includes('upacara')) {
+    return {
+      deskripsi: `Mendampingi pelaksanaan apel kedisiplinan ${targetPhrase} di halaman kampus Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memeriksa presensi kehadiran dan kesiapan sikap santri sebelum memulai rangkaian kegiatan.`,
+      rhk: 'RHK 3',
+    };
+  }
+
+  // General fallback
+  const cleanKeyword = normalized
+    .replace(/^(mendampingi|mengawasi|membimbing|melaksanakan|mengikuti)\s+/i, '')
+    .trim();
+  const capitalized = cleanKeyword ? cleanKeyword.charAt(0).toUpperCase() + cleanKeyword.slice(1) : 'kegiatan harian';
+
+  let timeDesc = 'secara tertib, bertanggung jawab, dan mendukung pembinaan karakter siswa';
+  if (timeContext === 'malam') timeDesc = 'pada malam hari di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dalam suasana yang aman, tertib, dan kondusif';
+  else if (timeContext === 'pagi' || timeContext === 'subuh') timeDesc = 'pada pagi hari di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan disiplin dan penuh semangat';
+  else if (timeContext === 'siang') timeDesc = 'pada siang hari di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib dan terarah';
+  else if (timeContext === 'sore') timeDesc = 'pada sore hari di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan antusias dan tertib';
+
+  return {
+    deskripsi: `Melaksanakan pendampingan kegiatan ${capitalized.toLowerCase()} bersama ${targetPhrase} di Sekolah Rakyat Terintegrasi 1 Kab. Kediri ${timeDesc}.`,
+    rhk: rhk || 'RHK 3',
+  };
 }
 
 // Client-side LocalStorage cache management for learned AI vocabulary

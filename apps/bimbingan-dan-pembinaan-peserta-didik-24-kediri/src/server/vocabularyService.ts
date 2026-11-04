@@ -50,19 +50,27 @@ function initStorage() {
 
 initStorage();
 
+const MAX_LEARNED_CAPACITY = 50000;
+let _saveDebounceTimer: NodeJS.Timeout | null = null;
+
 function saveToDisk() {
-  try {
-    if (!fs.existsSync(STORAGE_DIR)) {
-      fs.mkdirSync(STORAGE_DIR, { recursive: true });
+  if (_saveDebounceTimer) return;
+  _saveDebounceTimer = setTimeout(() => {
+    _saveDebounceTimer = null;
+    try {
+      if (!fs.existsSync(STORAGE_DIR)) {
+        fs.mkdirSync(STORAGE_DIR, { recursive: true });
+      }
+      fs.writeFileSync(STORAGE_FILE, JSON.stringify(inMemoryVocabulary), 'utf-8');
+    } catch (err) {
+      console.warn('[Vocabulary Service] Failed to write learned vocabulary to disk:', err);
     }
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(inMemoryVocabulary, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[Vocabulary Service] Failed to write learned vocabulary to disk:', err);
-  }
+  }, 500);
 }
 
 /**
  * Save newly generated AI description into server vocabulary bank
+ * Automatically records every Gemini AI generation up to 50,000 entries.
  */
 export function saveLearnedVocabularyServer(
   kataKunci: string,
@@ -97,9 +105,9 @@ export function saveLearnedVocabularyServer(
   // Add to beginning of memory list
   inMemoryVocabulary.unshift(newItem);
 
-  // Limit memory to 1000 learned entries
-  if (inMemoryVocabulary.length > 1000) {
-    inMemoryVocabulary = inMemoryVocabulary.slice(0, 1000);
+  // Limit memory to 50,000 learned entries
+  if (inMemoryVocabulary.length > MAX_LEARNED_CAPACITY) {
+    inMemoryVocabulary = inMemoryVocabulary.slice(0, MAX_LEARNED_CAPACITY);
   }
 
   saveToDisk();

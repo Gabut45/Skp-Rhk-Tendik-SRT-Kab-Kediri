@@ -45,13 +45,14 @@ if (envFileKey) {
 let _aiInstance: GoogleGenAI | null = null;
 let _apiKeyBlacklisted = false;
 let _lastTestedKey = '';
+let _blacklistTimestamp = 0;
 
 /**
  * Validasi apakah API key Gemini tersedia dan bukan dummy / invalid
  */
 export function hasValidGeminiKey(): boolean {
-  // Selalu periksa kunci terbaru dari file .env jika ada
-  const permanentKey = loadKeyFromEnvFile() || process.env.GEMINI_API_KEY;
+  // Selalu periksa kunci terbaru dari file .env atau environment variable
+  const permanentKey = loadKeyFromEnvFile() || process.env.GEMINI_API_KEY || process.env.API_KEY;
   if (!permanentKey || typeof permanentKey !== 'string') return false;
   const trimmed = permanentKey.trim();
 
@@ -59,11 +60,21 @@ export function hasValidGeminiKey(): boolean {
   if (trimmed !== _lastTestedKey) {
     _lastTestedKey = trimmed;
     _apiKeyBlacklisted = false;
+    _blacklistTimestamp = 0;
     _aiInstance = null;
     process.env.GEMINI_API_KEY = trimmed;
   }
 
-  if (_apiKeyBlacklisted) return false;
+  // Jika pernah blacklist, beri kesempatan coba kembali setelah 30 detik (cooldown)
+  if (_apiKeyBlacklisted) {
+    if (Date.now() - _blacklistTimestamp > 30000) {
+      _apiKeyBlacklisted = false;
+      _aiInstance = null;
+    } else {
+      return false;
+    }
+  }
+
   if (trimmed.length < 20) return false;
   if (
     trimmed === 'AIzaSyDummyKeyForInitializationOnly' ||
@@ -142,31 +153,57 @@ Instruksi:
    - RHK 6: Pengembangan Kompetensi Tenaga Kependidikan
    - RHK 7: Tugas Tambahan dari Kepala Sekolah`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              deskripsi: {
-                type: Type.STRING,
-                description: 'Deskripsi kegiatan kedinasan formal yang presisi sesuai waktu dan kata kunci',
-              },
-              rhk: {
-                type: Type.STRING,
-                description: 'Kategori RHK yang sesuai, contoh: RHK 1, RHK 2, RHK 3, RHK 4',
+      // Gunakan gemini-3.1-flash-lite terlebih dahulu karena responsif dan bebas antrean 503, lalu gemini-3.8-flash
+      const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      let parsed: any = null;
+
+      for (const currentModel of modelsToTry) {
+        try {
+          const generatePromise = ai.models.generateContent({
+            model: currentModel,
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  deskripsi: {
+                    type: Type.STRING,
+                    description: 'Deskripsi kegiatan kedinasan formal yang presisi sesuai waktu dan kata kunci',
+                  },
+                  rhk: {
+                    type: Type.STRING,
+                    description: 'Kategori RHK yang sesuai, contoh: RHK 1, RHK 2, RHK 3, RHK 4',
+                  },
+                },
+                required: ['deskripsi', 'rhk'],
               },
             },
-            required: ['deskripsi', 'rhk'],
-          },
-        },
-      });
+          });
 
-      const text = response.text?.trim() || '';
-      const parsed = JSON.parse(text);
-      if (parsed.deskripsi && parsed.rhk) {
+          // Proteksi batas waktu 6 detik agar UI pengguna selalu responsif
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('TIMEOUT_GEMINI_API')), 6000)
+          );
+
+          const response = (await Promise.race([generatePromise, timeoutPromise])) as any;
+          const text = response.text?.trim() || '';
+          parsed = JSON.parse(text);
+          if (parsed.deskripsi && parsed.rhk) {
+            break;
+          }
+        } catch (innerErr: any) {
+          const msg = String(innerErr?.message || innerErr);
+          if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+            _apiKeyBlacklisted = true;
+            _blacklistTimestamp = Date.now();
+            break;
+          }
+          // Lanjutkan ke model berikutnya atau fallback ke bank kosakata secara halus
+        }
+      }
+
+      if (parsed?.deskripsi && parsed?.rhk) {
         const deskripsiStr = String(parsed.deskripsi);
         const rhkStr = String(parsed.rhk);
 
@@ -183,7 +220,6 @@ Instruksi:
         };
       }
     } catch (err: any) {
-      // Jika key tidak valid atau quota habis, tandai blacklist agar tidak berulang kali memanggil network
       const errMsg = String(err?.message || err || '');
       if (
         errMsg.includes('API_KEY_INVALID') ||
@@ -193,7 +229,6 @@ Instruksi:
       ) {
         _apiKeyBlacklisted = true;
       }
-      // Beralih secara senyap & mulus ke Bank Kosakata Server
     }
   }
 
@@ -213,29 +248,20 @@ export async function handleGenerateTextServer(prompt: string, systemInstruction
     return 'Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.';
   }
 
-  const maxAttempts = 2;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  for (const model of modelsToTry) {
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model,
         contents: prompt,
         config: systemInstruction ? { systemInstruction } : undefined,
       });
       return response.text ?? '';
-    } catch (err: any) {
-      const errMsg = String(err?.message || err || '');
-      if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
-        _apiKeyBlacklisted = true;
-        return 'Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.';
-      }
-      if (attempt < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        continue;
-      }
-      return 'Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.';
+    } catch {
+      // lanjut ke model berikutnya
     }
   }
-  return '';
+  return 'Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.';
 }
 
 /**
@@ -251,23 +277,24 @@ export async function handleStreamTextServer(
     return;
   }
 
-  try {
-    const responseStream = await ai.models.generateContentStream({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-      config: systemInstruction ? { systemInstruction } : undefined,
-    });
+  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  for (const model of modelsToTry) {
+    try {
+      const responseStream = await ai.models.generateContentStream({
+        model,
+        contents: prompt,
+        config: systemInstruction ? { systemInstruction } : undefined,
+      });
 
-    for await (const chunk of responseStream) {
-      if (chunk.text) {
-        onChunk(chunk.text);
+      for await (const chunk of responseStream) {
+        if (chunk.text) {
+          onChunk(chunk.text);
+        }
       }
+      return;
+    } catch {
+      // lanjut ke model berikutnya
     }
-  } catch (err: any) {
-    const errMsg = String(err?.message || err || '');
-    if (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid')) {
-      _apiKeyBlacklisted = true;
-    }
-    onChunk('Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.');
   }
+  onChunk('Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.');
 }
