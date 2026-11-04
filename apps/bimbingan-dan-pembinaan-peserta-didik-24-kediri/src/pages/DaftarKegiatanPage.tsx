@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
 
+import { deleteCpanelBulkKegiatan } from '@/lib/cpanel-client';
+
 type Activity = GetKegiatanOutputType['records'][0];
 
 function getLocalDateString(d: Date = new Date()): string {
@@ -186,6 +188,22 @@ export default function DaftarKegiatanPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      toast.info(`Menghapus ${ids.length} kegiatan secara permanen dari server...`);
+      await Promise.allSettled(ids.map(id => deleteKegiatan({ id })));
+      await deleteCpanelBulkKegiatan(ids);
+
+      setRecords(prev => prev.filter(r => !selectedIds.has(r.id)));
+      setSelectedIds(new Set());
+      toast.success(`${ids.length} kegiatan berhasil dihapus permanen dari server`);
+    } catch {
+      toast.error('Gagal menghapus beberapa kegiatan');
+    }
+  };
+
   const handleCopyToInput = () => {
     const selected = records.filter(r => selectedIds.has(r.id));
     if (selected.length === 0) return toast.error('Pilih minimal 1 kegiatan');
@@ -233,19 +251,38 @@ export default function DaftarKegiatanPage() {
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h2 className="text-2xl font-bold text-foreground">Daftar Kegiatan Harian</h2>
-            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 gap-1.5 py-1 px-2.5 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Live Database MySQL cPanel (game.gabutgame.my.id)
-            </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
             Lihat, kelola, dan salin kegiatan yang sudah diinput dari semua perangkat secara langsung
           </p>
         </div>
         {selectedIds.size > 0 && (
-          <Button onClick={handleCopyToInput} className="gap-2">
-            <Copy size={14} /> Salin {selectedIds.size} Kegiatan ke Input
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button onClick={handleCopyToInput} size="sm" className="gap-1.5 text-xs">
+              <Copy size={14} /> Salin {selectedIds.size} Kegiatan
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
+                  <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
+                    Hapus Permanen
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         )}
       </div>
 

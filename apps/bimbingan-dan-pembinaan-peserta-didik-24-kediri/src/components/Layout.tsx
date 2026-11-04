@@ -1,10 +1,22 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { ClipboardList, FileText, History, CalendarDays, Menu, X, LogOut, Calendar, Database } from 'lucide-react';
+import {
+  ClipboardList,
+  FileText,
+  History,
+  CalendarDays,
+  Menu,
+  X,
+  LogOut,
+  Calendar,
+  Database,
+  ShieldCheck,
+  User as UserIcon,
+} from 'lucide-react';
 import { useState } from 'react';
-import { useAuth } from '@project/components/lib/legacyAuth';
+import { useAuth } from '@/lib/auth-context';
 import CpanelModal from './CpanelModal';
 
-const navItems = [
+const baseNavItems = [
   { to: '/kegiatan-harian', label: 'Input Kegiatan', icon: ClipboardList },
   { to: '/daftar-kegiatan', label: 'Daftar Kegiatan', icon: CalendarDays },
   { to: '/laporan-rhk', label: 'Laporan RHK', icon: FileText },
@@ -17,55 +29,96 @@ export default function Layout() {
   const [cpanelOpen, setCpanelOpen] = useState(false);
   const { user, logout } = useAuth();
 
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  const navItems = [
+    ...baseNavItems,
+    ...(isSuperAdmin ? [{ to: '/kelola-pengguna', label: 'Kelola Akun', icon: ShieldCheck }] : []),
+  ];
+
   return (
     <div className="min-h-screen bg-muted/30">
       {/* Top bar */}
       <header className="bg-primary text-primary-foreground shadow-md sticky top-0 z-50">
         <div className="container mx-auto px-4 flex items-center justify-between h-14">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary-foreground/20 rounded-lg flex items-center justify-center text-xs font-bold">SR</div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-primary-foreground/20 rounded-lg flex items-center justify-center text-xs font-bold shadow-inner">
+              SR
+            </div>
             <div>
               <h1 className="text-sm font-bold leading-tight">SR TERINTEGRASI 1 KEDIRI</h1>
               <p className="text-[10px] opacity-80">Sistem Pelaporan Kinerja</p>
             </div>
           </div>
+
           <div className="flex items-center gap-2">
-            <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
+            <button
+              className="md:hidden p-2 rounded-lg hover:bg-primary-foreground/10 transition-colors"
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
               {mobileOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
+
             <nav className="hidden md:flex items-center gap-1">
               {navItems.map(item => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      isActive ? 'bg-primary-foreground/20 font-semibold' : 'hover:bg-primary-foreground/10 opacity-90'
+                    `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary-foreground/20 font-bold shadow-sm'
+                        : 'hover:bg-primary-foreground/10 opacity-90'
                     }`
                   }
                 >
-                  <item.icon size={16} />
+                  <item.icon size={15} />
                   {item.label}
                 </NavLink>
               ))}
             </nav>
-            <button
-              onClick={() => setCpanelOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-400 text-amber-950 hover:bg-amber-300 transition-colors shadow-sm"
-              title="Konfigurasi Database MySQL cPanel"
-            >
-              <Database size={15} />
-              <span>Database cPanel</span>
-            </button>
-            {user && (
+
+            {/* Menu "Database cPanel" HANYA tampil untuk Super Admin (Tersembunyi dari publik & wali asuh biasa) */}
+            {isSuperAdmin && (
               <button
-                onClick={() => logout()}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm hover:bg-primary-foreground/10 opacity-90 transition-colors ml-1"
-                title={`Logout (${user.email})`}
+                onClick={() => setCpanelOpen(true)}
+                className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-400 text-amber-950 hover:bg-amber-300 transition-colors shadow-sm ml-1"
+                title="Konfigurasi Database MySQL cPanel (Khusus Super Admin)"
               >
-                <LogOut size={16} />
-                <span className="hidden lg:inline">Logout</span>
+                <Database size={14} />
+                <span>Database cPanel</span>
               </button>
+            )}
+
+            {/* User Profile Info & Logout */}
+            {user && (
+              <div className="flex items-center gap-2 ml-1 pl-2 border-l border-primary-foreground/20">
+                <div className="hidden xl:flex flex-col text-right">
+                  <span className="text-xs font-semibold leading-none max-w-[150px] truncate">
+                    {user.nama}
+                  </span>
+                  <span className="text-[10px] opacity-75 font-mono">
+                    {isSuperAdmin ? 'Super Admin' : user.username}
+                  </span>
+                </div>
+
+                <div
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                    isSuperAdmin ? 'bg-amber-400 text-amber-950' : 'bg-primary-foreground/20 text-white'
+                  }`}
+                >
+                  {isSuperAdmin ? 'Super Admin' : 'Wali Asuh'}
+                </div>
+
+                <button
+                  onClick={() => logout()}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs hover:bg-primary-foreground/20 opacity-90 transition-colors text-red-100 hover:text-white"
+                  title={`Logout (${user.username})`}
+                >
+                  <LogOut size={15} />
+                  <span className="hidden sm:inline">Logout</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -89,16 +142,41 @@ export default function Layout() {
               {item.label}
             </NavLink>
           ))}
-          <button
-            onClick={() => {
-              setMobileOpen(false);
-              setCpanelOpen(true);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm bg-amber-50 text-amber-900 font-semibold border-b border-amber-200"
-          >
-            <Database size={18} className="text-amber-700" />
-            Integrasi Database cPanel
-          </button>
+
+          {/* Akses Database cPanel di menu mobile HANYA untuk Super Admin */}
+          {isSuperAdmin && (
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                setCpanelOpen(true);
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm bg-amber-50 text-amber-900 font-semibold border-b border-amber-200"
+            >
+              <Database size={18} className="text-amber-700" />
+              Integrasi Database cPanel (Super Admin)
+            </button>
+          )}
+
+          {user && (
+            <div className="p-4 bg-muted/40 border-t flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-foreground">{user.nama}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {isSuperAdmin ? 'Super Admin SKP' : `Wali Asuh (${user.username})`}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setMobileOpen(false);
+                  logout();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs bg-red-50 text-red-700 border border-red-200 font-medium"
+              >
+                <LogOut size={14} />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       )}
 

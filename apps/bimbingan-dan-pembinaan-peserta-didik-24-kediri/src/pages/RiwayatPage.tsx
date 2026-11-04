@@ -5,17 +5,18 @@ import { Button } from '@project/components/ui/button';
 import { Badge } from '@project/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@project/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@project/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@project/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@project/components/ui/dialog';
 import { Label } from '@project/components/ui/label';
 import { Textarea } from '@project/components/ui/textarea';
 import { Input } from '@project/components/ui/input';
-import { Trash2, Loader2, Pencil, Copy, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye, Database, X } from 'lucide-react';
-import { getRiwayat, deleteRiwayat, getKegiatan, previewHarian, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
+import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye } from 'lucide-react';
+import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd } from '@/lib/pelapor-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
+import { deleteCpanelBulkKegiatan, getDeletedRiwayatKeys, markDeletedRiwayatKey } from '@/lib/cpanel-client';
 
 type FileRecord = GetRiwayatOutputType['records'][0];
 type Activity = GetKegiatanOutputType['records'][0];
@@ -70,28 +71,53 @@ export default function RiwayatPage() {
 
   /**
    * Mengambil atau membuat HTML dokumen secara on-demand.
-   * Jika record berasal dari cPanel atau pdfUrl lokal belum ada,
-   * secara otomatis mengambil kegiatan dari cPanel MySQL dan membuat HTML preview resmi.
    */
   const getRecordHtml = async (r: FileRecord, isWord: boolean = false): Promise<string> => {
-    // 1. Jika file lokal/cached memiliki pdfUrl valid dan bukan permintaan Word
+    // 1. Jika file lokal/cached memiliki HTML tersimpan (bukan binary PDF data URL)
     if (!isWord && r.pdfUrl && !r.id.startsWith('cpanel_')) {
       if (r.pdfUrl.startsWith('data:text/html;charset=utf-8,')) {
         return decodeURIComponent(r.pdfUrl.slice('data:text/html;charset=utf-8,'.length));
       }
-      if (r.pdfUrl.startsWith('data:')) {
-        const commaIndex = r.pdfUrl.indexOf(',');
-        return decodeURIComponent(r.pdfUrl.slice(commaIndex + 1));
+      if (r.pdfUrl.startsWith('data:text/html,')) {
+        return decodeURIComponent(r.pdfUrl.slice('data:text/html,'.length));
       }
-      try {
-        const res = await fetch(r.pdfUrl);
-        if (res.ok) return await res.text();
-      } catch (e) {
-        console.warn('Fetch pdfUrl gagal, membuat on-the-fly:', e);
+      if (r.pdfUrl.startsWith('blob:') || (r.pdfUrl.startsWith('http') && !r.pdfUrl.endsWith('.pdf'))) {
+        try {
+          const res = await fetch(r.pdfUrl);
+          if (res.ok) {
+            const text = await res.text();
+            if (text && (text.includes('<html') || text.includes('<table') || text.includes('KINERJA HARIAN') || text.includes('LAPORAN'))) {
+              return text;
+            }
+          }
+        } catch (e) {
+          console.warn('Fetch pdfUrl gagal, membuat on-the-fly:', e);
+        }
       }
     }
 
-    // 2. Ambil data kegiatan live dari cPanel MySQL
+    // 2. Jika laporan adalah Laporan RHK
+    if (r.jenisLaporan === 'Laporan RHK' || r.namaFile?.includes('RHK')) {
+      const rhkMatch = (r.rhkNomor || r.namaFile || '').match(/(\d+)/);
+      const rhkNomor = rhkMatch ? rhkMatch[1] : '1';
+      const targetTanggalMulai = r.tanggalMulai || today;
+      const targetTanggalSelesai = r.tanggalSelesai || r.tanggalMulai || today;
+      const pelaporNama = r.namaPelapor || DEFAULT_PELAPOR.nama;
+      const savedTtd = getSavedTtd(pelaporNama);
+
+      const rhkRes = await generatePdfRhk({
+        rhkNomor: rhkNomor as any,
+        namaPelapor: pelaporNama,
+        nip: DEFAULT_PELAPOR.nip,
+        tanggalMulai: targetTanggalMulai,
+        tanggalSelesai: targetTanggalSelesai,
+        tandaTangan: savedTtd || undefined,
+        format: isWord ? 'word' : 'pdf',
+      });
+      return isWord ? rhkRes.wordHtml : rhkRes.pdfHtml;
+    }
+
+    // 3. Ambil data kegiatan dari database untuk merekonstruksi HTML laporan secara akurat
     const targetTanggal = r.tanggalMulai || today;
     const kegData = await getKegiatan({
       tanggalMulai: targetTanggal,
@@ -146,8 +172,23 @@ export default function RiwayatPage() {
   const handleDownloadPdfRecord = async (r: FileRecord) => {
     try {
       toast.info('Menyiapkan unduhan PDF...');
-      const html = await getRecordHtml(r, false);
       const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+
+      // Hanya unduh langsung JIKA r.pdfUrl adalah binary PDF murni data URL
+      if (r.pdfUrl && r.pdfUrl.startsWith('data:application/pdf')) {
+        const a = document.createElement('a');
+        a.href = r.pdfUrl;
+        a.download = `${fname}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        toast.success('File PDF berhasil diunduh!');
+        return;
+      }
+
+      // Ambil HTML laporan lengkap
+      const html = await getRecordHtml(r, false);
+      // Konversi HTML ke file PDF biner asli
       await downloadPdfFromHtml(html, `${fname}.pdf`);
       toast.success('File PDF berhasil diunduh!');
     } catch (err: any) {
@@ -170,33 +211,43 @@ export default function RiwayatPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Ambil data riwayat yang sudah di-generate sebelumnya
+      const deletedKeys = getDeletedRiwayatKeys();
+
+      // 1. Ambil data riwayat file tersimpan
       const riwayatData = await getRiwayat({
         namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
         tanggalMulai: filterTanggalMulai || undefined,
         tanggalSelesai: filterTanggalSelesai || undefined,
       });
 
-      // 2. Ambil data kegiatan harian live dari cPanel MySQL
+      // Filter yang sudah ditandai dihapus permanen
+      const validRiwayat = riwayatData.records.filter(r => {
+        const key = `${r.tanggalMulai}___${r.namaPelapor}`;
+        return !deletedKeys.has(key);
+      });
+
+      // 2. Ambil data kegiatan harian dari backend
       const kegiatanData = await getKegiatan({
         namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
         tanggalMulai: filterTanggalMulai || undefined,
         tanggalSelesai: filterTanggalSelesai || undefined,
       });
 
-      // 3. Kelompokkan kegiatan cPanel berdasarkan tanggal & namaPelapor
+      // 3. Kelompokkan kegiatan berdasarkan tanggal & namaPelapor
       const groups = new Map<string, { tanggal: string; namaPelapor: string; items: Activity[] }>();
       for (const k of kegiatanData.records) {
         if (!k.tanggal) continue;
         const key = `${k.tanggal}___${k.namaPelapor || 'Wali Asuh'}`;
+        if (deletedKeys.has(key)) continue;
+
         if (!groups.has(key)) {
           groups.set(key, { tanggal: k.tanggal, namaPelapor: k.namaPelapor || 'Wali Asuh', items: [] });
         }
         groups.get(key)!.items.push(k);
       }
 
-      // 4. Merge: pastikan setiap hari yang memiliki kegiatan di cPanel muncul di Riwayat File
-      const mergedRecords: FileRecord[] = [...riwayatData.records];
+      // 4. Merge: pastikan setiap hari yang memiliki kegiatan muncul di Riwayat File
+      const mergedRecords: FileRecord[] = [...validRiwayat];
       const existingKeys = new Set(
         mergedRecords.map(r => `${r.tanggalMulai}___${r.namaPelapor}`)
       );
@@ -216,7 +267,7 @@ export default function RiwayatPage() {
             namaFile: `Kinerja Harian - ${dateFormatted} (${g.items.length} Kegiatan)`,
             jenisLaporan: 'Kinerja Harian',
             namaPelapor: g.namaPelapor,
-            pdfUrl: '', // Dinamis di-generate saat klik
+            pdfUrl: '',
             dibuatPada: `${g.tanggal}T12:00:00.000Z`,
             tanggalMulai: g.tanggal,
             tanggalSelesai: g.tanggal,
@@ -236,19 +287,65 @@ export default function RiwayatPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleDelete = async (id: string) => {
+  /**
+   * Menghapus laporan dan seluruh data kegiatan terkait secara permanen dari server dan cPanel
+   */
+  const handleDelete = async (record: FileRecord) => {
     try {
-      if (id.startsWith('cpanel_')) {
-        // Record dinamis dari kegiatan cPanel
-        setRecords(prev => prev.filter(r => r.id !== id));
-        toast.success('Entri dihapus dari tampilan');
-      } else {
-        await deleteRiwayat({ id });
-        setRecords(prev => prev.filter(r => r.id !== id));
-        toast.success('File berhasil dihapus dari riwayat');
+      toast.info('Menghapus data secara permanen dari server...');
+
+      const targetTanggal = record.tanggalMulai;
+      const targetPelapor = record.namaPelapor;
+      const riwayatKey = `${targetTanggal}___${targetPelapor}`;
+
+      // 1. Jika record riwayat tersimpan di zite.riwayatFile, hapus
+      if (!record.id.startsWith('cpanel_')) {
+        try {
+          await deleteRiwayat({ id: record.id });
+        } catch (e) {
+          console.warn('Gagal deleteRiwayat:', e);
+        }
       }
-    } catch {
-      toast.error('Gagal menghapus');
+
+      // 2. Ambil seluruh kegiatan pada tanggal dan pelapor terkait
+      if (targetTanggal) {
+        try {
+          const kegData = await getKegiatan({
+            tanggalMulai: targetTanggal,
+            tanggalSelesai: record.tanggalSelesai || targetTanggal,
+            namaPelapor: targetPelapor && targetPelapor !== 'Semua Pelapor' ? targetPelapor : undefined,
+          });
+
+          const idsToDelete = kegData.records.map(k => k.id);
+          if (idsToDelete.length > 0) {
+            // Hapus setiap kegiatan di backend (menghapus dari zite.kegiatanHarian & cPanel MySQL)
+            await Promise.allSettled(idsToDelete.map(id => deleteKegiatan({ id })));
+
+            // Hapus via client cPanel helper langsung
+            await deleteCpanelBulkKegiatan(idsToDelete);
+          }
+        } catch (err) {
+          console.warn('Gagal menghapus kegiatan terkait:', err);
+        }
+
+        // Tandai key laporan agar tidak muncul kembali
+        markDeletedRiwayatKey(riwayatKey);
+      }
+
+      // 3. Update state lokal
+      setRecords(prev =>
+        prev.filter(item => {
+          if (item.id === record.id) return false;
+          if (targetTanggal && item.tanggalMulai === targetTanggal && item.namaPelapor === targetPelapor) {
+            return false;
+          }
+          return true;
+        })
+      );
+
+      toast.success('Laporan dan seluruh data kegiatan berhasil dihapus permanen dari server!');
+    } catch (err: any) {
+      toast.error('Gagal menghapus data: ' + (err?.message || 'Error'));
     }
   };
 
@@ -318,17 +415,12 @@ export default function RiwayatPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header Tanpa Badge MySQL cPanel sesuai permintaan */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-2xl font-bold text-foreground">Riwayat File & Laporan</h2>
-            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 gap-1.5 py-1 px-2.5 font-medium">
-              <Database size={13} className="text-emerald-600" />
-              Tersinkronisasi Realtime dengan MySQL cPanel
-            </Badge>
-          </div>
+          <h2 className="text-2xl font-bold text-foreground">Riwayat File & Laporan</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Semua laporan PDF/Word yang dibuat di HP maupun PC dapat langsung dipratinjau, diunduh, dan diedit
+            Semua laporan PDF/Word yang dibuat dapat langsung dipratinjau, diunduh, dan diedit
           </p>
         </div>
       </div>
@@ -426,14 +518,14 @@ export default function RiwayatPage() {
           ) : records.length === 0 ? (
             <div className="text-center py-12 space-y-2">
               <p className="text-muted-foreground">Belum ada file atau kegiatan di rentang tanggal ini</p>
-              <p className="text-xs text-muted-foreground">Gunakan tombol &quot;Bulan Ini&quot; atau &quot;Semua Tanggal&quot; untuk menampilkan semua data cPanel.</p>
+              <p className="text-xs text-muted-foreground">Gunakan tombol &quot;Bulan Ini&quot; atau &quot;Semua Tanggal&quot; untuk menampilkan semua data.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">No</TableHead>
+                    <TableHead className="w-10 text-center">No</TableHead>
                     <TableHead>Nama File / Laporan</TableHead>
                     <TableHead>Jenis</TableHead>
                     <TableHead>Pelapor</TableHead>
@@ -446,13 +538,12 @@ export default function RiwayatPage() {
                         {sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
                       </button>
                     </TableHead>
-                    <TableHead>Sumber / Status</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Tindakan</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sortedRecords.map((r, i) => {
-                    const isCpanelLive = r.id.startsWith('cpanel_') || !r.pdfUrl;
                     return (
                       <TableRow key={r.id}>
                         <TableCell className="text-center">{i + 1}</TableCell>
@@ -460,11 +551,6 @@ export default function RiwayatPage() {
                           <p className="text-sm font-medium line-clamp-1">{r.namaFile || '-'}</p>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {r.rhkNomor && <Badge variant="outline" className="text-[10px]">{r.rhkNomor}</Badge>}
-                            {isCpanelLive && (
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono">
-                                Live cPanel
-                              </span>
-                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -479,7 +565,7 @@ export default function RiwayatPage() {
                             : '-'}
                         </TableCell>
                         <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-                          {isCpanelLive ? 'Siap Dicetak / Unduh' : formatDateTime(r.dibuatPada)}
+                          {formatDateTime(r.dibuatPada)}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5 flex-wrap">
@@ -524,20 +610,33 @@ export default function RiwayatPage() {
                             </Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus Entri">
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">
                                   <Trash2 size={14} className="text-destructive" />
                                 </Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent>
                                 <AlertDialogHeader>
-                                  <AlertDialogTitle>Hapus Entri Laporan?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Entri ini akan dihapus dari daftar riwayat.
+                                  <AlertDialogTitle className="text-destructive">Hapus Permanen Dari Server?</AlertDialogTitle>
+                                  <AlertDialogDescription asChild>
+                                    <div className="space-y-2 text-sm text-muted-foreground">
+                                      <p>
+                                        Laporan ini beserta seluruh data kegiatan terkait pada tanggal{' '}
+                                        <strong className="text-foreground">{r.tanggalMulai || '-'}</strong> ({r.namaPelapor}) akan dihapus secara permanen dari server dan database.
+                                      </p>
+                                      <p className="text-xs text-muted-foreground font-medium">
+                                        Data yang dihapus tidak akan dapat dipulihkan kembali.
+                                      </p>
+                                    </div>
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Batal</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleDelete(r.id)}>Hapus</AlertDialogAction>
+                                  <AlertDialogAction
+                                    onClick={() => handleDelete(r)}
+                                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                                  >
+                                    Hapus Permanen
+                                  </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -604,46 +703,36 @@ export default function RiwayatPage() {
                   {item.photos.length > 0 && (
                     <div className="space-y-1">
                       <Label className="text-xs">Foto ({item.photos.length})</Label>
-                      <div className="grid grid-cols-5 gap-1.5">
+                      <div className="flex gap-2 overflow-x-auto pb-1">
                         {item.photos.map((url, pi) => (
-                          <div key={pi} className="relative rounded overflow-hidden border bg-muted">
-                            <img src={url} alt={`Foto ${pi + 1}`} className="w-full h-12 object-cover" />
-                            <button
-                              onClick={() => {
-                                const newPhotos = item.photos.filter((_, j) => j !== pi);
-                                setEditItems(prev => prev.map(ei => ei.id === item.id ? { ...ei, photos: newPhotos } : ei));
-                              }}
-                              className="absolute top-0 right-0 bg-destructive text-destructive-foreground rounded-full w-4 h-4 flex items-center justify-center"
-                            >
-                              <X size={8} />
-                            </button>
-                          </div>
+                          <img key={pi} src={url} alt={`Foto ${pi + 1}`} className="w-16 h-16 object-cover rounded border shrink-0" />
                         ))}
                       </div>
                     </div>
                   )}
                 </div>
               ))}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditRecord(null)}>Tutup</Button>
+                <Button onClick={handleSaveAsCopy} className="bg-primary text-primary-foreground">
+                  Salin ke Input Kegiatan
+                </Button>
+              </div>
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditRecord(null)}>Batal</Button>
-            <Button onClick={handleSaveAsCopy} disabled={editItems.length === 0} className="gap-2">
-              <Copy size={14} /> Salin ke Input Kegiatan
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Preview Dialog */}
       {previewState && (
         <PreviewDialog
           open={previewState.open}
           onClose={() => setPreviewState(null)}
           pdfHtml={previewState.pdfHtml}
           wordHtml={previewState.wordHtml}
-          filename={previewState.filename}
           title={previewState.title}
+          filename={previewState.filename}
         />
       )}
     </div>

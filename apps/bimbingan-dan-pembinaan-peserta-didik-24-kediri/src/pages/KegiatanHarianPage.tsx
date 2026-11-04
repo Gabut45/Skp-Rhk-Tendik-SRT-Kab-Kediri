@@ -13,6 +13,8 @@ import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
+import { useAuth } from '@/lib/auth-context';
+
 function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
 }
@@ -25,14 +27,27 @@ function getLocalDateString(d: Date = new Date()): string {
 }
 
 export default function KegiatanHarianPage() {
+  const { user } = useAuth();
   const today = getLocalDateString(new Date());
-  const [namaPelapor, setNamaPelapor] = useState(DEFAULT_PELAPOR.nama);
-  const [nip, setNip] = useState(DEFAULT_PELAPOR.nip);
+  const initialNama = (user && user.role === 'wali_asuh' && user.nama) ? user.nama : DEFAULT_PELAPOR.nama;
+  const initialNip = (user && user.role === 'wali_asuh' && user.nip) ? user.nip : DEFAULT_PELAPOR.nip;
+
+  const [namaPelapor, setNamaPelapor] = useState(initialNama);
+  const [nip, setNip] = useState(initialNip);
   const [tanggal, setTanggal] = useState(today);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(DEFAULT_PELAPOR.nama));
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
   const [kegiatanList, setKegiatanList] = useState<KegiatanItem[]>(() =>
     Array.from({ length: 4 }, createKegiatan)
   );
+
+  useEffect(() => {
+    if (user && user.role === 'wali_asuh' && user.nama) {
+      setNamaPelapor(user.nama);
+      if (user.nip) setNip(user.nip);
+      const saved = getSavedTtd(user.nama);
+      if (saved) setTandaTangan(saved);
+    }
+  }, [user]);
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);

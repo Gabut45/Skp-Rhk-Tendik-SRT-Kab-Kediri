@@ -62,9 +62,9 @@ function buildDocTable(records: any[]): string {
         const photos = allPhotos.slice(0, MAX_PHOTOS_PER_RECORD);
         const photoRows: string[] = [];
         for (let i = 0; i < photos.length; i += 2) {
-          const left = `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i].url)}" style="width:100%;height:auto;border-radius:4px;border:1px solid #ddd;" /></td>`;
+          const left = `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i].url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:4px;border:1px solid #ddd;" /></td>`;
           const right = i + 1 < photos.length
-            ? `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i + 1].url)}" style="width:100%;height:auto;border-radius:4px;border:1px solid #ddd;" /></td>`
+            ? `<td style="width:50%;padding:3px;text-align:center;vertical-align:top;"><img src="${esc(photos[i + 1].url)}" style="width:100%;max-height:160px;object-fit:cover;border-radius:4px;border:1px solid #ddd;" /></td>`
             : '<td style="width:50%;padding:3px;"></td>';
           photoRows.push(`<tr>${left}${right}</tr>`);
         }
@@ -75,7 +75,7 @@ function buildDocTable(records: any[]): string {
       }
 
       const desc = r.deskripsiKegiatan || '';
-      rowsHtml.push(`<tr>
+      rowsHtml.push(`<tr style="page-break-inside:avoid;break-inside:avoid;">
         <td style="text-align:center;vertical-align:top;padding:8px;border:1px solid #333;width:35px;">${no}</td>
         <td style="vertical-align:top;padding:8px;border:1px solid #333;width:120px;text-align:center;font-size:9pt;">${esc(tglFormatted)}</td>
         <td style="vertical-align:top;padding:8px;border:1px solid #333;">

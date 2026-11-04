@@ -5,14 +5,26 @@ import {
   lookupServerVocabulary,
 } from './vocabularyService.ts';
 
-// Shared server-side Gemini client utility
-// User-Agent must be set to 'aistudio-build' in httpOptions for telemetry
-export const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    },
+let _aiInstance: GoogleGenAI | null = null;
+export function getAi(): GoogleGenAI {
+  if (!_aiInstance) {
+    _aiInstance = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY || 'AIzaSyDummyKeyForInitializationOnly',
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return _aiInstance;
+}
+
+// Proxy export for backwards compatibility
+export const ai = new Proxy({} as GoogleGenAI, {
+  get(_target, prop) {
+    const instance = getAi() as any;
+    return instance[prop];
   },
 });
 

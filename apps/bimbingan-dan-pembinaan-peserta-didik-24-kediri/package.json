@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'vite --host 0.0.0.0 --port 3000' --",
+    "dev": "node dev.mjs",
     "build": "tsc -b && vite build",
-    "preview": "sh -c 'vite preview --host 0.0.0.0 --port 3000' --"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@amplitude/analytics-browser": "^2.45.6",

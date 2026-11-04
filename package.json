@@ -2,10 +2,10 @@
   "name": "bimbingan-dan-pembinaan-peserta-didik-24-kediri",
   "private": true,
   "scripts": {
-    "dev": "sh -c 'npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri' --",
+    "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "start": "node server.ts",
-    "preview": "sh -c 'npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri' --",
+    "preview": "npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "lint": "npm run build"
   },
   "workspaces": [
@@ -17,7 +17,9 @@
     "@vitejs/plugin-react": "^5.0.0",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",
+    "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
+    "jspdf": "^4.2.1",
     "typescript": "~5.7.3",
     "vite": "^8.1.0",
     "zitejs": "0.9.148"

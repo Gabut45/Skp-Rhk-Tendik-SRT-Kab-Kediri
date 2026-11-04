@@ -13,20 +13,25 @@ import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
+import { useAuth } from '@/lib/auth-context';
 
 export default function LaporanRHKPage() {
+  const { user } = useAuth();
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   const startOfMonth = `${year}-${month}-01`;
   const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+  const initialNama = (user && user.role === 'wali_asuh' && user.nama) ? user.nama : DEFAULT_PELAPOR.nama;
+  const initialNip = (user && user.role === 'wali_asuh' && user.nip) ? user.nip : DEFAULT_PELAPOR.nip;
+
   const [rhkNomor, setRhkNomor] = useState('');
   const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
   const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
-  const [namaPelapor, setNamaPelapor] = useState(DEFAULT_PELAPOR.nama);
-  const [nip, setNip] = useState(DEFAULT_PELAPOR.nip);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(DEFAULT_PELAPOR.nama));
+  const [namaPelapor, setNamaPelapor] = useState(initialNama);
+  const [nip, setNip] = useState(initialNip);
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
   const [previewing, setPreviewing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewPdfHtml, setPreviewPdfHtml] = useState('');

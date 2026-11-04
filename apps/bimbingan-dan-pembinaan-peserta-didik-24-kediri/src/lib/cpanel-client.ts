@@ -51,6 +51,32 @@ export function markDeletedId(id: string) {
   }
 }
 
+export function getDeletedRiwayatKeys(): Set<string> {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = localStorage.getItem('cpanel_deleted_riwayat_keys');
+      if (stored) {
+        return new Set(JSON.parse(stored));
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return new Set();
+}
+
+export function markDeletedRiwayatKey(key: string) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const set = getDeletedRiwayatKeys();
+      set.add(key);
+      localStorage.setItem('cpanel_deleted_riwayat_keys', JSON.stringify(Array.from(set)));
+    } catch {
+      // ignore
+    }
+  }
+}
+
 /**
  * Fetch records from cPanel MySQL API
  */
@@ -184,7 +210,7 @@ export async function saveCpanelBulk(payload: {
 }
 
 /**
- * Delete activity from cPanel MySQL API
+ * Delete activity from cPanel MySQL API permanently
  */
 export async function deleteCpanelKegiatan(id: string): Promise<boolean> {
   markDeletedId(id);
@@ -201,6 +227,34 @@ export async function deleteCpanelKegiatan(id: string): Promise<boolean> {
       },
       body: JSON.stringify({ id }),
     });
+  } catch {
+    // ignore
+  }
+  return true;
+}
+
+/**
+ * Delete multiple activities from cPanel MySQL API permanently
+ */
+export async function deleteCpanelBulkKegiatan(ids: string[]): Promise<boolean> {
+  ids.forEach(id => markDeletedId(id));
+  const { url, key } = getCpanelConfig();
+  if (!url || ids.length === 0) return true;
+
+  try {
+    const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_kegiatan`;
+    await Promise.allSettled(
+      ids.map(id =>
+        fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(key ? { 'X-API-KEY': key } : {}),
+          },
+          body: JSON.stringify({ id }),
+        })
+      )
+    );
   } catch {
     // ignore
   }
