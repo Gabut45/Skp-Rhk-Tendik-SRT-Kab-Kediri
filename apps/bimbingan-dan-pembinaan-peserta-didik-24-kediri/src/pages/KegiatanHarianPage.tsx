@@ -14,6 +14,7 @@ import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
+import { compressSignature } from '@/lib/compress-image';
 
 function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
@@ -84,10 +85,11 @@ export default function KegiatanHarianPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: `ttd-${file.name}` });
+      const compressed = await compressSignature(file);
+      const { fileUrl } = await uploadFile({ data: compressed, filename: `ttd-${compressed.name}` });
       setTandaTangan(fileUrl);
       saveTtd(namaPelapor, fileUrl);
-      toast.success('Tanda tangan berhasil diunggah & disimpan untuk ' + namaPelapor);
+      toast.success('Tanda tangan berhasil dioptimalkan & disimpan untuk ' + namaPelapor);
     } catch {
       toast.error('Gagal upload tanda tangan');
     }

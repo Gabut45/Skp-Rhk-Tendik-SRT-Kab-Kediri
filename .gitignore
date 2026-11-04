@@ -1,6 +1,19 @@
-node_modules
-dist
-.env.local
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+build/
 .tsbuildinfo
+
+# Environment variables & secrets (NEVER commit to GitHub)
+.env
+.env.local
+.env.*
+!.env.example
+
+# Temporary & runtime files
 __zite__*
 .npmrc
+*.log
+.DS_Store

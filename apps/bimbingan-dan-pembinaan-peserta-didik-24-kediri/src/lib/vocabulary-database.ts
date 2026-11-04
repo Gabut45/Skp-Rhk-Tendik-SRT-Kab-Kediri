@@ -6,6 +6,8 @@
  * dan Pembina Karakter Peserta Didik, lengkap dengan variasi kalimat dinamis dan penanganan waktu.
  */
 
+import { LARGE_VOCABULARY_BANK, type CompactVocabItem } from './vocabulary-large-bank.ts';
+
 export interface VocabularyEntry {
   keyword: string;
   aliases?: string[];
@@ -781,8 +783,44 @@ export function detectRhkCategory(text: string): 'RHK 1' | 'RHK 2' | 'RHK 3' | '
   return 'RHK 3';
 }
 
+// Fast lookup index for massive 5,250+ vocabulary database
+let _largeBankIndexed = false;
+const _exactLargeMap = new Map<string, CompactVocabItem>();
+const _tokensMap = new Map<string, CompactVocabItem[]>();
+
+function ensureLargeBankIndex() {
+  if (_largeBankIndexed) return;
+  for (let i = 0; i < LARGE_VOCABULARY_BANK.length; i++) {
+    const item = LARGE_VOCABULARY_BANK[i];
+    const key = item.k.toLowerCase().trim();
+    _exactLargeMap.set(key, item);
+
+    // Index aliases
+    if (item.a) {
+      for (const al of item.a) {
+        _exactLargeMap.set(al.toLowerCase().trim(), item);
+      }
+    }
+
+    // Index individual words/tokens for fast partial matching
+    const words = key.split(/\s+/).filter(w => w.length > 2);
+    for (const w of words) {
+      let list = _tokensMap.get(w);
+      if (!list) {
+        list = [];
+        _tokensMap.set(w, list);
+      }
+      if (list.length < 25) { // limit pool per token for speed
+        list.push(item);
+      }
+    }
+  }
+  _largeBankIndexed = true;
+}
+
 /**
- * Searches the vocabulary bank for matches based on keyword tokens, aliases, and time-of-day.
+ * Searches the vocabulary bank for matches across standard bank (66+) and massive bank (5,250+)
+ * prioritizing exact matches, time-of-day compatibility, and token relevance.
  */
 export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; rhk: string; matchedKeyword: string } | null {
   const clean = rawKeyword.toLowerCase().trim();
@@ -790,7 +828,7 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
 
   const timeContext = detectTimeContext(clean);
 
-  // 1. Direct or partial match prioritizing longer, specific entries first
+  // 1. Check standard comprehensive bank (rich multi-templates)
   const sortedBank = [...VOCABULARY_BANK].sort((a, b) => b.keyword.length - a.keyword.length);
 
   for (const entry of sortedBank) {
@@ -798,7 +836,6 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     const isAliasMatched = entry.aliases?.some(alias => clean.includes(alias.toLowerCase()));
 
     if (isKeywordMatched || isAliasMatched) {
-      // Filter templates matching time context if both specify time
       const compatibleTemplates = entry.templates.filter(tpl => {
         const tplTime = detectTimeContext(tpl);
         if (timeContext && tplTime && timeContext !== tplTime) {
@@ -818,7 +855,91 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     }
   }
 
+  // 2. Check massive 5,250+ vocabulary database
+  ensureLargeBankIndex();
+
+  // 2a. Direct exact lookup
+  const exactItem = _exactLargeMap.get(clean);
+  if (exactItem) {
+    return {
+      deskripsi: exactItem.d,
+      rhk: exactItem.r,
+      matchedKeyword: exactItem.k,
+    };
+  }
+
+  // 2b. Token / Word intersection search
+  const cleanTokens = clean.split(/\s+/).filter(w => w.length > 2);
+  const candidates: CompactVocabItem[] = [];
+
+  for (const token of cleanTokens) {
+    const matchedItems = _tokensMap.get(token);
+    if (matchedItems) {
+      for (const m of matchedItems) {
+        if (!candidates.includes(m)) {
+          candidates.push(m);
+        }
+      }
+    }
+  }
+
+  if (candidates.length > 0) {
+    // Sort candidates by match quality
+    candidates.sort((a, b) => {
+      let scoreA = 0;
+      let scoreB = 0;
+      for (const t of cleanTokens) {
+        if (a.k.includes(t)) scoreA++;
+        if (b.k.includes(t)) scoreB++;
+      }
+      return scoreB - scoreA;
+    });
+
+    // Time-context compatibility filter
+    const compatible = candidates.filter(c => {
+      if (!timeContext || !c.t || c.t === 'fleksibel') return true;
+      return c.t === timeContext;
+    });
+
+    const chosen = (compatible.length > 0 ? compatible : candidates)[0];
+    return {
+      deskripsi: chosen.d,
+      rhk: chosen.r,
+      matchedKeyword: chosen.k,
+    };
+  }
+
   return null;
+}
+
+/**
+ * Returns exact vocabulary count statistics per RHK
+ */
+export function getVocabularyBreakdown() {
+  const counts: Record<string, number> = {
+    'RHK 1': 0,
+    'RHK 2': 0,
+    'RHK 3': 0,
+    'RHK 4': 0,
+    'RHK 5': 0,
+    'RHK 6': 0,
+    'RHK 7': 0,
+    total: 0,
+  };
+
+  // Standard bank
+  for (const item of VOCABULARY_BANK) {
+    counts[item.rhk] = (counts[item.rhk] || 0) + 1;
+    counts.total++;
+  }
+
+  // Large bank
+  for (const item of LARGE_VOCABULARY_BANK) {
+    counts[item.r] = (counts[item.r] || 0) + 1;
+    counts.total++;
+  }
+
+  return counts;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   synthesizeFallbackDeskripsi,
   detectRhkCategory,
   detectTimeContext,
+  getVocabularyBreakdown,
 } from '../lib/vocabulary-database.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -172,9 +173,11 @@ export function lookupServerVocabulary(rawKeyword: string): {
  * Get statistics and learned items
  */
 export function getVocabularyStats() {
+  const breakdown = getVocabularyBreakdown();
   return {
     totalLearned: inMemoryVocabulary.length,
-    totalPreseededKeywords: VOCABULARY_BANK.length,
+    totalPreseededKeywords: breakdown.total,
+    breakdownPerRhk: breakdown,
     recentLearned: inMemoryVocabulary.slice(0, 50),
   };
 }

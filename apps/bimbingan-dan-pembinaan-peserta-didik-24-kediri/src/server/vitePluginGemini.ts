@@ -4,6 +4,7 @@ import {
   handleGenerateDeskripsiServer,
   handleGenerateTextServer,
   handleStreamTextServer,
+  hasValidGeminiKey,
 } from './geminiServer.ts';
 import {
   getVocabularyStats,
@@ -24,10 +25,12 @@ export function geminiServerPlugin(): Plugin {
         if (url === '/api/gemini/health' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');
           res.statusCode = 200;
+          const keyValid = hasValidGeminiKey();
           res.end(JSON.stringify({
             status: 'ok',
             serverSide: true,
-            hasKey: Boolean(process.env.GEMINI_API_KEY),
+            hasKey: keyValid,
+            mode: keyValid ? 'gemini-online' : 'server-vocabulary-bank',
           }));
           return;
         }

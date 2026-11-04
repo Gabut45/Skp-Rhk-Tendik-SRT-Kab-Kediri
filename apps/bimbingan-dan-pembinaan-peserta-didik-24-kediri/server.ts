@@ -6,6 +6,7 @@ import {
   handleGenerateDeskripsiServer,
   handleGenerateTextServer,
   handleStreamTextServer,
+  hasValidGeminiKey,
 } from './src/server/geminiServer';
 import {
   getVocabularyStats,
@@ -18,14 +19,17 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.json({ limit: '25mb' }));
+app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
 
 // Health check
 app.get('/api/gemini/health', (_req, res) => {
+  const keyValid = hasValidGeminiKey();
   res.json({
     status: 'ok',
     serverSide: true,
-    hasKey: Boolean(process.env.GEMINI_API_KEY),
+    hasKey: keyValid,
+    mode: keyValid ? 'gemini-online' : 'server-vocabulary-bank',
   });
 });
 

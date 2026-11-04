@@ -1,11 +1,13 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import {
   handleGenerateDeskripsiServer,
   handleGenerateTextServer,
   handleStreamTextServer,
+  hasValidGeminiKey,
 } from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/geminiServer';
 import {
   getVocabularyStats,
@@ -15,17 +17,32 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Automatically load .env file permanently
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    const envFile = path.resolve(__dirname, '.env');
+    if (fs.existsSync(envFile)) {
+      process.loadEnvFile(envFile);
+    }
+  }
+} catch {
+  // ignore
+}
+
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.json({ limit: '25mb' }));
+app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
 
 // Health check
 app.get('/api/gemini/health', (_req, res) => {
+  const keyValid = hasValidGeminiKey();
   res.json({
     status: 'ok',
     serverSide: true,
-    hasKey: Boolean(process.env.GEMINI_API_KEY),
+    hasKey: keyValid,
+    mode: keyValid ? 'gemini-online' : 'server-vocabulary-bank',
   });
 });
 

@@ -1,8 +1,24 @@
 import { createServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Automatically load .env file from root or app folder if present
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    const rootEnv = path.resolve(__dirname, '../../.env');
+    const localEnv = path.resolve(__dirname, '.env');
+    if (fs.existsSync(rootEnv)) {
+      process.loadEnvFile(rootEnv);
+    } else if (fs.existsSync(localEnv)) {
+      process.loadEnvFile(localEnv);
+    }
+  }
+} catch {
+  // ignore
+}
 
 // Safely parse any port or host passed as flags (--port 3000 --host 0.0.0.0) or positionals (3000 0.0.0.0)
 const args = process.argv.slice(2);

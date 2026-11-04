@@ -14,6 +14,7 @@ import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
+import { compressSignature } from '@/lib/compress-image';
 
 export default function LaporanRHKPage() {
   const { user } = useAuth();
@@ -52,10 +53,11 @@ export default function LaporanRHKPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const { fileUrl } = await uploadFile({ data: file, filename: `ttd-${file.name}` });
+      const compressed = await compressSignature(file);
+      const { fileUrl } = await uploadFile({ data: compressed, filename: `ttd-${compressed.name}` });
       setTandaTangan(fileUrl);
       saveTtd(namaPelapor, fileUrl);
-      toast.success('Tanda tangan disimpan untuk ' + namaPelapor);
+      toast.success('Tanda tangan dioptimalkan & disimpan untuk ' + namaPelapor);
     } catch {
       toast.error('Gagal upload tanda tangan');
     }

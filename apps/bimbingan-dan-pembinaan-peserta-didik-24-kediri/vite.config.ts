@@ -2,11 +2,26 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { ziteId } from 'zitejs/vite-plugin';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { geminiServerPlugin } from './src/server/vitePluginGemini.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+
+// Automatically load .env into process.env for Vite dev server and plugins
+try {
+  if (typeof process.loadEnvFile === 'function') {
+    const rootEnv = path.resolve(__dirname, '../../.env');
+    const localEnv = path.resolve(__dirname, '.env');
+    if (existsSync(rootEnv)) {
+      process.loadEnvFile(rootEnv);
+    } else if (existsSync(localEnv)) {
+      process.loadEnvFile(localEnv);
+    }
+  }
+} catch {
+  // ignore
+}
 
 // https://vite.dev/config/
 const __ziteFlowId = (() => { try { return JSON.parse(readFileSync(path.resolve(__dirname, 'zite.config.json'), 'utf-8')).id ?? ''; } catch { return ''; } })();
