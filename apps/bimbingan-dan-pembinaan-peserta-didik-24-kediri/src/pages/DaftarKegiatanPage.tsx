@@ -13,6 +13,7 @@ import { getKegiatan, deleteKegiatan, deleteRiwayat, type GetKegiatanOutputType 
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
+import { useAuth } from '@/lib/auth-context';
 
 import {
   deleteCpanelBulkKegiatan,
@@ -36,6 +37,9 @@ function getLocalDateString(d: Date = new Date()): string {
 }
 
 export default function DaftarKegiatanPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -284,61 +288,65 @@ export default function DaftarKegiatanPage() {
               <Button onClick={handleCopyToInput} size="sm" className="gap-1.5 text-xs">
                 <Copy size={14} /> Salin {selectedIds.size} Kegiatan
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
-                    <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Batal</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
-                      Hapus Permanen
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {isSuperAdmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
+                      <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
+                        Hapus Permanen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </>
           )}
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 border-destructive/30">
-                <Trash2 size={14} /> Hapus Semua Kegiatan
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive">Hapus SEMUA Kegiatan Harian?</AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>
-                      Tindakan ini akan menghapus <strong>seluruh kegiatan harian</strong> dan berkas riwayat secara permanen dari server database dan perangkat lokal.
-                    </p>
-                    <p className="text-xs text-destructive font-semibold">
-                      PERINGATAN: Seluruh kegiatan akan terhapus bersih dan tidak dapat dipulihkan!
-                    </p>
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Batal</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAll}
-                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
-                >
-                  Ya, Bersihkan Semua Kegiatan
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {isSuperAdmin && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 border-destructive/30">
+                  <Trash2 size={14} /> Hapus Semua Kegiatan
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-destructive">Hapus SEMUA Kegiatan Harian?</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p>
+                        Tindakan ini akan menghapus <strong>seluruh kegiatan harian</strong> dan berkas riwayat secara permanen dari server database dan perangkat lokal.
+                      </p>
+                      <p className="text-xs text-destructive font-semibold">
+                        PERINGATAN: Seluruh kegiatan akan terhapus bersih dan tidak dapat dipulihkan!
+                      </p>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAll}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                  >
+                    Ya, Bersihkan Semua Kegiatan
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -486,23 +494,25 @@ export default function DaftarKegiatanPage() {
                           >
                             <Copy size={14} />
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus Kegiatan">
-                                <Trash2 size={14} className="text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Hapus Kegiatan?</AlertDialogTitle>
-                                <AlertDialogDescription>Tindakan ini akan menghapus kegiatan dari database.</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Batal</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(r.id)}>Hapus</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus Kegiatan">
+                                  <Trash2 size={14} className="text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Hapus Kegiatan?</AlertDialogTitle>
+                                  <AlertDialogDescription>Tindakan ini akan menghapus kegiatan dari database.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(r.id)}>Hapus</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

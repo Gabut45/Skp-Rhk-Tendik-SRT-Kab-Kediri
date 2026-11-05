@@ -40,6 +40,8 @@ type FileRecord = GetRiwayatOutputType['records'][0];
 
 export default function LaporanRHKPage() {
   const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -234,6 +236,10 @@ export default function LaporanRHKPage() {
    * Menghapus berkas Laporan RHK dan kegiatan terkait secara permanen selamanya
    */
   const handleDeleteRhkRecord = async (record: FileRecord) => {
+    if (!isSuperAdmin) {
+      toast.error('Hanya Super Admin yang diizinkan untuk menghapus berkas laporan');
+      return;
+    }
     try {
       toast.info('Menghapus berkas Laporan RHK dan data terkait secara permanen...');
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
@@ -593,43 +599,45 @@ export default function LaporanRHKPage() {
                             <FileText size={13} />
                             <span>Word</span>
                           </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 hover:bg-red-50"
-                                title="Hapus Permanen"
-                              >
-                                <Trash2 size={14} className="text-destructive" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="text-destructive">Hapus Berkas Laporan RHK?</AlertDialogTitle>
-                                <AlertDialogDescription asChild>
-                                  <div className="space-y-2 text-sm text-muted-foreground">
-                                    <p>
-                                      Berkas <strong>{r.namaFile}</strong> dan seluruh data kegiatan terkait pada periode{' '}
-                                      <strong className="text-foreground">{r.tanggalMulai || '-'} s/d {r.tanggalSelesai || '-'}</strong> ({r.namaPelapor}) akan dihapus permanen dari server database, riwayat file, dan daftar kegiatan.
-                                    </p>
-                                    <p className="text-xs text-muted-foreground font-medium">
-                                      Tindakan ini permanen dan tidak dapat dipulihkan.
-                                    </p>
-                                  </div>
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Batal</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteRhkRecord(r)}
-                                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                          {isSuperAdmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 hover:bg-red-50"
+                                  title="Hapus Permanen"
                                 >
-                                  Hapus Permanen
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                  <Trash2 size={14} className="text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-destructive">Hapus Berkas Laporan RHK?</AlertDialogTitle>
+                                  <AlertDialogDescription asChild>
+                                    <div className="space-y-2 text-sm text-muted-foreground">
+                                      <p>
+                                        Berkas <strong>{r.namaFile}</strong> dan seluruh data kegiatan terkait pada periode{' '}
+                                        <strong className="text-foreground">{r.tanggalMulai || '-'} s/d {r.tanggalSelesai || '-'}</strong> ({r.namaPelapor}) akan dihapus permanen dari server database, riwayat file, dan daftar kegiatan.
+                                      </p>
+                                      <p className="text-xs text-muted-foreground font-medium">
+                                        Tindakan ini permanen dan tidak dapat dipulihkan.
+                                      </p>
+                                    </div>
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteRhkRecord(r)}
+                                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                                  >
+                                    Hapus Permanen
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

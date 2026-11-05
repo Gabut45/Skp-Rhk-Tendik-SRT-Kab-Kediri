@@ -16,6 +16,7 @@ import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd } from '@/lib/pelapor-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
+import { useAuth } from '@/lib/auth-context';
 import {
   deleteCpanelBulkKegiatan,
   deleteCpanelRiwayat,
@@ -49,6 +50,9 @@ function getLocalDateString(d: Date = new Date()): string {
 }
 
 export default function RiwayatPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+
   const navigate = useNavigate();
   const [records, setRecords] = useState<FileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -332,6 +336,10 @@ export default function RiwayatPage() {
    * baik di penyimpanan lokal (localStorage) maupun di database server (cPanel MySQL & zite)
    */
   const handleDelete = async (record: FileRecord) => {
+    if (!isSuperAdmin) {
+      toast.error('Hanya Super Admin yang diizinkan untuk menghapus data');
+      return;
+    }
     try {
       toast.info('Menghapus data secara permanen dari server dan penyimpanan...');
 
@@ -438,6 +446,10 @@ export default function RiwayatPage() {
    * Menghapus semua berkas riwayat, kegiatan, dan laporan RHK secara bersih menyeluruh
    */
   const handleDeleteAll = async () => {
+    if (!isSuperAdmin) {
+      toast.error('Hanya Super Admin yang diizinkan untuk menghapus data');
+      return;
+    }
     try {
       toast.info('Menghapus SEMUA berkas riwayat dan kegiatan secara permanen...');
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
@@ -534,39 +546,41 @@ export default function RiwayatPage() {
             Semua laporan PDF/Word yang dibuat dapat langsung dipratinjau, diunduh, dan diedit
           </p>
         </div>
-        <div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="gap-1.5 text-xs font-semibold">
-                <Trash2 size={14} /> Hapus Semua Data
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive">Hapus SEMUA Data Secara Permanen?</AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>
-                      Tindakan ini akan menghapus <strong>seluruh berkas riwayat</strong>, <strong>semua kegiatan harian</strong>, dan <strong>laporan RHK</strong> secara permanen dari server database dan perangkat lokal.
-                    </p>
-                    <p className="text-xs text-destructive font-semibold">
-                      PERINGATAN: Semua data akan terhapus bersih selamanya dan tidak dapat dipulihkan!
-                    </p>
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Batal</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteAll}
-                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
-                >
-                  Ya, Bersihkan Semua Data
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+        {isSuperAdmin && (
+          <div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="gap-1.5 text-xs font-semibold">
+                  <Trash2 size={14} /> Hapus Semua Data
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-destructive">Hapus SEMUA Data Secara Permanen?</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p>
+                        Tindakan ini akan menghapus <strong>seluruh berkas riwayat</strong>, <strong>semua kegiatan harian</strong>, dan <strong>laporan RHK</strong> secara permanen dari server database dan perangkat lokal.
+                      </p>
+                      <p className="text-xs text-destructive font-semibold">
+                        PERINGATAN: Semua data akan terhapus bersih selamanya dan tidak dapat dipulihkan!
+                      </p>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAll}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                  >
+                    Ya, Bersihkan Semua Data
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
       </div>
 
       {/* Filter */}
@@ -761,38 +775,40 @@ export default function RiwayatPage() {
                               >
                                 <Pencil size={14} />
                               </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">
-                                    <Trash2 size={14} className="text-destructive" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle className="text-destructive">Hapus Permanen Dari Server?</AlertDialogTitle>
-                                    <AlertDialogDescription asChild>
-                                      <div className="space-y-2 text-sm text-muted-foreground">
-                                        <p>
-                                          Laporan ini beserta seluruh data kegiatan terkait pada tanggal{' '}
-                                          <strong className="text-foreground">{r.tanggalMulai || '-'}</strong> ({r.namaPelapor}) akan dihapus secara permanen dari server dan database.
-                                        </p>
-                                        <p className="text-xs text-muted-foreground font-medium">
-                                          Data yang dihapus tidak akan dapat dipulihkan kembali.
-                                        </p>
-                                      </div>
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Batal</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDelete(r)}
-                                      className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                                    >
-                                      Hapus Permanen
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              {isSuperAdmin && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">
+                                      <Trash2 size={14} className="text-destructive" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle className="text-destructive">Hapus Permanen Dari Server?</AlertDialogTitle>
+                                      <AlertDialogDescription asChild>
+                                        <div className="space-y-2 text-sm text-muted-foreground">
+                                          <p>
+                                            Laporan ini beserta seluruh data kegiatan terkait pada tanggal{' '}
+                                            <strong className="text-foreground">{r.tanggalMulai || '-'}</strong> ({r.namaPelapor}) akan dihapus secara permanen dari server dan database.
+                                          </p>
+                                          <p className="text-xs text-muted-foreground font-medium">
+                                            Data yang dihapus tidak akan dapat dipulihkan kembali.
+                                          </p>
+                                        </div>
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDelete(r)}
+                                        className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                                      >
+                                        Hapus Permanen
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
