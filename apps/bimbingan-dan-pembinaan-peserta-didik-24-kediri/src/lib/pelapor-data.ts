@@ -107,8 +107,13 @@ export function findMatchingPelapor(user?: { username?: string; nama?: string; n
   return DEFAULT_PELAPOR;
 }
 
-// --- Pre-configured TTD URLs per pelapor (kosong secara default) ---
-const PRESET_TTD: Record<string, string> = {};
+import { TTD_AHMAD_FADKHURRIZA, TTD_EKO_WAHYUDI } from './ttd-preset-data';
+
+// --- Pre-configured TTD URLs per pelapor ---
+const PRESET_TTD: Record<string, string> = {
+  'Ahmad Fadkhurriza Ivakhudin, S.Gz': TTD_AHMAD_FADKHURRIZA,
+  'Eko Wahyudi, S.Pd': TTD_EKO_WAHYUDI,
+};
 
 // --- Saved TTD per pelapor (localStorage) ---
 
@@ -140,13 +145,27 @@ function getTtdMap(): Record<string, string> {
 }
 
 export function getSavedTtd(namaPelapor: string): string | null {
+  if (!namaPelapor) return null;
+
   // Pastikan nama Zainudin selalu kosong kecuali jika baru diupload sendiri
   if (namaPelapor.toLowerCase().includes('zainudin')) {
     const map = getTtdMap();
     return map[namaPelapor] || null;
   }
-  // Check localStorage first (user-uploaded overrides), then preset
+
   const map = getTtdMap();
+
+  // Khusus Ahmad Fadkhurriza Ivakhudin, S.Gz: Preset tanda tangan bawaan selalu siap digunakan
+  if (namaPelapor.toLowerCase().includes('fadkhurriza') || namaPelapor.toLowerCase().includes('ivakhudin')) {
+    return map[namaPelapor] || PRESET_TTD['Ahmad Fadkhurriza Ivakhudin, S.Gz'] || TTD_AHMAD_FADKHURRIZA;
+  }
+
+  // Khusus Eko Wahyudi, S.Pd: Preset tanda tangan bawaan selalu siap digunakan
+  if (namaPelapor.toLowerCase().includes('eko') || namaPelapor.toLowerCase().includes('wahyudi')) {
+    return map[namaPelapor] || PRESET_TTD['Eko Wahyudi, S.Pd'] || TTD_EKO_WAHYUDI;
+  }
+
+  // Check localStorage first (user-uploaded overrides), then preset
   return map[namaPelapor] || PRESET_TTD[namaPelapor] || null;
 }
 

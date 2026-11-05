@@ -15,7 +15,9 @@ function loadKeyFromEnvFile(): string | null {
   try {
     const paths = [
       path.resolve(process.cwd(), '.env'),
+      path.resolve(process.cwd(), '.env.example'),
       path.resolve(__dirname, '../../../../.env'),
+      path.resolve(__dirname, '../../../../.env.example'),
       path.resolve(__dirname, '../../.env'),
       path.resolve(__dirname, '.env'),
     ];
