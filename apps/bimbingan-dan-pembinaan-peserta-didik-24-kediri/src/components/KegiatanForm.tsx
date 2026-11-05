@@ -6,7 +6,7 @@ import { Label } from '@project/components/ui/label';
 import { Textarea } from '@project/components/ui/textarea';
 import { Badge } from '@project/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@project/components/ui/dialog';
-import { Sparkles, Image as ImageIcon, X, Trash2, ArrowUp, ArrowDown, Loader2, Eye, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, X, Trash2, ArrowUp, ArrowDown, Loader2, Eye, ShieldCheck } from 'lucide-react';
 import { generateDeskripsi } from 'zitejs/api';
 import { uploadFile } from 'zitejs/upload';
 import { toast } from 'sonner';
@@ -198,10 +198,6 @@ export default function KegiatanForm({ index, item, onChange, onRemove, canRemov
             <div className="flex items-center gap-1.5">
               <Label>Foto Dokumen / Kegiatan</Label>
               <span className="text-xs text-muted-foreground font-normal">({item.photos.length}/100)</span>
-            </div>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-              <CheckCircle2 size={12} className="text-emerald-500" />
-              <span>Kompresi Otomatis Aktif (Hemat Server & Tetap Tajam)</span>
             </div>
           </div>
 

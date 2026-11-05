@@ -133,7 +133,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="text-center text-[11px] text-slate-500">
-          Sekolah Rakyat Terintegrasi 1 Kabupaten Kediri &bull; SRMA 24 Kediri
+          Sekolah Rakyat Terintegrasi Kab Kediri
         </p>
       </div>
     </div>

@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, findMatchingPelapor } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
@@ -31,23 +31,23 @@ function getLocalDateString(d: Date = new Date()): string {
 export default function KegiatanHarianPage() {
   const { user } = useAuth();
   const today = getLocalDateString(new Date());
-  const initialNama = (user && user.role === 'wali_asuh' && user.nama) ? user.nama : DEFAULT_PELAPOR.nama;
-  const initialNip = (user && user.role === 'wali_asuh' && user.nip) ? user.nip : DEFAULT_PELAPOR.nip;
+  const matched = findMatchingPelapor(user);
 
-  const [namaPelapor, setNamaPelapor] = useState(initialNama);
-  const [nip, setNip] = useState(initialNip);
+  const [namaPelapor, setNamaPelapor] = useState(matched.nama);
+  const [nip, setNip] = useState(matched.nip);
   const [tanggal, setTanggal] = useState(today);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(matched.nama));
   const [kegiatanList, setKegiatanList] = useState<KegiatanItem[]>(() =>
     Array.from({ length: 4 }, createKegiatan)
   );
 
   useEffect(() => {
-    if (user && user.role === 'wali_asuh' && user.nama) {
-      setNamaPelapor(user.nama);
-      if (user.nip) setNip(user.nip);
-      const saved = getSavedTtd(user.nama);
-      if (saved) setTandaTangan(saved);
+    if (user) {
+      const currentMatched = findMatchingPelapor(user);
+      setNamaPelapor(currentMatched.nama);
+      setNip(currentMatched.nip);
+      const saved = getSavedTtd(currentMatched.nama);
+      setTandaTangan(saved);
     }
   }, [user]);
   const [saving, setSaving] = useState(false);

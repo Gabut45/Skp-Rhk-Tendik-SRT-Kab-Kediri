@@ -331,7 +331,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
 
     // Collect bounding boxes of all critical structural elements so we NEVER slice inside them
     const containerRect = container.getBoundingClientRect();
-    const scale = 2; // high-DPI scale factor
+    const scale = 1.8; // optimal high-DPI scale (crisp text & photos with reduced PDF weight)
 
     const noBreakElements = Array.from(
       container.querySelectorAll('tr, .signature-block, .kop-block, .meta-table, h1, h2, .section, .photo-proof-box, .photo-single-box')
@@ -383,7 +383,8 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
     // If the entire document fits within 1 page (with up to 15% tolerance for clean single-page layout)
     if (canvas.height <= maxPageCanvasHeight * 1.15) {
       const renderedHeight = (canvas.height * printWidth) / canvas.width;
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', margin, margin, printWidth, renderedHeight);
+      // Kompresi cerdas JPEG 0.80: ukuran file jauh lebih ringan, teks dan foto tetap tajam & mudah dibaca
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.80), 'JPEG', margin, margin, printWidth, renderedHeight, undefined, 'FAST');
       pdf.save(fname);
       return;
     }
@@ -440,14 +441,15 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
         );
       }
 
-      const sliceDataUrl = pageCanvas.toDataURL('image/jpeg', 0.96);
+      // Kompresi cerdas JPEG 0.80: ukuran file berkurang signifikan tanpa penurunan keterbacaan
+      const sliceDataUrl = pageCanvas.toDataURL('image/jpeg', 0.80);
       const renderedHeightOnPage = (sliceHeight * printWidth) / canvas.width;
 
       if (pageIndex > 0) {
         pdf.addPage('a4', 'portrait');
       }
 
-      pdf.addImage(sliceDataUrl, 'JPEG', margin, margin, printWidth, renderedHeightOnPage);
+      pdf.addImage(sliceDataUrl, 'JPEG', margin, margin, printWidth, renderedHeightOnPage, undefined, 'FAST');
 
       currentY = targetCutY;
       pageIndex++;

@@ -1,6 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
+// Browser-compatible deleted records store backed by localStorage and memory
 export interface DeletedDateRange {
   tanggalMulai?: string;
   tanggalSelesai?: string;
@@ -15,23 +13,9 @@ interface DeletedStoreData {
   deletedRanges: DeletedDateRange[];
 }
 
-const STORE_PATH = path.resolve(process.cwd(), '.zite', 'deleted_records.json');
+const LOCAL_STORAGE_KEY = 'zite_deleted_records';
 
-function loadStore(): DeletedStoreData {
-  try {
-    if (fs.existsSync(STORE_PATH)) {
-      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-      const data = JSON.parse(raw);
-      return {
-        deletedAll: Boolean(data.deletedAll),
-        deletedIds: Array.isArray(data.deletedIds) ? data.deletedIds : [],
-        deletedRiwayatKeys: Array.isArray(data.deletedRiwayatKeys) ? data.deletedRiwayatKeys : [],
-        deletedRanges: Array.isArray(data.deletedRanges) ? data.deletedRanges : [],
-      };
-    }
-  } catch (err) {
-    console.warn('[deleted_store] Gagal membaca deleted_records.json:', err);
-  }
+function getDefaultStore(): DeletedStoreData {
   return {
     deletedAll: false,
     deletedIds: [],
@@ -40,17 +24,35 @@ function loadStore(): DeletedStoreData {
   };
 }
 
+function loadStore(): DeletedStoreData {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        return {
+          deletedAll: Boolean(data.deletedAll),
+          deletedIds: Array.isArray(data.deletedIds) ? data.deletedIds : [],
+          deletedRiwayatKeys: Array.isArray(data.deletedRiwayatKeys) ? data.deletedRiwayatKeys : [],
+          deletedRanges: Array.isArray(data.deletedRanges) ? data.deletedRanges : [],
+        };
+      }
+    } catch (err) {
+      console.warn('[deleted_store] Gagal membaca deleted_records dari localStorage:', err);
+    }
+  }
+  return getDefaultStore();
+}
+
 let storeMemory: DeletedStoreData = loadStore();
 
 function saveStore(): void {
-  try {
-    const dir = path.dirname(STORE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(storeMemory));
+    } catch (err) {
+      console.warn('[deleted_store] Gagal menyimpan deleted_records ke localStorage:', err);
     }
-    fs.writeFileSync(STORE_PATH, JSON.stringify(storeMemory, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[deleted_store] Gagal menyimpan deleted_records.json:', err);
   }
 }
 

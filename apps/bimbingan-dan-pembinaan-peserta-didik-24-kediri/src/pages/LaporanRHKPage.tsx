@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, findMatchingPelapor } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -46,15 +46,24 @@ export default function LaporanRHKPage() {
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   const startOfMonth = `${year}-${month}-01`;
   const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-  const initialNama = (user && user.role === 'wali_asuh' && user.nama) ? user.nama : DEFAULT_PELAPOR.nama;
-  const initialNip = (user && user.role === 'wali_asuh' && user.nip) ? user.nip : DEFAULT_PELAPOR.nip;
+  const matched = findMatchingPelapor(user);
 
   const [rhkNomor, setRhkNomor] = useState('1');
   const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
   const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
-  const [namaPelapor, setNamaPelapor] = useState(initialNama);
-  const [nip, setNip] = useState(initialNip);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
+  const [namaPelapor, setNamaPelapor] = useState(matched.nama);
+  const [nip, setNip] = useState(matched.nip);
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(matched.nama));
+
+  useEffect(() => {
+    if (user) {
+      const currentMatched = findMatchingPelapor(user);
+      setNamaPelapor(currentMatched.nama);
+      setNip(currentMatched.nip);
+      const saved = getSavedTtd(currentMatched.nama);
+      setTandaTangan(saved);
+    }
+  }, [user]);
 
   const [previewing, setPreviewing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);

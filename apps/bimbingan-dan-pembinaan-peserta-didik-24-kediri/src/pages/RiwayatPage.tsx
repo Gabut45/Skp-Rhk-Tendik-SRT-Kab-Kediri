@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@project/compo
 import { Label } from '@project/components/ui/label';
 import { Textarea } from '@project/components/ui/textarea';
 import { Input } from '@project/components/ui/input';
-import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye } from 'lucide-react';
+import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
@@ -65,6 +65,13 @@ export default function RiwayatPage() {
   const [filterTanggalMulai, setFilterTanggalMulai] = useState(startOfMonth);
   const [filterTanggalSelesai, setFilterTanggalSelesai] = useState(endOfMonth);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
+  // Reset ke halaman 1 ketika filter pencarian diubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterPelapor, filterTanggalMulai, filterTanggalSelesai]);
 
   // Edit dialog state
   const [editRecord, setEditRecord] = useState<FileRecord | null>(null);
@@ -492,6 +499,12 @@ export default function RiwayatPage() {
     return sortOrder === 'asc' ? dateA.localeCompare(dateB) : dateB.localeCompare(dateA);
   });
 
+  const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, sortedRecords.length);
+  const pagedRecords = sortedRecords.slice(startIndex, endIndex);
+
   const formatDateTime = (d?: string) => {
     if (!d) return '-';
     return new Date(d).toLocaleString('id-ID', {
@@ -623,8 +636,15 @@ export default function RiwayatPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>Daftar File ({records.length})</span>
+          <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
+            <span>
+              Daftar File ({records.length})
+              {totalPages > 1 && (
+                <span className="text-xs font-normal text-muted-foreground ml-2">
+                  (Halaman {safeCurrentPage} dari {totalPages})
+                </span>
+              )}
+            </span>
             <span className="text-xs font-normal text-muted-foreground">
               Klik &quot;Preview&quot;, &quot;PDF&quot;, atau &quot;Word&quot; pada baris manapun untuk mencetak/mengunduh
             </span>
@@ -641,132 +661,226 @@ export default function RiwayatPage() {
               <p className="text-xs text-muted-foreground">Gunakan tombol &quot;Bulan Ini&quot; atau &quot;Semua Tanggal&quot; untuk menampilkan semua data.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10 text-center">No</TableHead>
-                    <TableHead>Nama File / Laporan</TableHead>
-                    <TableHead>Jenis</TableHead>
-                    <TableHead>Pelapor</TableHead>
-                    <TableHead>
-                      <button
-                        onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                        className="flex items-center gap-1 hover:text-foreground transition-colors font-medium"
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-center">No</TableHead>
+                      <TableHead>Nama File / Laporan</TableHead>
+                      <TableHead>Jenis</TableHead>
+                      <TableHead>Pelapor</TableHead>
+                      <TableHead>
+                        <button
+                          onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                          className="flex items-center gap-1 hover:text-foreground transition-colors font-medium"
+                        >
+                          Tanggal
+                          {sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
+                        </button>
+                      </TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Tindakan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedRecords.map((r, i) => {
+                      const rowNumber = startIndex + i + 1;
+                      return (
+                        <TableRow key={r.id}>
+                          <TableCell className="text-center font-medium">{rowNumber}</TableCell>
+                          <TableCell className="max-w-xs">
+                            <p className="text-sm font-medium line-clamp-1">{r.namaFile || '-'}</p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {r.rhkNomor && <Badge variant="outline" className="text-[10px]">{r.rhkNomor}</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={(r.jenisLaporan === 'Kinerja Harian' ? 'default' : 'secondary') as 'default' | 'secondary'} className="text-xs">
+                              {r.jenisLaporan}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm font-medium">{r.namaPelapor}</TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {r.tanggalMulai
+                              ? new Date(r.tanggalMulai + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+                            {formatDateTime(r.dibuatPada)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewPreview(r)}
+                                title="Buka Preview & Cetak Laporan"
+                                className="h-8 gap-1 px-2.5 text-xs font-medium"
+                              >
+                                <Eye size={13} />
+                                <span>Preview</span>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadPdfRecord(r)}
+                                title="Unduh File PDF (.pdf)"
+                                className="h-8 gap-1 px-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <FileDown size={13} />
+                                <span>PDF</span>
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDownloadWordRecord(r)}
+                                title="Unduh File Word (.doc)"
+                                className="h-8 gap-1 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              >
+                                <FileText size={13} />
+                                <span>Word</span>
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(r)}
+                                title="Edit & Salin Kegiatan"
+                                className="h-8 w-8 p-0"
+                              >
+                                <Pencil size={14} />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">
+                                    <Trash2 size={14} className="text-destructive" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle className="text-destructive">Hapus Permanen Dari Server?</AlertDialogTitle>
+                                    <AlertDialogDescription asChild>
+                                      <div className="space-y-2 text-sm text-muted-foreground">
+                                        <p>
+                                          Laporan ini beserta seluruh data kegiatan terkait pada tanggal{' '}
+                                          <strong className="text-foreground">{r.tanggalMulai || '-'}</strong> ({r.namaPelapor}) akan dihapus secara permanen dari server dan database.
+                                        </p>
+                                        <p className="text-xs text-muted-foreground font-medium">
+                                          Data yang dihapus tidak akan dapat dipulihkan kembali.
+                                        </p>
+                                      </div>
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(r)}
+                                      className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                                    >
+                                      Hapus Permanen
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Baris Navigasi Paginasi 50 Data per Halaman */}
+              {sortedRecords.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t text-xs text-muted-foreground">
+                  <div>
+                    Menampilkan <span className="font-semibold text-foreground">{startIndex + 1}</span> - <span className="font-semibold text-foreground">{endIndex}</span> dari <span className="font-semibold text-foreground">{sortedRecords.length}</span> file
+                    {totalPages > 1 && (
+                      <span className="ml-1 text-muted-foreground">
+                        (50 data per tab • Halaman {safeCurrentPage} dari {totalPages})
+                      </span>
+                    )}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-1 flex-wrap justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={safeCurrentPage <= 1}
+                        className="h-8 w-8 p-0"
+                        title="Halaman Pertama"
                       >
-                        Tanggal
-                        {sortOrder === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />}
-                      </button>
-                    </TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Tindakan</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedRecords.map((r, i) => {
-                    return (
-                      <TableRow key={r.id}>
-                        <TableCell className="text-center">{i + 1}</TableCell>
-                        <TableCell className="max-w-xs">
-                          <p className="text-sm font-medium line-clamp-1">{r.namaFile || '-'}</p>
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            {r.rhkNomor && <Badge variant="outline" className="text-[10px]">{r.rhkNomor}</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={(r.jenisLaporan === 'Kinerja Harian' ? 'default' : 'secondary') as 'default' | 'secondary'} className="text-xs">
-                            {r.jenisLaporan}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm font-medium">{r.namaPelapor}</TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {r.tanggalMulai
-                            ? new Date(r.tanggalMulai + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
-                          {formatDateTime(r.dibuatPada)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewPreview(r)}
-                              title="Buka Preview & Cetak Laporan"
-                              className="h-8 gap-1 px-2.5 text-xs font-medium"
-                            >
-                              <Eye size={13} />
-                              <span>Preview</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownloadPdfRecord(r)}
-                              title="Unduh File PDF (.pdf)"
-                              className="h-8 gap-1 px-2 text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <FileDown size={13} />
-                              <span>PDF</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDownloadWordRecord(r)}
-                              title="Unduh File Word (.doc)"
-                              className="h-8 gap-1 px-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <FileText size={13} />
-                              <span>Word</span>
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(r)}
-                              title="Edit & Salin Kegiatan"
-                              className="h-8 w-8 p-0"
-                            >
-                              <Pencil size={14} />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">
-                                  <Trash2 size={14} className="text-destructive" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle className="text-destructive">Hapus Permanen Dari Server?</AlertDialogTitle>
-                                  <AlertDialogDescription asChild>
-                                    <div className="space-y-2 text-sm text-muted-foreground">
-                                      <p>
-                                        Laporan ini beserta seluruh data kegiatan terkait pada tanggal{' '}
-                                        <strong className="text-foreground">{r.tanggalMulai || '-'}</strong> ({r.namaPelapor}) akan dihapus secara permanen dari server dan database.
-                                      </p>
-                                      <p className="text-xs text-muted-foreground font-medium">
-                                        Data yang dihapus tidak akan dapat dipulihkan kembali.
-                                      </p>
-                                    </div>
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Batal</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDelete(r)}
-                                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                                  >
-                                    Hapus Permanen
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                        <ChevronsLeft size={14} />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={safeCurrentPage <= 1}
+                        className="h-8 gap-1 px-2.5"
+                        title="Halaman Sebelumnya"
+                      >
+                        <ChevronLeft size={14} />
+                        <span>Sebelumnya</span>
+                      </Button>
+
+                      <div className="flex items-center gap-1 mx-1">
+                        {Array.from({ length: totalPages }, (_, idx) => idx + 1)
+                          .filter(p => p === 1 || p === totalPages || Math.abs(p - safeCurrentPage) <= 2)
+                          .reduce((acc: (number | string)[], p, idx, arr) => {
+                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
+                              acc.push('...');
+                            }
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((item, idx) =>
+                            item === '...' ? (
+                              <span key={`dots-${idx}`} className="px-1 text-muted-foreground">...</span>
+                            ) : (
+                              <Button
+                                key={`page-${item}`}
+                                variant={safeCurrentPage === item ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setCurrentPage(item as number)}
+                                className={`h-8 w-8 p-0 text-xs font-semibold ${
+                                  safeCurrentPage === item ? 'pointer-events-none' : ''
+                                }`}
+                              >
+                                {item}
+                              </Button>
+                            )
+                          )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={safeCurrentPage >= totalPages}
+                        className="h-8 gap-1 px-2.5"
+                        title="Halaman Berikutnya"
+                      >
+                        <span>Berikutnya</span>
+                        <ChevronRight size={14} />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={safeCurrentPage >= totalPages}
+                        className="h-8 w-8 p-0"
+                        title="Halaman Terakhir"
+                      >
+                        <ChevronsRight size={14} />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>

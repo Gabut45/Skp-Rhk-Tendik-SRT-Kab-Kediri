@@ -53,7 +53,7 @@ export default function SplashScreen({ onFinish, durationMs = 2200 }: SplashScre
       {/* Top Header Badge */}
       <div className="pt-6 flex items-center gap-2 text-xs tracking-wider uppercase text-indigo-300/80 font-medium">
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Pemerintah Kabupaten Kediri &bull; SRMA 24</span>
+        <span>Pemerintah Kabupaten Kediri &bull; Sekolah Rakyat Terintegrasi Kab Kediri</span>
       </div>
 
       {/* Main Center Brand Identity */}

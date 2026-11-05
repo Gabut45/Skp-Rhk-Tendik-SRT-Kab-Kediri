@@ -16,9 +16,9 @@ export const RHK_DATA = [
       "Monitoring kehadiran peserta didik dalam kegiatan belajar",
     ],
     maksudTujuan:
-      "Bimbingan dan pengajaran kepada siswa peserta didik SRMA 24 Kediri bertujuan memberikan pendampingan belajar yang terarah dan kondusif, menumbuhkan kedisiplinan, kemandirian, dan tanggungjawab siswa dalam menciptakan lingkungan asrama yang baik.",
+      "Bimbingan dan pengajaran kepada siswa peserta didik Sekolah Rakyat Terintegrasi Kab Kediri bertujuan memberikan pendampingan belajar yang terarah dan kondusif, menumbuhkan kedisiplinan, kemandirian, dan tanggungjawab siswa dalam menciptakan lingkungan asrama yang baik.",
     ruangLingkup:
-      "Kegiatan bimbingan dan pengajaran yang dilaksanakan di SRMA 24 Kediri meliputi sharing bersama, refleksi malam setelah kegiatan, pendampingan dan bimbingan belajar yang dilaksanakan oleh wali asuh dan wali asrama yang diikuti oleh seluruh siswa SRMA 24 Kediri.",
+      "Kegiatan bimbingan dan pengajaran yang dilaksanakan di Sekolah Rakyat Terintegrasi Kab Kediri meliputi sharing bersama, refleksi malam setelah kegiatan, pendampingan dan bimbingan belajar yang dilaksanakan oleh wali asuh dan wali asrama yang diikuti oleh seluruh siswa Sekolah Rakyat Terintegrasi Kab Kediri.",
   },
   {
     nomor: "2",
@@ -36,9 +36,9 @@ export const RHK_DATA = [
       "Pembiasaan antre dan tertib dalam kegiatan bersama",
     ],
     maksudTujuan:
-      "Kegiatan kemandirian kepada siswa peserta didik SRMA 24 Kediri bertujuan membangun kemandirian pada diri siswa agar dapat terbiasa melakukan kegiatan sehari-hari secara mandiri dan tidak bergantung kepada orang lain, serta ketika siswa sudah keluar dari asrama dapat diterapkan di lingkungan keluarga.",
+      "Kegiatan kemandirian kepada siswa peserta didik Sekolah Rakyat Terintegrasi Kab Kediri bertujuan membangun kemandirian pada diri siswa agar dapat terbiasa melakukan kegiatan sehari-hari secara mandiri dan tidak bergantung kepada orang lain, serta ketika siswa sudah keluar dari asrama dapat diterapkan di lingkungan keluarga.",
     ruangLingkup:
-      "Kegiatan kemandirian yang dilaksanakan di SRMA 24 Kediri meliputi ibadah sholat berjamaah, olahraga pagi, bersih diri dan lingkungan, pembiasaan pagi, makan, cuci baju, cuci piring, belajar mandiri, dan diskusi.",
+      "Kegiatan kemandirian yang dilaksanakan di Sekolah Rakyat Terintegrasi Kab Kediri meliputi ibadah sholat berjamaah, olahraga pagi, bersih diri dan lingkungan, pembiasaan pagi, makan, cuci baju, cuci piring, belajar mandiri, dan diskusi.",
   },
   {
     nomor: "3",
@@ -58,9 +58,9 @@ export const RHK_DATA = [
       "Pendampingan kegiatan rutin asrama",
     ],
     maksudTujuan:
-      "Kegiatan bimbingan dan pembinaan peserta didik dalam berbagai aspek kehidupan termasuk ibadah, belajar dan aktivitas sehari-hari kepada peserta didik SRMA 24 Kediri bertujuan memberikan bimbingan dan pembinaan disetiap kegiatan yang dilakukan di asrama, dengan maksud memberikan pendampingan dan pengawasan agar setiap siswa peserta didik dapat melaksanaan kegiatan dengan baik dan efektif.",
+      "Kegiatan bimbingan dan pembinaan peserta didik dalam berbagai aspek kehidupan termasuk ibadah, belajar dan aktivitas sehari-hari kepada peserta didik Sekolah Rakyat Terintegrasi Kab Kediri bertujuan memberikan bimbingan dan pembinaan disetiap kegiatan yang dilakukan di asrama, dengan maksud memberikan pendampingan dan pengawasan agar setiap siswa peserta didik dapat melaksanaan kegiatan dengan baik dan efektif.",
     ruangLingkup:
-      "Kegiatan yang dilaksanakan di SRMA 24 Kediri meliputi pendampingan ibadah, pendampingan belajar, pendampingan makan, pendampingan kebersihan lingkungan, refleksi harian, dll.",
+      "Kegiatan yang dilaksanakan di Sekolah Rakyat Terintegrasi Kab Kediri meliputi pendampingan ibadah, pendampingan belajar, pendampingan makan, pendampingan kebersihan lingkungan, refleksi harian, dll.",
   },
   {
     nomor: "4",
@@ -78,9 +78,9 @@ export const RHK_DATA = [
       "Pendampingan kegiatan olahraga dan rekreasi",
     ],
     maksudTujuan:
-      "Kegiatan bimbingan spiritual dan emosional kepada siswa peserta didik SRMA 24 Kediri bertujuan membangun kebiasaan disiplin dalam kegiatan keagamaan, belajar dengan giat dan tekun, terbangun kebiasaan untuk menjaga kesehatan, dan memberikan dukungan emosional kepada siswa peserta didik.",
+      "Kegiatan bimbingan spiritual dan emosional kepada siswa peserta didik Sekolah Rakyat Terintegrasi Kab Kediri bertujuan membangun kebiasaan disiplin dalam kegiatan keagamaan, belajar dengan giat dan tekun, terbangun kebiasaan untuk menjaga kesehatan, dan memberikan dukungan emosional kepada siswa peserta didik.",
     ruangLingkup:
-      "Kegiatan bimbingan spiritual dan emosional yang dilaksanakan di SRMA 24 Kediri meliputi kegiatan keagamaan, sharing bersama, belajar mandiri, pengecekan kesehatan, kunjungan orangtua, pembinaan kebersihan, konseling, dan apel malam.",
+      "Kegiatan bimbingan spiritual dan emosional yang dilaksanakan di Sekolah Rakyat Terintegrasi Kab Kediri meliputi kegiatan keagamaan, sharing bersama, belajar mandiri, pengecekan kesehatan, kunjungan orangtua, pembinaan kebersihan, konseling, dan apel malam.",
   },
   {
     nomor: "5",
@@ -119,7 +119,7 @@ export const RHK_DATA = [
     maksudTujuan:
       "Tersedianya hasil tugas tambahan sesuai dengan penugasan dari Kepala Sekolah sesuai dengan ketentuan.",
     ruangLingkup:
-      "Tugas tambahan yang diberikan oleh Kepala Sekolah sesuai kebutuhan operasional SRMA 24 Kediri.",
+      "Tugas tambahan yang diberikan oleh Kepala Sekolah sesuai kebutuhan operasional Sekolah Rakyat Terintegrasi Kab Kediri.",
   },
 ];
 

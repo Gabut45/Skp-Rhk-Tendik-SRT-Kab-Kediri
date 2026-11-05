@@ -16,7 +16,7 @@ const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; tim
     timeOfDays: ['malam'],
     templates: [
       'Mendampingi kegiatan makan malam bersama di ruang makan asrama, menciptakan suasana kekeluargaan yang hangat, serta mengingatkan peserta didik untuk menghabiskan makanan dan membersihkan tempat makan.',
-      'Melaksanakan pendampingan makan malam peserta didik di asrama SRMA 24 Kediri dengan tertib, memastikan adab makan diterapkan dengan baik dan seluruh siswa mendapatkan asupan nutrisi yang cukup.',
+      'Melaksanakan pendampingan makan malam peserta didik di asrama Sekolah Rakyat Terintegrasi Kab Kediri dengan tertib, memastikan adab makan diterapkan dengan baik dan seluruh siswa mendapatkan asupan nutrisi yang cukup.',
       'Mengawasi jalannya makan malam bersama seluruh penghuni asrama, mengecek ketertiban antrian makan, serta membiasakan budaya berdoa bersama sebelum dan sesudah makan malam.',
     ],
   },
@@ -180,7 +180,7 @@ const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; tim
   'belajar': {
     rhk: 'RHK 1',
     templates: [
-      'Melaksanakan pendampingan kegiatan belajar bersama peserta didik dengan menekankan penguasaan materi pelajaran serta teknik belajar yang efektif di asrama SRMA 24 Kediri.',
+      'Melaksanakan pendampingan kegiatan belajar bersama peserta didik dengan menekankan penguasaan materi pelajaran serta teknik belajar yang efektif di asrama Sekolah Rakyat Terintegrasi Kab Kediri.',
       'Memberikan bimbingan belajar secara intensif kepada siswa-siswi, meliputi penjelasan materi yang belum dipahami serta latihan soal guna meningkatkan capaian akademik.',
     ],
   },
@@ -243,7 +243,7 @@ const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; tim
   'cuci': {
     rhk: 'RHK 2',
     templates: [
-      'Melaksanakan pendampingan kegiatan kemandirian peserta didik dalam mencuci pakaian dan perlengkapan pribadi secara mandiri di lingkungan asrama SRMA 24 Kediri.',
+      'Melaksanakan pendampingan kegiatan kemandirian peserta didik dalam mencuci pakaian dan perlengkapan pribadi secara mandiri di lingkungan asrama Sekolah Rakyat Terintegrasi Kab Kediri.',
     ],
   },
   'piket kebersihan': {
@@ -494,7 +494,7 @@ const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; tim
   'tugas kepala sekolah': {
     rhk: 'RHK 7',
     templates: [
-      'Melaksanakan tugas tambahan kedinasan sesuai penugasan dari Kepala Sekolah dalam rangka mendukung kelancaran operasional asrama SRMA 24 Kediri.',
+      'Melaksanakan tugas tambahan kedinasan sesuai penugasan dari Kepala Sekolah dalam rangka mendukung kelancaran operasional asrama Sekolah Rakyat Terintegrasi Kab Kediri.',
     ],
   },
   'kepanitiaan': {

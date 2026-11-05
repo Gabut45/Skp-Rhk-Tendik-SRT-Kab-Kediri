@@ -137,7 +137,7 @@ export async function handleGenerateDeskripsiServer(rawKeyword: string): Promise
   // 1. Coba gunakan Gemini API jika key valid
   if (hasValidGeminiKey()) {
     try {
-      const prompt = `Anda adalah sistem AI perumus deskripsi Sasaran Kinerja Pegawai (SKP) / Rencana Hasil Kerja (RHK) Tenaga Kependidikan / Wali Asuh di Sekolah Rakyat Terintegrasi 1 Kabupaten Kediri (SRT 1 Kediri / SRMA 24 Kediri).
+      const prompt = `Anda adalah sistem AI perumus deskripsi Sasaran Kinerja Pegawai (SKP) / Rencana Hasil Kerja (RHK) Tenaga Kependidikan / Wali Asuh di Sekolah Rakyat Terintegrasi Kab Kediri.
 Kata Kunci Kegiatan: "${trimmed}"
 
 Instruksi:

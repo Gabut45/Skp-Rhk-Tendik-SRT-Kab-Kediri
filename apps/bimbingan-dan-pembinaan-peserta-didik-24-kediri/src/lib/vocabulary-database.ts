@@ -1,6 +1,6 @@
 /**
  * Database Kosa Kata & Bank Deskripsi Kegiatan Bimbingan dan Pembinaan Peserta Didik
- * Khusus Lingkungan: Sekolah Rakyat Terintegrasi 1 Kab. Kediri (SRT 1 Kediri / SRMA 24 Kediri)
+ * Khusus Lingkungan: Sekolah Rakyat Terintegrasi Kab Kediri
  *
  * Berisi perbendaharaan kata realistis terlengkap untuk tugas Wali Asuh, Tenaga Kependidikan,
  * dan Pembina Karakter Peserta Didik, lengkap dengan variasi kalimat dinamis dan penanganan waktu.
@@ -27,7 +27,7 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     timeContext: 'malam',
     templates: [
       'Mendampingi kegiatan makan malam bersama peserta didik di ruang makan asrama, menciptakan suasana kekeluargaan yang hangat, serta membiasakan berdoa dan adab makan yang tertib.',
-      'Melaksanakan pendampingan makan malam peserta didik di asrama SRMA 24 Kediri, memastikan asupan nutrisi tercukupi dan seluruh siswa merapikan kembali peralatan makannya.',
+      'Melaksanakan pendampingan makan malam peserta didik di asrama Sekolah Rakyat Terintegrasi Kab Kediri, memastikan asupan nutrisi tercukupi dan seluruh siswa merapikan kembali peralatan makannya.',
       'Mengawasi jalannya makan malam bersama seluruh penghuni asrama, mengecek ketertiban antrean makan, serta memastikan tidak ada makanan yang terbuang percuma.',
       'Mendampingi makan malam santri/peserta didik secara tertib dan teratur, mempererat kebersamaan antar-siswa, serta memastikan kebersihan meja makan setelah selesai.',
     ],
@@ -289,7 +289,7 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     timeContext: 'fleksibel',
     templates: [
       'Mengoordinasikan dan mendampingi kegiatan kerja bakti gotong royong membersihkan seluruh lingkungan asrama, halaman, dan drainase bersama peserta didik.',
-      'Melaksanakan kegiatan gotong royong membersihkan lingkungan asrama SRMA 24 Kediri, menanamkan kepedulian lingkungan dan kebersamaan antar-siswa.',
+      'Melaksanakan kegiatan gotong royong membersihkan lingkungan asrama Sekolah Rakyat Terintegrasi Kab Kediri, menanamkan kepedulian lingkungan dan kebersamaan antar-siswa.',
     ],
   },
   {
@@ -650,7 +650,7 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     timeContext: 'malam',
     templates: [
       'Melaksanakan patroli dan pengecekan keliling asrama pada malam hari, memastikan seluruh pintu dan jendela terkunci aman, kran air tertutup, serta lingkungan asrama kondusif.',
-      'Melakukan pengawasan keamanan berkala di lingkungan asrama SRMA 24 Kediri selama jam istirahat malam demi menjamin keselamatan dan kenyamanan seluruh peserta didik.',
+      'Melakukan pengawasan keamanan berkala di lingkungan asrama Sekolah Rakyat Terintegrasi Kab Kediri selama jam istirahat malam demi menjamin keselamatan dan kenyamanan seluruh peserta didik.',
     ],
   },
   {
@@ -704,7 +704,7 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     rhk: 'RHK 7',
     timeContext: 'fleksibel',
     templates: [
-      'Melaksanakan tugas tambahan kedinasan sesuai surat penugasan / arahan Kepala Sekolah dalam rangka mendukung kelancaran operasional dan program asrama SRMA 24 Kediri.',
+      'Melaksanakan tugas tambahan kedinasan sesuai surat penugasan / arahan Kepala Sekolah dalam rangka mendukung kelancaran operasional dan program asrama Sekolah Rakyat Terintegrasi Kab Kediri.',
       'Menjalankan disposisi kedinasan dari pimpinan sekolah terkait koordinasi lintas unit dan pengelolaan fasilitas penunjang peserta didik secara bertanggung jawab.',
     ],
   },

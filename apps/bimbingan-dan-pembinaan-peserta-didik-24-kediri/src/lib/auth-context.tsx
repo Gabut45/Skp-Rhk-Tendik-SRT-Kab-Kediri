@@ -133,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             nama: found.nama,
             nip: found.nip,
             role: found.role,
-            email: `${found.username}@srma24kediri.sch.id`,
+            email: `${found.username}@sekolahrakyat.kedirikab.go.id`,
           });
         } else {
           localStorage.removeItem(STORAGE_SESSION_KEY);
@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       nama: matched.nama,
       nip: matched.nip,
       role: matched.role,
-      email: `${matched.username}@srma24kediri.sch.id`,
+      email: `${matched.username}@sekolahrakyat.kedirikab.go.id`,
     };
 
     setUser(authUser);
