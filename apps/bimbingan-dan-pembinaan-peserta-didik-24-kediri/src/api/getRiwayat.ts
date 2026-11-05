@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { zite } from 'zitejs/db';
+import { zite, isRecordDeleted, isDeletedAll, addDeletedIds } from 'zitejs/db';
 import { createEndpoint } from 'zitejs/backend';
 
 export default createEndpoint({
@@ -7,6 +7,7 @@ export default createEndpoint({
     namaPelapor: z.string().optional(),
     tanggalMulai: z.string().optional(),
     tanggalSelesai: z.string().optional(),
+    deletedIds: z.array(z.string()).optional(),
   }),
   outputSchema: z.object({
     records: z.array(z.object({
@@ -22,6 +23,14 @@ export default createEndpoint({
     })),
   }),
   async execute({ input }) {
+    if (isDeletedAll()) {
+      return { records: [] };
+    }
+
+    if (input.deletedIds && input.deletedIds.length > 0) {
+      addDeletedIds(input.deletedIds);
+    }
+
     const filters: any = {};
     if (input.namaPelapor && input.namaPelapor !== 'Semua Pelapor') {
       filters.namaPelapor = input.namaPelapor;
@@ -33,8 +42,9 @@ export default createEndpoint({
     }
 
     const { records } = await zite.riwayatFile.findAll({ filters, limit: 500 });
+    const validRecords = records.filter(r => !isRecordDeleted(r));
     return {
-      records: records.map(r => ({
+      records: validRecords.map(r => ({
         id: r.id,
         namaFile: r.namaFile,
         jenisLaporan: r.jenisLaporan,

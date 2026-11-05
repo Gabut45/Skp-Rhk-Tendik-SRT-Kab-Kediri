@@ -164,6 +164,8 @@ async function fetchCpanelForRhk(params: { tanggalMulai: string; tanggalSelesai:
   return [];
 }
 
+import { isRecordDeleted, isDeletedAll, addDeletedIds } from 'zitejs/db';
+
 export default createEndpoint({
   inputSchema: z.object({
     rhkNomor: z.string(),
@@ -173,21 +175,26 @@ export default createEndpoint({
     nip: z.string(),
     tandaTangan: z.string().optional(),
     format: z.enum(['pdf', 'word']).optional(),
+    deletedIds: z.array(z.string()).optional(),
   }),
-  outputSchema: z.object({ url: z.string(), id: z.string(), wordHtml: z.string(), pdfHtml: z.string() }),
+  outputSchema: z.object({ url: z.string(), id: z.string(), wordHtml: z.string(), pdfHtml: z.string(), kegiatanCount: z.number().optional() }),
   async execute({ input }) {
+    if (input.deletedIds && input.deletedIds.length > 0) {
+      addDeletedIds(input.deletedIds);
+    }
+
     const rhkInfo = RHK_INFO[input.rhkNomor];
     if (!rhkInfo) throw new Error('RHK tidak ditemukan');
 
     const rhkLabel = `RHK ${input.rhkNomor}`;
-    const cpanelRecs = await fetchCpanelForRhk({
+    const cpanelRecs = isDeletedAll() ? [] : await fetchCpanelForRhk({
       tanggalMulai: input.tanggalMulai,
       tanggalSelesai: input.tanggalSelesai,
       namaPelapor: input.namaPelapor,
       rhkLabel,
     });
 
-    const { records: localRecs } = await zite.kegiatanHarian.findAll({
+    const { records: localRecs } = isDeletedAll() ? { records: [] } : await zite.kegiatanHarian.findAll({
       filters: {
         tanggal: { gte: input.tanggalMulai, lte: input.tanggalSelesai },
         rhkKategori: { contains: rhkLabel },
@@ -196,12 +203,38 @@ export default createEndpoint({
       limit: 500,
     });
 
-    const combinedMap = new Map<string, any>();
-    for (const r of cpanelRecs) combinedMap.set(r.id, r);
-    for (const r of localRecs) {
-      if (!combinedMap.has(r.id)) combinedMap.set(r.id, r);
+    const byFingerprint = new Map<string, any>();
+    const seenIds = new Set<string>();
+
+    const allRecs = [...cpanelRecs, ...localRecs];
+    for (const r of allRecs) {
+      if (!r || isRecordDeleted(r)) continue;
+      const id = String(r.id || '');
+      if (id && seenIds.has(id)) continue;
+
+      const tgl = String(r.tanggal || '').trim();
+      const pelapor = String(r.namaPelapor || '').trim().toLowerCase();
+      const mulai = String(r.waktuMulai || '').trim();
+      const selesai = String(r.waktuSelesai || '').trim();
+      const desc = String(r.deskripsiKegiatan || r.kataKunciKegiatan || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const fp = `${tgl}::${pelapor}::${mulai}::${selesai}::${desc}`;
+
+      if (!byFingerprint.has(fp)) {
+        if (id) seenIds.add(id);
+        byFingerprint.set(fp, r);
+      } else {
+        const existing = byFingerprint.get(fp);
+        const existingPhotos = existing.fotoKegiatan || [];
+        const rPhotos = r.fotoKegiatan || [];
+        if (rPhotos.length > existingPhotos.length) {
+          existing.fotoKegiatan = rPhotos;
+        }
+      }
     }
-    const records = Array.from(combinedMap.values());
+    const records = Array.from(byFingerprint.values());
+    if (records.length === 0) {
+      throw new Error('Tidak ada data kegiatan atau bukti foto untuk RHK ini pada rentang tanggal yang dipilih. Berkas laporan tidak dapat dibuat karena data telah dihapus atau belum diinput.');
+    }
 
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     const endDate = new Date(input.tanggalSelesai + 'T00:00:00');
@@ -335,6 +368,6 @@ ${docTable}
       },
     });
 
-    return { url, id: riwayat.id, wordHtml, pdfHtml: html };
+    return { url, id: riwayat.id, wordHtml, pdfHtml: html, kegiatanCount: records.length };
   },
 });

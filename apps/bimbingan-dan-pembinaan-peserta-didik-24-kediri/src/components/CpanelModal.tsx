@@ -304,19 +304,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit;
     }
-    // Aksi: Hapus Kegiatan
+    // Aksi: Hapus Kegiatan (Permanen Selamanya)
     if ($action === 'delete_kegiatan') {
         $delId = $data['id'] ?? ($_GET['id'] ?? '');
-        if ($delId) {
-            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id");
-            $stmt->execute([':id' => $delId]);
-            echo json_encode([
-                'success' => true,
-                'message' => "Kegiatan berhasil dihapus dari cPanel MySQL!",
-                'id' => $delId
-            ]);
-            exit;
+        $delNum = $data['id_numeric'] ?? null;
+        $delIds = $data['ids'] ?? [];
+        $tgl = $data['tanggal'] ?? ($_GET['tanggal'] ?? null);
+        $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
+
+        if (!empty($delIds) && is_array($delIds)) {
+            $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
+            $stmt->execute($delIds);
         }
+        if ($delId) {
+            $numVal = $delNum ?? (is_numeric($delId) ? $delId : 0);
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
+            $stmt->execute([':id' => $delId, ':num' => $numVal]);
+        }
+        if ($tgl && $pelapor) {
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
+            $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+        }
+        echo json_encode([
+            'success' => true,
+            'message' => 'Kegiatan berhasil dihapus secara permanen dari cPanel MySQL!'
+        ]);
+        exit;
+    }
+
+    // Aksi: Hapus Riwayat File (Permanen Selamanya)
+    if ($action === 'delete_riwayat') {
+        $delId = $data['id'] ?? ($_GET['id'] ?? '');
+        $tgl = $data['tanggal'] ?? ($_GET['tanggal'] ?? null);
+        $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
+
+        if ($delId) {
+            $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id = :id");
+            $stmt->execute([':id' => $delId]);
+        }
+        if ($tgl && $pelapor) {
+            $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
+            $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+        }
+        echo json_encode([
+            'success' => true,
+            'message' => 'Riwayat file berhasil dihapus secara permanen dari cPanel MySQL!'
+        ]);
+        exit;
     }
 }
 

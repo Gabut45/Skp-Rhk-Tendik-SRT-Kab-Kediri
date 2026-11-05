@@ -114,50 +114,105 @@ const INITIAL_RIWAYAT: RiwayatFileRecordType[] = SEED_RIWAYAT as unknown as Riwa
 
 const memoryStore: Record<string, any[]> = {};
 
+function deduplicateKegiatanList(list: any[]): any[] {
+  const byFp = new Map<string, any>();
+  const seenIds = new Set<string>();
+  for (const r of list) {
+    if (!r) continue;
+    const id = String(r.id || '');
+    if (id && seenIds.has(id)) continue;
+    const tgl = String(r.tanggal || '').trim();
+    const pelapor = String(r.namaPelapor || r.nama_pelapor || '').trim().toLowerCase();
+    const mulai = String(r.waktuMulai || r.waktu_mulai || '').trim();
+    const selesai = String(r.waktuSelesai || r.waktu_selesai || '').trim();
+    const desc = String(r.deskripsiKegiatan || r.deskripsi_kegiatan || r.kataKunciKegiatan || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const fp = `${tgl}::${pelapor}::${mulai}::${selesai}::${desc}`;
+
+    if (!byFp.has(fp)) {
+      if (id) seenIds.add(id);
+      byFp.set(fp, r);
+    } else {
+      const existing = byFp.get(fp);
+      const existingPhotos = existing.fotoKegiatan || [];
+      const rPhotos = r.fotoKegiatan || [];
+      if (rPhotos.length > existingPhotos.length) {
+        byFp.set(fp, r);
+      }
+    }
+  }
+  return Array.from(byFp.values());
+}
+
+import {
+  isRecordDeleted,
+  isDeletedAll,
+  setDeletedAll,
+  addDeletedIds,
+  addDeletedRange,
+  addDeletedRiwayatKey,
+} from './deleted_store';
+
+export {
+  isRecordDeleted,
+  isDeletedAll,
+  setDeletedAll,
+  addDeletedIds,
+  addDeletedRange,
+  addDeletedRiwayatKey,
+};
+
 function getTableRecords(tableName: string): any[] {
+  if (isDeletedAll()) {
+    return [];
+  }
+
   if (typeof window !== 'undefined' && window.localStorage) {
     const key = `zite_table_${tableName}`;
     const stored = localStorage.getItem(key);
-    if (stored) {
+    if (stored !== null) {
       try {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // If stored has only placeholder 4 items, upgrade to full seed database!
-          if (tableName === 'KegiatanHarian' && parsed.length <= 4 && parsed[0]?.id?.startsWith('keg-0')) {
+        if (Array.isArray(parsed)) {
+          // Hanya upgrade jika data awal adalah placeholder demo dummy 'keg-0'
+          if (tableName === 'KegiatanHarian' && parsed.length > 0 && parsed.length <= 4 && parsed[0]?.id?.startsWith('keg-0')) {
             localStorage.setItem(key, JSON.stringify(INITIAL_KEGIATAN));
-            return INITIAL_KEGIATAN;
+            return INITIAL_KEGIATAN.filter(r => !isRecordDeleted(r));
           }
-          if (tableName === 'RiwayatFile' && parsed.length <= 1) {
-            localStorage.setItem(key, JSON.stringify(INITIAL_RIWAYAT));
-            return INITIAL_RIWAYAT;
+          if (tableName === 'KegiatanHarian') {
+            const deduped = deduplicateKegiatanList(parsed);
+            if (deduped.length !== parsed.length) {
+              localStorage.setItem(key, JSON.stringify(deduped));
+            }
+            return deduped.filter(r => !isRecordDeleted(r));
           }
-          return parsed;
+          return parsed.filter(r => !isRecordDeleted(r));
         }
       } catch {
         // parse error, fallback
       }
     }
-    // initialize defaults
+    // Inisialisasi awal hanya jika localStorage sama sekali belum diset (pertama kali dibuka)
     let initial: any[] = [];
     if (tableName === 'KegiatanHarian') initial = INITIAL_KEGIATAN;
     if (tableName === 'RiwayatFile') initial = INITIAL_RIWAYAT;
     localStorage.setItem(key, JSON.stringify(initial));
-    return initial;
+    return initial.filter(r => !isRecordDeleted(r));
   }
 
   if (!memoryStore[tableName]) {
-    if (tableName === 'KegiatanHarian') memoryStore[tableName] = [...INITIAL_KEGIATAN];
+    if (tableName === 'KegiatanHarian') memoryStore[tableName] = deduplicateKegiatanList([...INITIAL_KEGIATAN]);
     else if (tableName === 'RiwayatFile') memoryStore[tableName] = [...INITIAL_RIWAYAT];
     else memoryStore[tableName] = [];
   }
-  return memoryStore[tableName];
+  return memoryStore[tableName].filter(r => !isRecordDeleted(r));
 }
 
 function setTableRecords(tableName: string, records: any[]) {
+  const toSave = tableName === 'KegiatanHarian' ? deduplicateKegiatanList(records) : records;
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem(`zite_table_${tableName}`, JSON.stringify(records));
+    localStorage.setItem(`zite_table_${tableName}`, JSON.stringify(toSave));
   }
-  memoryStore[tableName] = records;
+  memoryStore[tableName] = toSave;
 }
 
 function matchesFilter(val: any, filter: any): boolean {

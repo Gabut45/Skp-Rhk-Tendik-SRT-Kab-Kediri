@@ -9,12 +9,22 @@ import { Checkbox } from '@project/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@project/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@project/components/ui/alert-dialog';
 import { Trash2, Search, Loader2, ImageIcon, Copy } from 'lucide-react';
-import { getKegiatan, deleteKegiatan, type GetKegiatanOutputType } from 'zitejs/api';
+import { getKegiatan, deleteKegiatan, deleteRiwayat, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
 
-import { deleteCpanelBulkKegiatan } from '@/lib/cpanel-client';
+import {
+  deleteCpanelBulkKegiatan,
+  deleteCpanelKegiatan,
+  purgeLocalStorageTable,
+  getCpanelConfig,
+  isAppDeletedAll,
+  getDeletedIds,
+  isClientRecordDeleted,
+  purgeAllLocalData,
+  purgeLocalDataForRiwayat,
+} from '@/lib/cpanel-client';
 
 type Activity = GetKegiatanOutputType['records'][0];
 
@@ -46,72 +56,55 @@ export default function DaftarKegiatanPage() {
     setLoading(true);
     setSelectedIds(new Set());
     try {
-      // 1. Data dari storage lokal & backend cPanel merge
+      if (isAppDeletedAll()) {
+        setRecords([]);
+        setLoading(false);
+        return;
+      }
+
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+      const deletedIdsArr = Array.from(getDeletedIds());
+
+      // 1. Data dari storage lokal & backend cPanel dengan deduplikasi terpusat
       const data = await getKegiatan({
         tanggalMulai: tanggalMulai || undefined,
         tanggalSelesai: tanggalSelesai || undefined,
         namaPelapor: (namaPelapor && namaPelapor !== 'Semua Pelapor') ? namaPelapor : undefined,
+        deletedIds: deletedIdsArr,
+        cpanelUrl,
+        cpanelKey,
       });
 
-      // 2. Fetch cPanel langsung untuk memastikan data paling segar
-      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
-      let combined = [...data.records];
+      // 2. Terapkan deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
+      const byFingerprint = new Map<string, Activity>();
+      const seenIds = new Set<string>();
 
-      if (cpanelUrl) {
-        try {
-          const params = new URLSearchParams({ action: 'get_kegiatan' });
-          if (tanggalMulai) params.append('tanggalMulai', tanggalMulai);
-          if (tanggalSelesai) params.append('tanggalSelesai', tanggalSelesai);
-          if (namaPelapor && namaPelapor !== 'Semua Pelapor') params.append('namaPelapor', namaPelapor);
+      for (const r of data.records) {
+        if (!r || isClientRecordDeleted(r)) continue;
 
-          const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
-          const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+        const id = String(r.id || '');
+        if (id && seenIds.has(id)) continue;
 
-          const res = await fetch(targetUrl, {
-            headers: cpanelKey ? { 'X-API-KEY': cpanelKey } : {},
-          });
+        const tgl = String(r.tanggal || '').trim();
+        const pelapor = String(r.namaPelapor || '').trim().toLowerCase();
+        const mulai = String(r.waktuMulai || '').trim();
+        const selesai = String(r.waktuSelesai || '').trim();
+        const desc = String(r.deskripsiKegiatan || r.kataKunciKegiatan || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const fp = `${tgl}::${pelapor}::${mulai}::${selesai}::${desc}`;
 
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && Array.isArray(json.records)) {
-              const remoteRecords: Activity[] = json.records.map((r: any) => ({
-                id: String(r.id || `keg_${r.id_kegiatan}`),
-                namaPelapor: r.nama_pelapor || r.namaPelapor,
-                nip: r.nip,
-                tanggal: r.tanggal,
-                waktuMulai: r.waktu_mulai || r.waktuMulai,
-                waktuSelesai: r.waktu_selesai || r.waktuSelesai,
-                kataKunciKegiatan: r.kata_kunci_kegiatan || r.kataKunciKegiatan,
-                deskripsiKegiatan: r.deskripsi_kegiatan || r.deskripsiKegiatan,
-                rhkKategori: r.rhk_kategori || r.rhkKategori,
-                fotoKegiatan: Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (r.fotoKegiatan || []),
-                tandaTangan: Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (r.tandaTangan || []),
-                unitKerja: r.unit_kerja || r.unitKerja,
-              }));
-
-              const map = new Map<string, Activity>();
-              for (const r of remoteRecords) map.set(r.id, r);
-              for (const r of combined) {
-                if (!map.has(r.id)) map.set(r.id, r);
-              }
-              combined = Array.from(map.values());
-            }
+        if (!byFingerprint.has(fp)) {
+          if (id) seenIds.add(id);
+          byFingerprint.set(fp, r);
+        } else {
+          // Jika ada rekaman yang sama, simpan yang memiliki foto lebih banyak
+          const existing = byFingerprint.get(fp)!;
+          if ((r.fotoKegiatan?.length || 0) > (existing.fotoKegiatan?.length || 0)) {
+            byFingerprint.set(fp, r);
           }
-        } catch (cpanelErr) {
-          console.warn('Direct cPanel fetch fallback:', cpanelErr);
         }
       }
 
-      // Filter out manually deleted IDs
-      try {
-        const deletedRaw = localStorage.getItem('cpanel_deleted_ids');
-        if (deletedRaw) {
-          const deletedSet = new Set(JSON.parse(deletedRaw));
-          combined = combined.filter(r => !deletedSet.has(r.id));
-        }
-      } catch {
-        // ignore
-      }
+      let combined = Array.from(byFingerprint.values()).filter(r => !isClientRecordDeleted(r));
 
       // Sort by date DESC then time DESC for comfortable overview
       combined.sort((a, b) => {
@@ -135,40 +128,42 @@ export default function DaftarKegiatanPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteKegiatan({ id });
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+      const targetRecord = records.find(r => r.id === id);
 
-      // Mark in local deleted store
-      try {
-        const deletedRaw = localStorage.getItem('cpanel_deleted_ids');
-        const deletedArr: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
-        if (!deletedArr.includes(id)) {
-          deletedArr.push(id);
-          localStorage.setItem('cpanel_deleted_ids', JSON.stringify(deletedArr));
-        }
-      } catch {
-        // ignore
-      }
+      // 1. Hapus dari backend zite & server MySQL cPanel
+      await deleteKegiatan({
+        id,
+        tanggal: targetRecord?.tanggal,
+        namaPelapor: targetRecord?.namaPelapor,
+        rhkNomor: targetRecord?.rhkKategori,
+        cpanelUrl,
+        cpanelKey,
+      });
 
+      // 2. Hapus langsung via client cPanel
+      await deleteCpanelKegiatan({
+        id,
+        tanggal: targetRecord?.tanggal,
+        namaPelapor: targetRecord?.namaPelapor,
+      });
+
+      // 3. Purge dari browser localStorage dan tandai cascade
+      purgeLocalDataForRiwayat({
+        recordId: id,
+        tanggal: targetRecord?.tanggal,
+        namaPelapor: targetRecord?.namaPelapor,
+        rhkNomor: targetRecord?.rhkKategori,
+        deletedActivityIds: [id],
+      });
+
+      // 4. Update UI
       setRecords(prev => prev.filter(r => r.id !== id));
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
 
-      // Hapus juga di cPanel jika endpoint tersedia
-      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
-      if (cpanelUrl) {
-        const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
-        fetch(`${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}&action=delete_kegiatan`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(cpanelKey ? { 'X-API-KEY': cpanelKey } : {}),
-          },
-          body: JSON.stringify({ id }),
-        }).catch(() => {});
-      }
-
-      toast.success('Kegiatan berhasil dihapus');
+      toast.success('Kegiatan berhasil dihapus secara permanen dari daftar, riwayat, dan laporan RHK');
     } catch {
-      toast.error('Gagal menghapus');
+      toast.error('Gagal menghapus kegiatan');
     }
   };
 
@@ -192,15 +187,42 @@ export default function DaftarKegiatanPage() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
     try {
-      toast.info(`Menghapus ${ids.length} kegiatan secara permanen dari server...`);
-      await Promise.allSettled(ids.map(id => deleteKegiatan({ id })));
-      await deleteCpanelBulkKegiatan(ids);
+      toast.info(`Menghapus ${ids.length} kegiatan secara permanen dari server dan penyimpanan...`);
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
+      // 1. Hapus di backend
+      await deleteKegiatan({ ids, cpanelUrl, cpanelKey });
+
+      // 2. Hapus di cPanel MySQL
+      await deleteCpanelBulkKegiatan({ ids });
+
+      // 3. Purge dari browser localStorage dan tandai cascade
+      purgeLocalDataForRiwayat({ deletedActivityIds: ids });
+
+      // 4. Update UI
       setRecords(prev => prev.filter(r => !selectedIds.has(r.id)));
       setSelectedIds(new Set());
-      toast.success(`${ids.length} kegiatan berhasil dihapus permanen dari server`);
+      toast.success(`${ids.length} kegiatan berhasil dihapus permanen`);
     } catch {
       toast.error('Gagal menghapus beberapa kegiatan');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      toast.info('Menghapus SEMUA kegiatan harian secara permanen...');
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+
+      await deleteKegiatan({ deleteAll: true, cpanelUrl, cpanelKey });
+      await deleteRiwayat({ deleteAll: true, cpanelUrl, cpanelKey });
+
+      purgeAllLocalData();
+      setRecords([]);
+      setSelectedIds(new Set());
+
+      toast.success('Semua kegiatan harian dan berkas riwayat telah terhapus bersih selamanya!');
+    } catch (err: any) {
+      toast.error('Gagal menghapus semua kegiatan: ' + (err?.message || 'Error'));
     }
   };
 
@@ -256,34 +278,68 @@ export default function DaftarKegiatanPage() {
             Lihat, kelola, dan salin kegiatan yang sudah diinput dari semua perangkat secara langsung
           </p>
         </div>
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button onClick={handleCopyToInput} size="sm" className="gap-1.5 text-xs">
-              <Copy size={14} /> Salin {selectedIds.size} Kegiatan
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
-                  <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Batal</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
-                    Hapus Permanen
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {selectedIds.size > 0 && (
+            <>
+              <Button onClick={handleCopyToInput} size="sm" className="gap-1.5 text-xs">
+                <Copy size={14} /> Salin {selectedIds.size} Kegiatan
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
+                    <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
+                      Hapus Permanen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
+          )}
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs text-destructive hover:bg-destructive/10 border-destructive/30">
+                <Trash2 size={14} /> Hapus Semua Kegiatan
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive">Hapus SEMUA Kegiatan Harian?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      Tindakan ini akan menghapus <strong>seluruh kegiatan harian</strong> dan berkas riwayat secara permanen dari server database dan perangkat lokal.
+                    </p>
+                    <p className="text-xs text-destructive font-semibold">
+                      PERINGATAN: Seluruh kegiatan akan terhapus bersih dan tidak dapat dipulihkan!
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Batal</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAll}
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                >
+                  Ya, Bersihkan Semua Kegiatan
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <Card>

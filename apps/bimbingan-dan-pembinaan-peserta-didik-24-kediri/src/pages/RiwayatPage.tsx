@@ -16,7 +16,18 @@ import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd } from '@/lib/pelapor-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
-import { deleteCpanelBulkKegiatan, getDeletedRiwayatKeys, markDeletedRiwayatKey } from '@/lib/cpanel-client';
+import {
+  deleteCpanelBulkKegiatan,
+  deleteCpanelRiwayat,
+  getDeletedRiwayatKeys,
+  markDeletedRiwayatKey,
+  purgeLocalDataForRiwayat,
+  purgeAllLocalData,
+  getCpanelConfig,
+  isAppDeletedAll,
+  getDeletedIds,
+  isClientRecordDeleted,
+} from '@/lib/cpanel-client';
 
 type FileRecord = GetRiwayatOutputType['records'][0];
 type Activity = GetKegiatanOutputType['records'][0];
@@ -211,34 +222,41 @@ export default function RiwayatPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const deletedKeys = getDeletedRiwayatKeys();
+      if (isAppDeletedAll()) {
+        setRecords([]);
+        setLoading(false);
+        return;
+      }
+
+      const deletedIdsArr = Array.from(getDeletedIds());
 
       // 1. Ambil data riwayat file tersimpan
       const riwayatData = await getRiwayat({
         namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
         tanggalMulai: filterTanggalMulai || undefined,
         tanggalSelesai: filterTanggalSelesai || undefined,
+        deletedIds: deletedIdsArr,
       });
 
       // Filter yang sudah ditandai dihapus permanen
-      const validRiwayat = riwayatData.records.filter(r => {
-        const key = `${r.tanggalMulai}___${r.namaPelapor}`;
-        return !deletedKeys.has(key);
-      });
+      const validRiwayat = riwayatData.records.filter(r => !isClientRecordDeleted(r));
 
       // 2. Ambil data kegiatan harian dari backend
       const kegiatanData = await getKegiatan({
         namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
         tanggalMulai: filterTanggalMulai || undefined,
         tanggalSelesai: filterTanggalSelesai || undefined,
+        deletedIds: deletedIdsArr,
       });
+
+      // Filter yang sudah dihapus permanen
+      const validKegiatan = kegiatanData.records.filter(k => !isClientRecordDeleted(k));
 
       // 3. Kelompokkan kegiatan berdasarkan tanggal & namaPelapor
       const groups = new Map<string, { tanggal: string; namaPelapor: string; items: Activity[] }>();
-      for (const k of kegiatanData.records) {
+      for (const k of validKegiatan) {
         if (!k.tanggal) continue;
         const key = `${k.tanggal}___${k.namaPelapor || 'Wali Asuh'}`;
-        if (deletedKeys.has(key)) continue;
 
         if (!groups.has(key)) {
           groups.set(key, { tanggal: k.tanggal, namaPelapor: k.namaPelapor || 'Wali Asuh', items: [] });
@@ -262,7 +280,7 @@ export default function RiwayatPage() {
             ? `${days[dateObj.getDay()]}, ${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`
             : g.tanggal;
 
-          mergedRecords.push({
+          const syntheticRecord: FileRecord = {
             id: `cpanel_harian_${g.tanggal}_${encodeURIComponent(g.namaPelapor)}`,
             namaFile: `Kinerja Harian - ${dateFormatted} (${g.items.length} Kegiatan)`,
             jenisLaporan: 'Kinerja Harian',
@@ -272,12 +290,16 @@ export default function RiwayatPage() {
             tanggalMulai: g.tanggal,
             tanggalSelesai: g.tanggal,
             rhkNomor: g.items[0]?.rhkKategori || 'RHK 3',
-          });
-          existingKeys.add(key);
+          };
+
+          if (!isClientRecordDeleted(syntheticRecord)) {
+            mergedRecords.push(syntheticRecord);
+            existingKeys.add(key);
+          }
         }
       }
 
-      setRecords(mergedRecords);
+      setRecords(mergedRecords.filter(r => !isClientRecordDeleted(r)));
     } catch {
       toast.error('Gagal memuat riwayat');
     } finally {
@@ -288,64 +310,129 @@ export default function RiwayatPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   /**
-   * Menghapus laporan dan seluruh data kegiatan terkait secara permanen dari server dan cPanel
+   * Menghapus laporan dan seluruh data kegiatan terkait secara permanen selamanya
+   * baik di penyimpanan lokal (localStorage) maupun di database server (cPanel MySQL & zite)
    */
   const handleDelete = async (record: FileRecord) => {
     try {
-      toast.info('Menghapus data secara permanen dari server...');
+      toast.info('Menghapus data secara permanen dari server dan penyimpanan...');
 
-      const targetTanggal = record.tanggalMulai;
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+      const targetTanggalMulai = record.tanggalMulai;
+      const targetTanggalSelesai = record.tanggalSelesai || record.tanggalMulai;
       const targetPelapor = record.namaPelapor;
-      const riwayatKey = `${targetTanggal}___${targetPelapor}`;
+      const targetRhk = record.rhkNomor;
 
-      // 1. Jika record riwayat tersimpan di zite.riwayatFile, hapus
-      if (!record.id.startsWith('cpanel_')) {
-        try {
-          await deleteRiwayat({ id: record.id });
-        } catch (e) {
-          console.warn('Gagal deleteRiwayat:', e);
-        }
-      }
-
-      // 2. Ambil seluruh kegiatan pada tanggal dan pelapor terkait
-      if (targetTanggal) {
+      // 1. Ambil ID seluruh kegiatan pada tanggal/rentang tanggal dan pelapor terkait
+      let idsToDelete: string[] = [];
+      if (targetTanggalMulai) {
         try {
           const kegData = await getKegiatan({
-            tanggalMulai: targetTanggal,
-            tanggalSelesai: record.tanggalSelesai || targetTanggal,
+            tanggalMulai: targetTanggalMulai,
+            tanggalSelesai: targetTanggalSelesai,
             namaPelapor: targetPelapor && targetPelapor !== 'Semua Pelapor' ? targetPelapor : undefined,
+            deletedIds: Array.from(getDeletedIds()),
           });
-
-          const idsToDelete = kegData.records.map(k => k.id);
-          if (idsToDelete.length > 0) {
-            // Hapus setiap kegiatan di backend (menghapus dari zite.kegiatanHarian & cPanel MySQL)
-            await Promise.allSettled(idsToDelete.map(id => deleteKegiatan({ id })));
-
-            // Hapus via client cPanel helper langsung
-            await deleteCpanelBulkKegiatan(idsToDelete);
-          }
+          idsToDelete = kegData.records.map(k => k.id);
         } catch (err) {
-          console.warn('Gagal menghapus kegiatan terkait:', err);
+          console.warn('Gagal mengambil daftar kegiatan untuk dihapus:', err);
         }
-
-        // Tandai key laporan agar tidak muncul kembali
-        markDeletedRiwayatKey(riwayatKey);
       }
 
-      // 3. Update state lokal
+      // 2. Hapus file riwayat di backend server (zite & cPanel)
+      try {
+        await deleteRiwayat({
+          id: record.id,
+          ids: idsToDelete.length > 0 ? idsToDelete : undefined,
+          tanggalMulai: targetTanggalMulai,
+          tanggalSelesai: targetTanggalSelesai,
+          namaPelapor: targetPelapor,
+          rhkNomor: targetRhk,
+          cpanelUrl,
+          cpanelKey,
+        });
+      } catch (e) {
+        console.warn('deleteRiwayat backend warning:', e);
+      }
+
+      // 3. Hapus kegiatan di backend server (zite & cPanel)
+      try {
+        await deleteKegiatan({
+          id: record.id,
+          ids: idsToDelete.length > 0 ? idsToDelete : undefined,
+          tanggalMulai: targetTanggalMulai,
+          tanggalSelesai: targetTanggalSelesai,
+          namaPelapor: targetPelapor,
+          rhkNomor: targetRhk,
+          cpanelUrl,
+          cpanelKey,
+        });
+      } catch (e) {
+        console.warn('deleteKegiatan backend warning:', e);
+      }
+
+      // 4. Hapus langsung via client API cPanel MySQL (agar pasti terhapus di remote server)
+      await deleteCpanelRiwayat({
+        id: record.id,
+        tanggal: targetTanggalMulai,
+        namaPelapor: targetPelapor,
+      });
+
+      if (idsToDelete.length > 0 || targetTanggalMulai) {
+        await deleteCpanelBulkKegiatan({
+          ids: idsToDelete,
+          tanggal: targetTanggalMulai,
+          namaPelapor: targetPelapor,
+        });
+      }
+
+      // 5. Bersihkan tuntas selamanya dari penyimpanan lokal (localStorage) browser
+      purgeLocalDataForRiwayat({
+        recordId: record.id,
+        tanggalMulai: targetTanggalMulai,
+        tanggalSelesai: targetTanggalSelesai,
+        namaPelapor: targetPelapor,
+        rhkNomor: targetRhk,
+        deletedActivityIds: idsToDelete,
+      });
+
+      // 6. Update state UI langsung
       setRecords(prev =>
         prev.filter(item => {
           if (item.id === record.id) return false;
-          if (targetTanggal && item.tanggalMulai === targetTanggal && item.namaPelapor === targetPelapor) {
-            return false;
+          const iDate = item.tanggalMulai;
+          if (targetTanggalMulai && targetTanggalSelesai && iDate && item.namaPelapor === targetPelapor) {
+            if (iDate >= targetTanggalMulai && iDate <= targetTanggalSelesai) {
+              if (!targetRhk || item.rhkNomor === targetRhk) return false;
+            }
           }
           return true;
         })
       );
 
-      toast.success('Laporan dan seluruh data kegiatan berhasil dihapus permanen dari server!');
+      toast.success('Laporan dan data kegiatan berhasil dihapus permanen dari riwayat, daftar kegiatan, dan laporan RHK!');
     } catch (err: any) {
       toast.error('Gagal menghapus data: ' + (err?.message || 'Error'));
+    }
+  };
+
+  /**
+   * Menghapus semua berkas riwayat, kegiatan, dan laporan RHK secara bersih menyeluruh
+   */
+  const handleDeleteAll = async () => {
+    try {
+      toast.info('Menghapus SEMUA berkas riwayat dan kegiatan secara permanen...');
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+
+      await deleteRiwayat({ deleteAll: true, cpanelUrl, cpanelKey });
+      await deleteKegiatan({ deleteAll: true, cpanelUrl, cpanelKey });
+
+      purgeAllLocalData();
+      setRecords([]);
+
+      toast.success('Semua berkas riwayat, kegiatan harian, dan laporan RHK telah terhapus bersih selamanya!');
+    } catch (err: any) {
+      toast.error('Gagal menghapus semua data: ' + (err?.message || 'Error'));
     }
   };
 
@@ -415,13 +502,46 @@ export default function RiwayatPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header Tanpa Badge MySQL cPanel sesuai permintaan */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Riwayat File & Laporan</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
             Semua laporan PDF/Word yang dibuat dapat langsung dipratinjau, diunduh, dan diedit
           </p>
+        </div>
+        <div>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="gap-1.5 text-xs font-semibold">
+                <Trash2 size={14} /> Hapus Semua Data
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-destructive">Hapus SEMUA Data Secara Permanen?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      Tindakan ini akan menghapus <strong>seluruh berkas riwayat</strong>, <strong>semua kegiatan harian</strong>, dan <strong>laporan RHK</strong> secara permanen dari server database dan perangkat lokal.
+                    </p>
+                    <p className="text-xs text-destructive font-semibold">
+                      PERINGATAN: Semua data akan terhapus bersih selamanya dan tidak dapat dipulihkan!
+                    </p>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Batal</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteAll}
+                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold"
+                >
+                  Ya, Bersihkan Semua Data
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 

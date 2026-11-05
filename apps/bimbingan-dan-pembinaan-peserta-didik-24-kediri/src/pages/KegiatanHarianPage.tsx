@@ -15,6 +15,7 @@ import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper
 
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
+import { setAppDeletedAll } from '@/lib/cpanel-client';
 
 function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
@@ -169,7 +170,11 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setSaving(true);
     try {
+      const cpanelUrl = localStorage.getItem('cpanel_api_url') || undefined;
+      const cpanelKey = localStorage.getItem('cpanel_api_key') || undefined;
+
       const payloadKegiatan = filled.map(k => ({
+        id: k.id,
         waktuMulai: k.waktuMulai,
         waktuSelesai: k.waktuSelesai,
         kataKunciKegiatan: k.kataKunci,
@@ -178,37 +183,18 @@ export default function KegiatanHarianPage() {
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
       }));
 
-      // 1. Simpan via backend endpoint
-      const result = await saveBulkKegiatan({
+      // Simpan via endpoint yang otomatis menyinkronkan ke database lokal & cPanel secara aman sekali saja
+      await saveBulkKegiatan({
         namaPelapor,
         nip,
         tanggal,
         tandaTangan: tandaTangan || undefined,
+        cpanelUrl,
+        cpanelKey,
         kegiatan: payloadKegiatan,
       });
 
-      // 2. Direct browser fetch to cPanel MySQL API untuk redundansi live
-      const cpanelUrl = localStorage.getItem('cpanel_api_url') || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
-      const cpanelKey = localStorage.getItem('cpanel_api_key') || '';
-      try {
-        const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}&action=save_bulk`;
-        await fetch(targetUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(cpanelKey ? { 'X-API-KEY': cpanelKey } : {}),
-          },
-          body: JSON.stringify({
-            namaPelapor,
-            nip,
-            tanggal,
-            tandaTangan: tandaTangan || undefined,
-            kegiatan: payloadKegiatan,
-          }),
-        });
-      } catch (err) {
-        console.warn('Direct client sync warning:', err);
-      }
+      setAppDeletedAll(false);
 
       toast.success(`${filled.length} kegiatan berhasil disimpan ke Database cPanel & Tersinkronisasi ke Semua Perangkat!`);
     } catch {

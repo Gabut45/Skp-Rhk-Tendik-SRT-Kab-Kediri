@@ -51,6 +51,91 @@ export function markDeletedId(id: string) {
   }
 }
 
+export interface ClientDeletedRange {
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
+  namaPelapor?: string;
+  rhkKategori?: string;
+}
+
+export function isAppDeletedAll(): boolean {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return localStorage.getItem('app_deleted_all') === 'true';
+  }
+  return false;
+}
+
+export function setAppDeletedAll(val: boolean) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    localStorage.setItem('app_deleted_all', String(val));
+  }
+}
+
+export function getDeletedRanges(): ClientDeletedRange[] {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = localStorage.getItem('cpanel_deleted_ranges');
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+  }
+  return [];
+}
+
+export function addClientDeletedRange(range: ClientDeletedRange) {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const list = getDeletedRanges();
+      list.push(range);
+      localStorage.setItem('cpanel_deleted_ranges', JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function isClientRecordDeleted(r: any): boolean {
+  if (isAppDeletedAll()) return true;
+
+  const id = String(r.id || (r.id_kegiatan ? `keg_${r.id_kegiatan}` : ''));
+  const deleted = getDeletedIds();
+  if (id && deleted.has(id)) return true;
+  if (r.id_kegiatan && deleted.has(String(r.id_kegiatan))) return true;
+
+  const tgl = r.tanggal || r.tanggalMulai;
+  const pelapor = (r.namaPelapor || r.nama_pelapor || '').trim().toLowerCase();
+  const rhk = (r.rhkKategori || r.rhk_kategori || r.rhkNomor || '').trim().toLowerCase();
+
+  // Check riwayat key
+  if (tgl && pelapor) {
+    const deletedKeys = getDeletedRiwayatKeys();
+    if (deletedKeys.has(`${tgl}___${r.namaPelapor || r.nama_pelapor}`)) return true;
+  }
+
+  // Check ranges
+  const ranges = getDeletedRanges();
+  for (const range of ranges) {
+    const rangePelapor = (range.namaPelapor || '').trim().toLowerCase();
+    if (rangePelapor && pelapor && rangePelapor !== pelapor) continue;
+
+    const start = range.tanggalMulai;
+    const end = range.tanggalSelesai || range.tanggalMulai;
+
+    if (tgl && start && end) {
+      if (tgl >= start && tgl <= end) {
+        if (!range.rhkKategori) return true;
+        const targetRhk = range.rhkKategori.toLowerCase();
+        if (rhk && (rhk.includes(targetRhk) || targetRhk.includes(rhk))) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
 export function getDeletedRiwayatKeys(): Set<string> {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
@@ -85,6 +170,8 @@ export async function fetchCpanelKegiatan(params?: {
   tanggalSelesai?: string;
   namaPelapor?: string;
 }): Promise<CpanelKegiatanRow[]> {
+  if (isAppDeletedAll()) return [];
+
   const { url, key } = getCpanelConfig();
   if (!url) return [];
 
@@ -109,12 +196,11 @@ export async function fetchCpanelKegiatan(params?: {
 
     const data = await res.json();
     if (data.success && Array.isArray(data.records)) {
-      const deleted = getDeletedIds();
       const mapped: CpanelKegiatanRow[] = [];
 
       for (const r of data.records) {
+        if (isClientRecordDeleted(r)) continue;
         const id = String(r.id || `keg_${r.id_kegiatan}`);
-        if (deleted.has(id)) continue;
 
         let fotoList: { url: string }[] = [];
         if (Array.isArray(r.foto_kegiatan)) {
@@ -210,10 +296,117 @@ export async function saveCpanelBulk(payload: {
 }
 
 /**
+ * Directly purges records from browser localStorage tables (zite_table_KegiatanHarian / zite_table_RiwayatFile)
+ */
+export function purgeLocalStorageTable(tableName: 'KegiatanHarian' | 'RiwayatFile', shouldRemove: (record: any) => boolean): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const key = `zite_table_${tableName}`;
+    const stored = localStorage.getItem(key);
+    if (!stored) return;
+    const list = JSON.parse(stored);
+    if (!Array.isArray(list)) return;
+    const filtered = list.filter(item => !shouldRemove(item));
+    localStorage.setItem(key, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn(`[purgeLocalStorageTable] Gagal membersihkan ${tableName}:`, err);
+  }
+}
+
+/**
+ * Purge all local data and marks app as deleted all
+ */
+export function purgeAllLocalData(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    localStorage.setItem('app_deleted_all', 'true');
+    localStorage.setItem('zite_table_KegiatanHarian', '[]');
+    localStorage.setItem('zite_table_RiwayatFile', '[]');
+    localStorage.setItem('zite_table_LaporanRhk', '[]');
+    localStorage.setItem('cpanel_deleted_ids', '[]');
+    localStorage.setItem('cpanel_deleted_riwayat_keys', '[]');
+    localStorage.setItem('cpanel_deleted_ranges', '[]');
+  } catch (err) {
+    console.warn('[purgeAllLocalData] Error:', err);
+  }
+}
+
+/**
+ * Purge both localStorage tables and cached ID sets for a given riwayat file and related activities
+ */
+export function purgeLocalDataForRiwayat(params: {
+  recordId?: string;
+  tanggal?: string;
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
+  namaPelapor?: string;
+  rhkNomor?: string;
+  deletedActivityIds?: string[];
+}): void {
+  const { recordId, tanggal, tanggalMulai, tanggalSelesai, namaPelapor, rhkNomor, deletedActivityIds = [] } = params;
+  const start = tanggalMulai || tanggal;
+  const end = tanggalSelesai || tanggalMulai || tanggal;
+
+  // 1. Purge from zite_table_RiwayatFile
+  purgeLocalStorageTable('RiwayatFile', item => {
+    if (recordId && item.id === recordId) return true;
+    const rDate = item.tanggalMulai || item.tanggalSelesai;
+    if (namaPelapor && item.namaPelapor === namaPelapor && rDate && start && end) {
+      if (rDate >= start && rDate <= end) {
+        if (!rhkNomor) return true;
+        const target = rhkNomor.toLowerCase();
+        const rRhk = (item.rhkNomor || '').toLowerCase();
+        if (rRhk.includes(target) || target.includes(rRhk)) return true;
+      }
+    }
+    return false;
+  });
+
+  // 2. Purge from zite_table_KegiatanHarian
+  purgeLocalStorageTable('KegiatanHarian', item => {
+    if (item.id && deletedActivityIds.includes(item.id)) return true;
+    const kDate = item.tanggal;
+    if (namaPelapor && item.namaPelapor === namaPelapor && kDate && start && end) {
+      if (kDate >= start && kDate <= end) {
+        if (!rhkNomor) return true;
+        const target = rhkNomor.toLowerCase();
+        const kRhk = (item.rhkKategori || '').toLowerCase();
+        if (kRhk.includes(target) || target.includes(kRhk)) return true;
+      }
+    }
+    return false;
+  });
+
+  // 3. Mark in deleted sets & ranges
+  if (start) {
+    addClientDeletedRange({
+      tanggalMulai: start,
+      tanggalSelesai: end,
+      namaPelapor,
+      rhkKategori: rhkNomor,
+    });
+    if (namaPelapor) {
+      markDeletedRiwayatKey(`${start}___${namaPelapor}`);
+    }
+  }
+  if (recordId) {
+    markDeletedId(recordId);
+  }
+  deletedActivityIds.forEach(id => markDeletedId(id));
+}
+
+/**
  * Delete activity from cPanel MySQL API permanently
  */
-export async function deleteCpanelKegiatan(id: string): Promise<boolean> {
-  markDeletedId(id);
+export async function deleteCpanelKegiatan(params: string | {
+  id?: string;
+  id_numeric?: string;
+  tanggal?: string;
+  namaPelapor?: string;
+}): Promise<boolean> {
+  const payload = typeof params === 'string' ? { id: params } : params;
+  if (payload.id) markDeletedId(payload.id);
+
   const { url, key } = getCpanelConfig();
   if (!url) return true;
 
@@ -225,10 +418,10 @@ export async function deleteCpanelKegiatan(id: string): Promise<boolean> {
         'Content-Type': 'application/json',
         ...(key ? { 'X-API-KEY': key } : {}),
       },
-      body: JSON.stringify({ id }),
+      body: JSON.stringify(payload),
     });
-  } catch {
-    // ignore
+  } catch (err) {
+    console.warn('[deleteCpanelKegiatan] Error:', err);
   }
   return true;
 }
@@ -236,27 +429,71 @@ export async function deleteCpanelKegiatan(id: string): Promise<boolean> {
 /**
  * Delete multiple activities from cPanel MySQL API permanently
  */
-export async function deleteCpanelBulkKegiatan(ids: string[]): Promise<boolean> {
+export async function deleteCpanelBulkKegiatan(params: string[] | {
+  ids?: string[];
+  tanggal?: string;
+  namaPelapor?: string;
+}): Promise<boolean> {
+  const ids = Array.isArray(params) ? params : (params.ids || []);
+  const tanggal = !Array.isArray(params) ? params.tanggal : undefined;
+  const namaPelapor = !Array.isArray(params) ? params.namaPelapor : undefined;
+
   ids.forEach(id => markDeletedId(id));
+
   const { url, key } = getCpanelConfig();
-  if (!url || ids.length === 0) return true;
+  if (!url) return true;
 
   try {
     const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_kegiatan`;
-    await Promise.allSettled(
-      ids.map(id =>
-        fetch(targetUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(key ? { 'X-API-KEY': key } : {}),
-          },
-          body: JSON.stringify({ id }),
-        })
-      )
-    );
-  } catch {
-    // ignore
+    await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(key ? { 'X-API-KEY': key } : {}),
+      },
+      body: JSON.stringify({
+        ids: ids.length > 0 ? ids : undefined,
+        tanggal,
+        namaPelapor,
+      }),
+    });
+  } catch (err) {
+    console.warn('[deleteCpanelBulkKegiatan] Error:', err);
   }
   return true;
 }
+
+/**
+ * Delete riwayat record from cPanel MySQL API permanently
+ */
+export async function deleteCpanelRiwayat(params: {
+  id?: string;
+  tanggal?: string;
+  namaPelapor?: string;
+}): Promise<boolean> {
+  if (params.tanggal && params.namaPelapor) {
+    markDeletedRiwayatKey(`${params.tanggal}___${params.namaPelapor}`);
+  }
+  if (params.id) {
+    markDeletedId(params.id);
+  }
+
+  const { url, key } = getCpanelConfig();
+  if (!url) return true;
+
+  try {
+    const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_riwayat`;
+    await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(key ? { 'X-API-KEY': key } : {}),
+      },
+      body: JSON.stringify(params),
+    });
+  } catch (err) {
+    console.warn('[deleteCpanelRiwayat] Error:', err);
+  }
+  return true;
+}
+

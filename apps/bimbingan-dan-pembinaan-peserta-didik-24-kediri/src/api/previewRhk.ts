@@ -32,7 +32,7 @@ function formatTanggal(dateStr: string): string {
 
 function buildDocTable(records: any[]): string {
   if (records.length === 0) {
-    return '<p style="text-align:center;color:#666;font-style:italic;">(Belum ada dokumentasi foto)</p>';
+    return '<p style="text-align:center;color:#dc2626;font-weight:bold;padding:24px 12px;background:#fef2f2;border:1px dashed #fca5a5;border-radius:6px;margin:16px 0;">(Tidak ada kegiatan atau dokumentasi foto pada periode ini — data telah dihapus atau belum diisi)</p>';
   }
 
   const byDate: Record<string, any[]> = {};
@@ -162,6 +162,8 @@ async function fetchCpanelForRhk(params: { tanggalMulai: string; tanggalSelesai:
   return [];
 }
 
+import { isRecordDeleted, isDeletedAll, addDeletedIds } from 'zitejs/db';
+
 export default createEndpoint({
   inputSchema: z.object({
     rhkNomor: z.string(),
@@ -170,21 +172,26 @@ export default createEndpoint({
     namaPelapor: z.string(),
     nip: z.string(),
     tandaTangan: z.string().optional(),
+    deletedIds: z.array(z.string()).optional(),
   }),
-  outputSchema: z.object({ pdfHtml: z.string(), wordHtml: z.string() }),
+  outputSchema: z.object({ pdfHtml: z.string(), wordHtml: z.string(), kegiatanCount: z.number().optional() }),
   async execute({ input }) {
+    if (input.deletedIds && input.deletedIds.length > 0) {
+      addDeletedIds(input.deletedIds);
+    }
+
     const rhkInfo = RHK_INFO[input.rhkNomor];
     if (!rhkInfo) throw new Error('RHK tidak ditemukan');
 
     const rhkLabel = `RHK ${input.rhkNomor}`;
-    const cpanelRecs = await fetchCpanelForRhk({
+    const cpanelRecs = isDeletedAll() ? [] : await fetchCpanelForRhk({
       tanggalMulai: input.tanggalMulai,
       tanggalSelesai: input.tanggalSelesai,
       namaPelapor: input.namaPelapor,
       rhkLabel,
     });
 
-    const { records: localRecs } = await zite.kegiatanHarian.findAll({
+    const { records: localRecs } = isDeletedAll() ? { records: [] } : await zite.kegiatanHarian.findAll({
       filters: {
         tanggal: { gte: input.tanggalMulai, lte: input.tanggalSelesai },
         rhkKategori: { contains: rhkLabel },
@@ -193,12 +200,35 @@ export default createEndpoint({
       limit: 500,
     });
 
-    const combinedMap = new Map<string, any>();
-    for (const r of cpanelRecs) combinedMap.set(r.id, r);
-    for (const r of localRecs) {
-      if (!combinedMap.has(r.id)) combinedMap.set(r.id, r);
+    const byFingerprint = new Map<string, any>();
+    const seenIds = new Set<string>();
+
+    const allRecs = [...cpanelRecs, ...localRecs];
+    for (const r of allRecs) {
+      if (!r || isRecordDeleted(r)) continue;
+      const id = String(r.id || '');
+      if (id && seenIds.has(id)) continue;
+
+      const tgl = String(r.tanggal || '').trim();
+      const pelapor = String(r.namaPelapor || '').trim().toLowerCase();
+      const mulai = String(r.waktuMulai || '').trim();
+      const selesai = String(r.waktuSelesai || '').trim();
+      const desc = String(r.deskripsiKegiatan || r.kataKunciKegiatan || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const fp = `${tgl}::${pelapor}::${mulai}::${selesai}::${desc}`;
+
+      if (!byFingerprint.has(fp)) {
+        if (id) seenIds.add(id);
+        byFingerprint.set(fp, r);
+      } else {
+        const existing = byFingerprint.get(fp);
+        const existingPhotos = existing.fotoKegiatan || [];
+        const rPhotos = r.fotoKegiatan || [];
+        if (rPhotos.length > existingPhotos.length) {
+          existing.fotoKegiatan = rPhotos;
+        }
+      }
     }
-    const records = Array.from(combinedMap.values());
+    const records = Array.from(byFingerprint.values());
 
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     const endDate = new Date(input.tanggalSelesai + 'T00:00:00');
@@ -312,6 +342,6 @@ ${docTable}
       .replace('<html>', '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">')
       .replace('<meta charset="utf-8"/>', '<meta charset="utf-8"/><meta http-equiv="Content-Type" content="application/vnd.ms-word; charset=utf-8" />');
 
-    return { pdfHtml: html, wordHtml };
+    return { pdfHtml: html, wordHtml, kegiatanCount: records.length };
   },
 });
