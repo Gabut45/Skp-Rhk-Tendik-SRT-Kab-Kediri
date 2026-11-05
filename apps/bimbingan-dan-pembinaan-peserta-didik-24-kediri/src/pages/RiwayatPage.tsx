@@ -169,12 +169,23 @@ export default function RiwayatPage() {
     return isWord ? preview.wordHtml : preview.pdfHtml;
   };
 
+  const getRecordFilename = (r: FileRecord): string => {
+    const sanitize = (name: string) => name.replace(/[/\\:*?"<>|]/g, '').trim();
+    if (r.jenisLaporan === 'Kinerja Harian' || !r.rhkNomor) {
+      const pelapor = r.namaPelapor ? `-${sanitize(r.namaPelapor)}` : '';
+      return `kinerja-harian-${r.tanggalMulai || 'harian'}${pelapor}`;
+    }
+    const rhkNum = (r.rhkNomor || '').replace(/[^0-9]/g, '') || '1';
+    const pelapor = r.namaPelapor ? `-${sanitize(r.namaPelapor)}` : '';
+    return `laporan-rhk${rhkNum}-${r.tanggalMulai || ''}-${r.tanggalSelesai || r.tanggalMulai || ''}${pelapor}`;
+  };
+
   const handleViewPreview = async (r: FileRecord) => {
     try {
       toast.info('Memuat preview laporan...');
       const html = await getRecordHtml(r, false);
       const wordHtml = await getRecordHtml(r, true);
-      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const fname = getRecordFilename(r);
       setPreviewState({
         open: true,
         title: r.namaFile || 'Preview Laporan',
@@ -190,7 +201,7 @@ export default function RiwayatPage() {
   const handleDownloadPdfRecord = async (r: FileRecord) => {
     try {
       toast.info('Menyiapkan unduhan PDF...');
-      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const fname = getRecordFilename(r);
 
       // Hanya unduh langsung JIKA r.pdfUrl adalah binary PDF murni data URL
       if (r.pdfUrl && r.pdfUrl.startsWith('data:application/pdf')) {
@@ -218,7 +229,7 @@ export default function RiwayatPage() {
     try {
       toast.info('Menyiapkan unduhan Word (.doc)...');
       const html = await getRecordHtml(r, true);
-      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const fname = getRecordFilename(r);
       downloadWordFromHtml(html, `${fname}.doc`);
       toast.success('File Word (.doc) berhasil diunduh!');
     } catch (err: any) {

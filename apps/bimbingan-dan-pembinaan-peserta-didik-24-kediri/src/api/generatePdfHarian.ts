@@ -224,15 +224,18 @@ export default createEndpoint({
     const { dateFormatted, html: pdfHtml } = buildHtml(input, input.kegiatan, false);
     const { html: wordHtml } = buildHtml(input, input.kegiatan, true);
 
+    const cleanPelapor = (input.namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
+    const filenameBase = cleanPelapor ? `kinerja-harian-${input.tanggal}-${cleanPelapor}` : `kinerja-harian-${input.tanggal}`;
+
     const { url } = await ZitePdf.renderHtml({
       html: isWord ? wordHtml : pdfHtml,
-      filename: `kinerja-harian-${input.tanggal}.${isWord ? 'doc' : 'pdf'}`,
+      filename: `${filenameBase}.${isWord ? 'doc' : 'pdf'}`,
     });
 
     const formatLabel = isWord ? 'WORD' : 'PDF';
     const riwayat = await zite.riwayatFile.create({
       record: {
-        namaFile: `Kinerja Harian - ${dateFormatted} (${formatLabel})`,
+        namaFile: `Kinerja Harian - ${dateFormatted} - ${input.namaPelapor} (${formatLabel})`,
         jenisLaporan: 'Kinerja Harian',
         namaPelapor: input.namaPelapor,
         pdfUrl: url,

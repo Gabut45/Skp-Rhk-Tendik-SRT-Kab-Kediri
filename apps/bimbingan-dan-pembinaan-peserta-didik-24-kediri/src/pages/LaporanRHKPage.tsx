@@ -169,7 +169,10 @@ export default function LaporanRHKPage() {
     }
   };
 
-  const reportFilename = `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}`;
+  const cleanPelapor = (namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
+  const reportFilename = cleanPelapor
+    ? `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}-${cleanPelapor}`
+    : `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}`;
 
   const handleDownloadPdf = async () => {
     if (isAppDeletedAll()) {

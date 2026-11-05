@@ -204,6 +204,11 @@ export default function KegiatanHarianPage() {
     }
   };
 
+  const getHarianFilename = () => {
+    const cleanPelapor = (namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
+    return cleanPelapor ? `kinerja-harian-${tanggal}-${cleanPelapor}` : `kinerja-harian-${tanggal}`;
+  };
+
   const handleDownloadPdf = async () => {
     const filled = getFilledKegiatan();
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
@@ -221,7 +226,8 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
+      const fname = getHarianFilename();
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${fname}.pdf`);
       toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -247,7 +253,8 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      downloadWordFromHtml(result.wordHtml || previewWordHtml, `kinerja-harian-${tanggal}.doc`);
+      const fname = getHarianFilename();
+      downloadWordFromHtml(result.wordHtml || previewWordHtml, `${fname}.doc`);
       toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat Word: ' + (err?.message || 'Error'));
@@ -273,7 +280,8 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
+      const fname = getHarianFilename();
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${fname}.pdf`);
       toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -405,7 +413,7 @@ export default function KegiatanHarianPage() {
         onClose={() => setShowPreview(false)}
         pdfHtml={previewPdfHtml}
         wordHtml={previewWordHtml}
-        filename={`kinerja-harian-${tanggal}`}
+        filename={getHarianFilename()}
         onDownloadPdf={handleDownloadPdf}
         onDownloadWord={handleDownloadWord}
         downloadingPdf={downloadingPdf}
