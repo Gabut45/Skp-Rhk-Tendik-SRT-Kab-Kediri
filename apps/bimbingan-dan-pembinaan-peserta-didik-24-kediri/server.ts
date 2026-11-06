@@ -7,11 +7,11 @@ import {
   handleGenerateTextServer,
   handleStreamTextServer,
   hasValidGeminiKey,
-} from './src/server/geminiServer';
+} from './src/server/geminiServer.ts';
 import {
   getVocabularyStats,
   saveLearnedVocabularyServer,
-} from './src/server/vocabularyService';
+} from './src/server/vocabularyService.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

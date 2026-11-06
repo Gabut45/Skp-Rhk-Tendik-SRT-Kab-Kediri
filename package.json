@@ -1,6 +1,7 @@
 {
   "name": "bimbingan-dan-pembinaan-peserta-didik-24-kediri",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
