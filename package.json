@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run dev --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
-    "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
+    "build": "npm run build --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri && node -e \"import('fs').then(fs => { if(fs.existsSync('apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/dist')){ fs.cpSync('apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/dist', 'dist', {recursive: true}); } })\"",
     "start": "node server.ts",
     "preview": "npm run preview --workspace=@project/bimbingan-dan-pembinaan-peserta-didik-24-kediri",
     "lint": "npm run build"
@@ -13,14 +13,22 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5"
+  },
   "dependencies": {
     "@google/genai": "^2.32.0",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^5.0.0",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.2.1",
+    "react": "^19.3.1",
+    "tsx": "^4.23.15",
     "typescript": "~5.7.3",
     "vite": "^8.1.0",
     "zitejs": "0.9.148"
