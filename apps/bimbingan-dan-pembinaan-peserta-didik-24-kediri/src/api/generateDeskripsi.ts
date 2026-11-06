@@ -602,6 +602,43 @@ function generateSmartFallback(rawKeyword: string): { deskripsi: string; rhk: st
   return { deskripsi, rhk };
 }
 
+const DEFAULT_CPANEL_URL = 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+
+let serverVocabCache: { kataKunci: string; deskripsi: string; rhk: string }[] | null = null;
+let lastServerVocabFetch = 0;
+
+async function fetchServerDatabaseVocabulary(): Promise<{ kataKunci: string; deskripsi: string; rhk: string }[]> {
+  const now = Date.now();
+  // Cache for 5 minutes in memory to keep response ultra fast
+  if (serverVocabCache && (now - lastServerVocabFetch < 300000)) {
+    return serverVocabCache;
+  }
+
+  try {
+    const res = await fetch(`${DEFAULT_CPANEL_URL}?action=get_kegiatan`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.records)) {
+        const list: { kataKunci: string; deskripsi: string; rhk: string }[] = [];
+        for (const r of data.records) {
+          const desc = String(r.deskripsi_kegiatan || r.deskripsiKegiatan || '').trim();
+          const kunci = String(r.kata_kunci_kegiatan || r.kataKunciKegiatan || '').trim();
+          const rhk = String(r.rhk_kategori || r.rhkKategori || 'RHK 3');
+          if (desc) {
+            list.push({ kataKunci: kunci || desc.slice(0, 30), deskripsi: desc, rhk });
+          }
+        }
+        serverVocabCache = list;
+        lastServerVocabFetch = now;
+        return list;
+      }
+    }
+  } catch (err) {
+    console.warn('[generateDeskripsi] Gagal memuat bank kosa kata dari database server:', err);
+  }
+  return serverVocabCache || [];
+}
+
 export default createEndpoint({
   inputSchema: z.object({ kataKunci: z.string() }),
   outputSchema: z.object({
@@ -644,7 +681,32 @@ export default createEndpoint({
     }
 
     // High precision fallback tiers:
-    // 1. Check local learned cache in browser
+    // 1. Check central server MySQL database bank vocabulary (shared across all devices)
+    try {
+      const serverRecords = await fetchServerDatabaseVocabulary();
+      const cleanRaw = raw.toLowerCase().trim();
+      const timeCtx = detectTime(cleanRaw);
+
+      const matchedServer = serverRecords.filter(item => {
+        const kw = item.kataKunci.toLowerCase();
+        const desc = item.deskripsi.toLowerCase();
+        return (kw && (cleanRaw.includes(kw) || kw.includes(cleanRaw))) ||
+               desc.includes(cleanRaw);
+      });
+
+      if (matchedServer.length > 0) {
+        const pool = matchedServer.filter(item => {
+          const t = detectTime(item.deskripsi);
+          return !timeCtx || !t || timeCtx === t;
+        });
+        const selected = (pool.length > 0 ? pool : matchedServer)[0];
+        return { deskripsi: selected.deskripsi, rhk: selected.rhk };
+      }
+    } catch {
+      // ignore & proceed to next fallback
+    }
+
+    // 2. Check local learned cache in browser
     try {
       const learned = getLearnedVocabularyLocal();
       const cleanRaw = raw.toLowerCase().trim();

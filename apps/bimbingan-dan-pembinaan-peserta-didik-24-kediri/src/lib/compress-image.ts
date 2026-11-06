@@ -98,10 +98,10 @@ export async function compressDocumentImage(
   }
 
   const {
-    maxDimension = 1280,
-    targetMaxKB = 220,
-    initialQuality = 0.82,
-    minQuality = 0.65,
+    maxDimension = 1100,
+    targetMaxKB = 110,
+    initialQuality = 0.80,
+    minQuality = 0.60,
   } = options;
 
   try {

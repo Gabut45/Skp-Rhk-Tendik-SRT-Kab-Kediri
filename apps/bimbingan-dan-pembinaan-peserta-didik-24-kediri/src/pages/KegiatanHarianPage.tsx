@@ -195,7 +195,7 @@ export default function KegiatanHarianPage() {
       }));
 
       // Simpan via endpoint yang otomatis menyinkronkan ke database lokal & cPanel secara aman sekali saja
-      await saveBulkKegiatan({
+      const result = await saveBulkKegiatan({
         namaPelapor,
         nip,
         tanggal,
@@ -207,9 +207,18 @@ export default function KegiatanHarianPage() {
 
       setAppDeletedAll(false);
 
-      toast.success(`${filled.length} kegiatan berhasil disimpan ke Database cPanel & Tersinkronisasi ke Semua Perangkat!`);
-    } catch {
-      toast.error('Gagal menyimpan kegiatan');
+      if (result?.cpanelSynced) {
+        toast.success(
+          `${filled.length} kegiatan & foto bukti berhasil disimpan ke Database Server cPanel dan tersinkronisasi ke semua perangkat!`,
+          { duration: 4000 }
+        );
+      } else {
+        toast.warning(
+          `Kegiatan tersimpan lokal, namun sinkronisasi server: ${result?.message || 'terkendala koneksi'}`
+        );
+      }
+    } catch (err: any) {
+      toast.error('Gagal menyimpan kegiatan: ' + (err?.message || 'Kesalahan sistem'));
     } finally {
       setSaving(false);
     }

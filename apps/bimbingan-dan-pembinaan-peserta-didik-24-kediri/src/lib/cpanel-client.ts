@@ -269,23 +269,48 @@ export async function saveCpanelBulk(payload: {
   const { url, key } = getCpanelConfig();
   if (!url) return { success: false, message: 'URL cPanel belum disetel' };
 
-  const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=save_bulk`;
+  const targetUrl = `${url}${url.includes('?') ? '&' : '?'}action=save_bulk`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(key ? { 'X-API-KEY': key } : {}),
+  };
 
   try {
-    const res = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(key ? { 'X-API-KEY': key } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
+    let savedCount = 0;
+    const items = payload.kegiatan || [];
 
-    const data = await res.json();
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const chunkPayload = {
+        namaPelapor: payload.namaPelapor,
+        nip: payload.nip,
+        tanggal: payload.tanggal,
+        tandaTangan: payload.tandaTangan,
+        unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+        kegiatan: [item],
+      };
+
+      const res = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(chunkPayload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || `Gagal menyimpan kegiatan #${i + 1}`);
+      }
+      savedCount++;
+    }
+
     return {
-      success: Boolean(data.success),
-      message: data.message || 'Tersimpan ke cPanel',
-      count: data.count,
+      success: true,
+      message: `${savedCount} kegiatan tersimpan permanen di database server cPanel!`,
+      count: savedCount,
     };
   } catch (err: any) {
     return {

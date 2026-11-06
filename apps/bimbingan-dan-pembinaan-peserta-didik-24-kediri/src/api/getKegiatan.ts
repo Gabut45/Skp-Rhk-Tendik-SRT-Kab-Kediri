@@ -50,8 +50,12 @@ async function fetchFromCpanel(input: {
           kataKunciKegiatan: r.kata_kunci_kegiatan || r.kataKunciKegiatan,
           deskripsiKegiatan: r.deskripsi_kegiatan || r.deskripsiKegiatan,
           rhkKategori: r.rhk_kategori || r.rhkKategori || 'RHK 3',
-          fotoKegiatan: Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (r.fotoKegiatan || []),
-          tandaTangan: Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (r.tandaTangan || []),
+          fotoKegiatan: (Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (Array.isArray(r.fotoKegiatan) ? r.fotoKegiatan : []))
+            .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
+            .filter((item): item is { url: string } => item !== null && Boolean(item.url)),
+          tandaTangan: (Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (Array.isArray(r.tandaTangan) ? r.tandaTangan : []))
+            .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
+            .filter((item): item is { url: string } => item !== null && Boolean(item.url)),
           unitKerja: r.unit_kerja || r.unitKerja,
         }));
       }
