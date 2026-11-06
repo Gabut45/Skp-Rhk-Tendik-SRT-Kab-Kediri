@@ -126,6 +126,7 @@ export default createEndpoint({
     // Masukkan cPanel records terlebih dahulu (server authoritative)
     for (const r of cpanelRecords) {
       if (isRecordDeleted(r)) continue;
+      if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') continue;
       if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) continue;
       const id = String(r.id || '');
       const fp = getKegiatanFingerprint(r);
@@ -149,6 +150,7 @@ export default createEndpoint({
     // Masukkan local records, hindari duplikasi jika sudah ada di cPanel dengan fingerprint yang sama
     for (const r of localRecords) {
       if (isRecordDeleted(r)) continue;
+      if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') continue;
       if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) continue;
       const id = String(r.id || '');
       const fp = getKegiatanFingerprint(r);

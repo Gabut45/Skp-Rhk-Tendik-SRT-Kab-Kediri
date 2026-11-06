@@ -13,7 +13,7 @@ import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, syncServerPresets } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
@@ -237,6 +237,7 @@ export default function RiwayatPage() {
       }
 
       const deletedIdsArr = Array.from(getDeletedIds());
+      syncServerPresets().catch(() => {});
 
       // 1. Ambil data riwayat file tersimpan
       const riwayatData = await getRiwayat({

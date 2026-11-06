@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
@@ -61,6 +61,15 @@ export default function KegiatanHarianPage() {
       }
     }
   }, [user]);
+
+  // Sinkronkan preset tanda tangan dari database server cPanel saat halaman dimuat
+  useEffect(() => {
+    syncServerPresets().then(presets => {
+      if (presets && presets[namaPelapor]) {
+        setTandaTangan(presets[namaPelapor]);
+      }
+    });
+  }, [namaPelapor]);
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -90,7 +99,16 @@ export default function KegiatanHarianPage() {
     setNamaPelapor(nama);
     setNip(nipVal);
     const saved = getSavedTtd(nama);
-    setTandaTangan(saved);
+    if (saved) {
+      setTandaTangan(saved);
+    } else {
+      setTandaTangan(null);
+      syncServerPresets().then(presets => {
+        if (presets && presets[nama]) {
+          setTandaTangan(presets[nama]);
+        }
+      });
+    }
   };
 
   const handleTtdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

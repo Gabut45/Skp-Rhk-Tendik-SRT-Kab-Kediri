@@ -60,19 +60,56 @@ export function matchPelapor(nameOrUser?: string): PelaporInfo | undefined {
 // --- Pre-configured TTD URLs per pelapor (kosong secara default) ---
 const PRESET_TTD: Record<string, string> = {};
 
-// --- Saved TTD per pelapor (localStorage) ---
-
+// --- Saved TTD per pelapor (localStorage & Server Database Presets) ---
 const TTD_STORAGE_KEY = '__savedTtdPerPelapor';
+const SERVER_PRESET_STORAGE_KEY = '__serverPresetTtdMap';
+
+export function getServerPresetMap(): Record<string, string> {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
+  try {
+    const raw = localStorage.getItem(SERVER_PRESET_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveServerPresetLocalCache(namaPelapor: string, url: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const map = getServerPresetMap();
+    if (url) {
+      map[namaPelapor] = url;
+    } else {
+      delete map[namaPelapor];
+    }
+    localStorage.setItem(SERVER_PRESET_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+import { fetchCpanelPresetTtd } from './cpanel-client';
+
+export async function syncServerPresets(): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const presets = await fetchCpanelPresetTtd();
+    if (presets && Object.keys(presets).length > 0) {
+      localStorage.setItem(SERVER_PRESET_STORAGE_KEY, JSON.stringify(presets));
+      return presets;
+    }
+  } catch (err) {
+    console.warn('[syncServerPresets] Warning:', err);
+  }
+  return getServerPresetMap();
+}
 
 function getTtdMap(): Record<string, string> {
+  if (typeof window === 'undefined' || !window.localStorage) return {};
   try {
     const raw = localStorage.getItem(TTD_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    // Pastikan tanda tangan A. Zainudin Sholeh terhapus dari sistem sesuai permintaan
-    if (parsed['A. Zainudin Sholeh, S.A.P.']) {
-      delete parsed['A. Zainudin Sholeh, S.A.P.'];
-      localStorage.setItem(TTD_STORAGE_KEY, JSON.stringify(parsed));
-    }
     return parsed;
   } catch {
     return {};
@@ -80,19 +117,30 @@ function getTtdMap(): Record<string, string> {
 }
 
 export function getSavedTtd(namaPelapor: string): string | null {
-  // Check localStorage first (user-uploaded overrides), then preset
-  const map = getTtdMap();
-  return map[namaPelapor] || PRESET_TTD[namaPelapor] || null;
+  if (!namaPelapor) return null;
+  // 1. Cek unggahan lokal sesi saat ini
+  const userMap = getTtdMap();
+  if (userMap[namaPelapor]) return userMap[namaPelapor];
+
+  // 2. Cek preset terpusat dari database server yang ditambahkan oleh Super Admin
+  const serverMap = getServerPresetMap();
+  if (serverMap[namaPelapor]) return serverMap[namaPelapor];
+
+  // 3. Fallback ke preset default sistem
+  return PRESET_TTD[namaPelapor] || null;
 }
 
 export function saveTtd(namaPelapor: string, url: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   const map = getTtdMap();
   map[namaPelapor] = url;
   localStorage.setItem(TTD_STORAGE_KEY, JSON.stringify(map));
 }
 
 export function removeTtd(namaPelapor: string): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
   const map = getTtdMap();
   delete map[namaPelapor];
   localStorage.setItem(TTD_STORAGE_KEY, JSON.stringify(map));
 }
+

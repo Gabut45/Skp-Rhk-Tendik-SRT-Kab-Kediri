@@ -200,6 +200,7 @@ export async function fetchCpanelKegiatan(params?: {
 
       for (const r of data.records) {
         if (isClientRecordDeleted(r)) continue;
+        if (r.tanggal === '1970-01-01' || r.kata_kunci_kegiatan === '__PRESET_TTD__' || r.rhk_kategori === '__SYSTEM_CONFIG__') continue;
         const id = String(r.id || `keg_${r.id_kegiatan}`);
 
         let fotoList: { url: string }[] = [];
@@ -521,4 +522,125 @@ export async function deleteCpanelRiwayat(params: {
   }
   return true;
 }
+
+/**
+ * Fetch all preset signatures for wali asuh stored in cPanel MySQL database
+ */
+export async function fetchCpanelPresetTtd(): Promise<Record<string, string>> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return {};
+
+  const targetUrl = `${url}${url.includes('?') ? '&' : '?'}action=get_kegiatan&tanggalMulai=1970-01-01&tanggalSelesai=1970-01-01`;
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: key ? { 'X-API-KEY': key } : {},
+    });
+
+    if (!res.ok) return {};
+
+    const data = await res.json();
+    if (data.success && Array.isArray(data.records)) {
+      const presets: Record<string, string> = {};
+      for (const r of data.records) {
+        const nama = String(r.nama_pelapor || r.namaPelapor || '').trim();
+        if (!nama) continue;
+
+        let signatureUrl = '';
+        if (Array.isArray(r.foto_kegiatan) && r.foto_kegiatan.length > 0) {
+          const item = r.foto_kegiatan[0];
+          signatureUrl = typeof item === 'string' ? item : (item?.url || '');
+        } else if (Array.isArray(r.fotoKegiatan) && r.fotoKegiatan.length > 0) {
+          const item = r.fotoKegiatan[0];
+          signatureUrl = typeof item === 'string' ? item : (item?.url || '');
+        }
+
+        if (!signatureUrl) {
+          if (Array.isArray(r.tanda_tangan) && r.tanda_tangan.length > 0) {
+            const item = r.tanda_tangan[0];
+            signatureUrl = typeof item === 'string' ? item : (item?.url || '');
+          } else if (Array.isArray(r.tandaTangan) && r.tandaTangan.length > 0) {
+            const item = r.tandaTangan[0];
+            signatureUrl = typeof item === 'string' ? item : (item?.url || '');
+          }
+        }
+
+        if (signatureUrl && signatureUrl !== 'EMPTY_PRESET' && signatureUrl !== 'CLEARED') {
+          presets[nama] = signatureUrl;
+        }
+      }
+      return presets;
+    }
+  } catch (err) {
+    console.warn('[fetchCpanelPresetTtd] Error:', err);
+  }
+  return {};
+}
+
+/**
+ * Save or delete a preset signature for a wali asuh in cPanel MySQL database
+ */
+export async function saveCpanelPresetTtd(params: {
+  namaPelapor: string;
+  nip?: string;
+  url: string; // empty string to clear
+}): Promise<{ success: boolean; message: string }> {
+  const { url: baseUrl, key } = getCpanelConfig();
+  if (!baseUrl) return { success: false, message: 'URL cPanel belum disetel' };
+
+  const targetUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}action=save_bulk`;
+  const cleanId = `preset_ttd_${params.namaPelapor.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40)}`;
+
+  const payload = {
+    namaPelapor: params.namaPelapor,
+    nip: params.nip || '',
+    tanggal: '1970-01-01',
+    tandaTangan: params.url || undefined,
+    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+    kegiatan: [
+      {
+        id: cleanId,
+        waktuMulai: '00:00',
+        waktuSelesai: '00:00',
+        kataKunciKegiatan: '__PRESET_TTD__',
+        deskripsiKegiatan: params.url ? 'PRESET_SIGNATURE' : 'EMPTY_PRESET',
+        rhkKategori: '__SYSTEM_CONFIG__',
+        fotoKegiatan: params.url ? [params.url] : [],
+      },
+    ],
+  };
+
+  try {
+    const res = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(key ? { 'X-API-KEY': key } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.message || 'Gagal menyimpan ke cPanel');
+    }
+
+    return {
+      success: true,
+      message: params.url
+        ? `Preset tanda tangan ${params.namaPelapor} berhasil disimpan di database server!`
+        : `Preset tanda tangan ${params.namaPelapor} berhasil dihapus dari database server.`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Gagal tersambung ke cPanel',
+    };
+  }
+}
+
 

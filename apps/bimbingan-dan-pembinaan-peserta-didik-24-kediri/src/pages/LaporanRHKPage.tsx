@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -76,6 +76,15 @@ export default function LaporanRHKPage() {
     }
   }, [user]);
 
+  // Sinkronkan preset tanda tangan dari database server cPanel saat halaman dimuat
+  useEffect(() => {
+    syncServerPresets().then(presets => {
+      if (presets && presets[namaPelapor]) {
+        setTandaTangan(presets[namaPelapor]);
+      }
+    });
+  }, [namaPelapor]);
+
   const [previewing, setPreviewing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewPdfHtml, setPreviewPdfHtml] = useState('');
@@ -92,7 +101,17 @@ export default function LaporanRHKPage() {
   const handlePelaporChange = (nama: string, nipVal: string) => {
     setNamaPelapor(nama);
     setNip(nipVal);
-    setTandaTangan(getSavedTtd(nama));
+    const saved = getSavedTtd(nama);
+    if (saved) {
+      setTandaTangan(saved);
+    } else {
+      setTandaTangan(null);
+      syncServerPresets().then(presets => {
+        if (presets && presets[nama]) {
+          setTandaTangan(presets[nama]);
+        }
+      });
+    }
   };
 
   const handleTtdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

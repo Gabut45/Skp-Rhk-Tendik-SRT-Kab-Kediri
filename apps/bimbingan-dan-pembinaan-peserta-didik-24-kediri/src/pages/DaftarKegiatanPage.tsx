@@ -12,7 +12,7 @@ import { Trash2, Search, Loader2, ImageIcon, Copy } from 'lucide-react';
 import { getKegiatan, deleteKegiatan, deleteRiwayat, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, syncServerPresets } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 
 import {
@@ -55,6 +55,10 @@ export default function DaftarKegiatanPage() {
   const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
   const [namaPelapor, setNamaPelapor] = useState('Semua Pelapor');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    syncServerPresets();
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
