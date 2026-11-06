@@ -352,6 +352,11 @@ export function purgeAllLocalData(): void {
     localStorage.setItem('cpanel_deleted_ids', '[]');
     localStorage.setItem('cpanel_deleted_riwayat_keys', '[]');
     localStorage.setItem('cpanel_deleted_ranges', '[]');
+    if (typeof window !== 'undefined' && window.indexedDB) {
+      try {
+        window.indexedDB.deleteDatabase('zite_applet_storage');
+      } catch {}
+    }
   } catch (err) {
     console.warn('[purgeAllLocalData] Error:', err);
   }

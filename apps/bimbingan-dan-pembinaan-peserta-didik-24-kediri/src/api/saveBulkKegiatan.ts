@@ -120,7 +120,6 @@ export default createEndpoint({
           savedCpanelCount++;
         } else {
           syncError = `Kegiatan ke-${i + 1} (${item.waktuMulai}): ${lastErr}`;
-          break;
         }
       }
 
@@ -135,8 +134,10 @@ export default createEndpoint({
       count: preparedKegiatan.length,
       cpanelSynced,
       message: cpanelSynced
-        ? `${savedCpanelCount} kegiatan berhasil tersimpan permanen di Database Server!`
-        : (syncError || 'Tersimpan lokal, sinkronisasi server belum selesai.'),
+        ? `${savedCpanelCount} kegiatan & seluruh foto dokumentasi berhasil tersimpan permanen di Database Server cPanel!`
+        : (savedCpanelCount > 0
+            ? `${savedCpanelCount} dari ${preparedKegiatan.length} kegiatan tersimpan di cPanel (${syncError})`
+            : (syncError || 'Tersimpan aman di sistem lokal, sinkronisasi cPanel belum selesai.')),
     };
   },
 });

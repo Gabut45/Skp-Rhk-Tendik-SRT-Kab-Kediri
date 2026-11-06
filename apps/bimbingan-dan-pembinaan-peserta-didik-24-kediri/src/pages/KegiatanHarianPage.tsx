@@ -212,7 +212,10 @@ export default function KegiatanHarianPage() {
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
       }));
 
-      // Simpan via endpoint yang otomatis menyinkronkan ke database lokal & cPanel secara aman sekali saja
+      const totalPhotos = filled.reduce((acc, k) => acc + (k.photos?.length || 0), 0);
+      toast.info(`Menyimpan ${filled.length} kegiatan & ${totalPhotos} foto ke sistem dan server...`, { duration: 2500 });
+
+      // Simpan via endpoint yang otomatis menyinkronkan ke database lokal (IndexedDB) & cPanel secara aman
       const result = await saveBulkKegiatan({
         namaPelapor,
         nip,

@@ -71,9 +71,9 @@ export default function KegiatanForm({ index, item, onChange, onRemove, canRemov
         try {
           // Kompresi cerdas dokumen & foto (mengurangi ukuran s/d 95% dengan resolusi tajam)
           const compResult = await compressDocumentImage(file, {
-            maxDimension: 1100,
-            targetMaxKB: 110,
-            initialQuality: 0.80,
+            maxDimension: 1024,
+            targetMaxKB: 80,
+            initialQuality: 0.78,
           });
 
           totalOrig += compResult.originalSize;
