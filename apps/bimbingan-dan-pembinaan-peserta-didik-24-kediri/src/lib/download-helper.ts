@@ -29,21 +29,36 @@ export function printHtml(html: string): void {
   doc.close();
 
   // Allow images and fonts to load before opening print dialog
-  setTimeout(() => {
-    try {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-    } catch (e) {
-      console.warn('Print error, falling back:', e);
-      window.print();
-    } finally {
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 2000);
-    }
-  }, 600);
+  const iframeDoc = iframe.contentWindow?.document;
+  const iframeImgs = iframeDoc ? Array.from(iframeDoc.querySelectorAll('img')) : [];
+  const waitImgs = Promise.all(
+    iframeImgs.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((res) => {
+        img.onload = () => res();
+        img.onerror = () => res();
+        setTimeout(res, 2500);
+      });
+    })
+  );
+
+  waitImgs.then(() => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        console.warn('Print error, falling back:', e);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 3000);
+      }
+    }, 300);
+  });
 }
 
 /**
@@ -139,16 +154,16 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
     .join('\n');
 
   // Create isolated render container attached to document.body
-  // Positioned off-screen with opacity: 1 so layout is fully computed
+  // Positioned at top: 0, left: 0 behind content (z-index: -99999) so browser graphics engine actively composites images
   const container = document.createElement('div');
   container.className = 'pdf-render-root';
   container.style.position = 'fixed';
-  container.style.left = '-9999px';
   container.style.top = '0';
+  container.style.left = '0';
   container.style.width = '794px'; // Exactly 210mm at 96 DPI
   container.style.backgroundColor = '#ffffff';
   container.style.color = '#111111';
-  container.style.zIndex = '-9999';
+  container.style.zIndex = '-99999';
   container.style.opacity = '1';
   container.style.visibility = 'visible';
   container.style.pointerEvents = 'none';
@@ -208,7 +223,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
         height: 3px !important;
         margin: 4px 0 10px 0 !important;
       }
-      .pdf-render-root img {
+      .pdf-render-root img, .pdf-render-root canvas {
         max-width: 100% !important;
         object-fit: contain !important;
       }
@@ -283,45 +298,102 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
   document.body.appendChild(container);
 
   try {
-    // Ensure all images are completely loaded and decoded
+    // 1. Process all images: convert them to real raster canvas elements
+    // This completely bypasses html2canvas cloning/caching bugs and crossOrigin race conditions
     const imgs = Array.from(container.querySelectorAll('img'));
     await Promise.all(
       imgs.map(async (img) => {
         try {
-          const src = img.getAttribute('src');
-          if (src && src.startsWith('http')) {
+          const rawSrc = img.getAttribute('src') || '';
+          if (!rawSrc || !rawSrc.trim() || rawSrc === 'data:,' || rawSrc === 'null' || rawSrc === 'undefined') {
+            // Remove empty image and clean up empty wrapper boxes
+            const parentBox = img.closest('.photo-single-box, .photo-proof-box');
+            if (parentBox) parentBox.remove();
+            else img.remove();
+            return;
+          }
+
+          let srcToUse = rawSrc;
+          if (rawSrc.startsWith('http')) {
             try {
-              const res = await fetch(src, { mode: 'cors' });
+              const res = await fetch(rawSrc, { mode: 'cors' });
               if (res.ok) {
                 const blob = await res.blob();
                 const reader = new FileReader();
-                await new Promise<void>((resolveReader) => {
+                srcToUse = await new Promise<string>((resolveReader) => {
                   reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                      img.src = reader.result;
-                    }
-                    resolveReader();
+                    resolveReader(typeof reader.result === 'string' ? reader.result : rawSrc);
                   };
+                  reader.onerror = () => resolveReader(rawSrc);
                   reader.readAsDataURL(blob);
                 });
+                img.src = srcToUse;
               }
             } catch {
-              // Proceed with original src
+              // Keep original src if fetch fails
             }
           }
 
-          if (img.complete && img.naturalWidth > 0) return;
-          if (img.decode) {
-            await img.decode();
-            return;
+          // Create an off-screen Image object to guarantee full asynchronous decode
+          const loaderImg = new Image();
+          if (srcToUse.startsWith('data:') || srcToUse.startsWith('blob:') || rawSrc.startsWith('http')) {
+            loaderImg.crossOrigin = 'anonymous';
           }
-          await new Promise<void>((res) => {
-            img.onload = () => res();
-            img.onerror = () => res();
-            setTimeout(res, 2000);
+
+          await new Promise<void>((resolveLoad) => {
+            let done = false;
+            const finish = () => {
+              if (!done) {
+                done = true;
+                resolveLoad();
+              }
+            };
+            loaderImg.onload = finish;
+            loaderImg.onerror = finish;
+            setTimeout(finish, 3500);
+            loaderImg.src = srcToUse;
+            if (loaderImg.complete && loaderImg.naturalWidth > 0) {
+              finish();
+            }
           });
-        } catch {
-          // Ignore individual image load failures
+
+          const naturalW = loaderImg.naturalWidth || img.naturalWidth;
+          const naturalH = loaderImg.naturalHeight || img.naturalHeight;
+
+          if (naturalW > 0 && naturalH > 0) {
+            // Create a high-fidelity <canvas> element to replace <img>
+            // html2canvas renders <canvas> directly via ctx.drawImage without caching/cloning lag
+            const canvasEl = document.createElement('canvas');
+            canvasEl.width = naturalW;
+            canvasEl.height = naturalH;
+            const cCtx = canvasEl.getContext('2d');
+            if (cCtx) {
+              cCtx.drawImage(loaderImg, 0, 0, naturalW, naturalH);
+            }
+
+            // Copy attributes & classNames
+            canvasEl.className = img.className;
+            if (img.id) canvasEl.id = img.id;
+
+            // Maintain exact responsive styling so layout matches iframe preview perfectly
+            canvasEl.style.maxWidth = img.style.maxWidth || '100%';
+            canvasEl.style.maxHeight = img.style.maxHeight || '280px';
+            canvasEl.style.width = 'auto';
+            canvasEl.style.height = 'auto';
+            canvasEl.style.display = img.style.display || 'block';
+            canvasEl.style.margin = img.style.margin || '0 auto';
+            canvasEl.style.borderRadius = img.style.borderRadius || '2px';
+            canvasEl.style.objectFit = 'contain';
+
+            img.parentNode?.replaceChild(canvasEl, img);
+          } else {
+            // Failed to load pixels, remove blank placeholder
+            const parentBox = img.closest('.photo-single-box, .photo-proof-box');
+            if (parentBox) parentBox.remove();
+            else img.remove();
+          }
+        } catch (e) {
+          console.warn('[download-helper] Error processing image:', e);
         }
       })
     );

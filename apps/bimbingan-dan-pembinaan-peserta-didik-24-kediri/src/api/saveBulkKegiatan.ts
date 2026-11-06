@@ -43,20 +43,23 @@ export default createEndpoint({
 
     // 1. Simpan ke database lokal dengan ID konsisten
     await zite.kegiatanHarian.bulkCreate({
-      records: preparedKegiatan.map(k => ({
-        id: k.id,
-        namaPelapor: input.namaPelapor,
-        nip: input.nip,
-        tanggal: input.tanggal,
-        waktuMulai: k.waktuMulai,
-        waktuSelesai: k.waktuSelesai,
-        kataKunciKegiatan: k.kataKunciKegiatan,
-        deskripsiKegiatan: k.deskripsiKegiatan,
-        rhkKategori: k.rhkKategori,
-        fotoKegiatan: k.fotoKegiatan?.map(url => ({ url })),
-        tandaTangan: input.tandaTangan ? [{ url: input.tandaTangan }] : undefined,
-        unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-      })),
+      records: preparedKegiatan.map(k => {
+        const validPhotos = (k.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 20 && !url.startsWith('data:,'));
+        return {
+          id: k.id,
+          namaPelapor: input.namaPelapor,
+          nip: input.nip,
+          tanggal: input.tanggal,
+          waktuMulai: k.waktuMulai,
+          waktuSelesai: k.waktuSelesai,
+          kataKunciKegiatan: k.kataKunciKegiatan,
+          deskripsiKegiatan: k.deskripsiKegiatan,
+          rhkKategori: k.rhkKategori,
+          fotoKegiatan: validPhotos.length > 0 ? validPhotos.map(url => ({ url })) : undefined,
+          tandaTangan: input.tandaTangan ? [{ url: input.tandaTangan }] : undefined,
+          unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+        };
+      }),
     });
 
     // 2. Simpan ke server cPanel MySQL secara aman per item/chunk
@@ -72,13 +75,17 @@ export default createEndpoint({
     try {
       for (let i = 0; i < preparedKegiatan.length; i++) {
         const item = preparedKegiatan[i];
+        const validPhotos = (item.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 20 && !url.startsWith('data:,'));
         const chunkPayload = {
           namaPelapor: input.namaPelapor,
           nip: input.nip,
           tanggal: input.tanggal,
           tandaTangan: input.tandaTangan,
           unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-          kegiatan: [item],
+          kegiatan: [{
+            ...item,
+            fotoKegiatan: validPhotos.length > 0 ? validPhotos : undefined,
+          }],
         };
 
         let itemSuccess = false;

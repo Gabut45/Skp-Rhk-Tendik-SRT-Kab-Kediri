@@ -32,9 +32,15 @@ function expandRhk(rhk: string): string {
 
 const MAX_PHOTOS_PER_RECORD = 20;
 
-function buildPhotosGrid(photos: string[]): string {
-  if (!photos || photos.length === 0) return '';
-  const limited = photos.slice(0, MAX_PHOTOS_PER_RECORD);
+function buildPhotosGrid(photos: any[]): string {
+  if (!photos || !Array.isArray(photos)) return '';
+  // Filter out any empty, whitespace-only, null, or invalid photo representations
+  const validPhotos = photos
+    .map((p: any) => (typeof p === 'string' ? p : (p?.url || '')))
+    .filter((p: string) => typeof p === 'string' && p.trim().length > 20 && !p.startsWith('data:,') && p !== 'null' && p !== 'undefined');
+
+  if (validPhotos.length === 0) return '';
+  const limited = validPhotos.slice(0, MAX_PHOTOS_PER_RECORD);
 
   // Jika hanya ada 1 foto: tampilkan di tengah secara proporsional dan jelas tanpa terpotong
   if (limited.length === 1) {
@@ -65,8 +71,8 @@ function buildPhotosGrid(photos: string[]): string {
   }
 
   let html = `<table style="width:100%;border-collapse:collapse;margin-bottom:6px;border:none;page-break-inside:avoid;break-inside:avoid;">${rows.join('')}</table>`;
-  if (photos.length > MAX_PHOTOS_PER_RECORD) {
-    html += `<p style="text-align:center;font-size:8pt;color:#64748b;margin:2px 0 0 0;">(Menampilkan ${MAX_PHOTOS_PER_RECORD} dari ${photos.length} foto)</p>`;
+  if (validPhotos.length > MAX_PHOTOS_PER_RECORD) {
+    html += `<p style="text-align:center;font-size:8pt;color:#64748b;margin:2px 0 0 0;">(Menampilkan ${MAX_PHOTOS_PER_RECORD} dari ${validPhotos.length} foto)</p>`;
   }
   return html;
 }

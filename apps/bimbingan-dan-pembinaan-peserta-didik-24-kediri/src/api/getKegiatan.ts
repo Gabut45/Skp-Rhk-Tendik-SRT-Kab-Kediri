@@ -52,10 +52,10 @@ async function fetchFromCpanel(input: {
           rhkKategori: r.rhk_kategori || r.rhkKategori || 'RHK 3',
           fotoKegiatan: (Array.isArray(r.foto_kegiatan) ? r.foto_kegiatan : (Array.isArray(r.fotoKegiatan) ? r.fotoKegiatan : []))
             .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
-            .filter((item): item is { url: string } => item !== null && Boolean(item.url)),
+            .filter((item): item is { url: string } => item !== null && Boolean(item.url && item.url.trim().length > 20 && !item.url.startsWith('data:,'))),
           tandaTangan: (Array.isArray(r.tanda_tangan) ? r.tanda_tangan : (Array.isArray(r.tandaTangan) ? r.tandaTangan : []))
             .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
-            .filter((item): item is { url: string } => item !== null && Boolean(item.url)),
+            .filter((item): item is { url: string } => item !== null && Boolean(item.url && item.url.trim().length > 20)),
           unitKerja: r.unit_kerja || r.unitKerja,
         }));
       }
@@ -137,10 +137,10 @@ export default createEndpoint({
         if (id) seenIds.add(id);
         byFingerprint.set(fp, r);
       } else {
-        // Jika duplikat di cPanel, prioritaskan yang memiliki foto lebih lengkap
+        // Jika duplikat di cPanel, prioritaskan yang memiliki foto valid lebih lengkap
         const existing = byFingerprint.get(fp);
-        const existingPhotos = existing.fotoKegiatan || [];
-        const rPhotos = r.fotoKegiatan || [];
+        const existingPhotos = (existing.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
+        const rPhotos = (r.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
         if (rPhotos.length > existingPhotos.length) {
           byFingerprint.set(fp, r);
         }
@@ -155,6 +155,11 @@ export default createEndpoint({
       const id = String(r.id || '');
       const fp = getKegiatanFingerprint(r);
 
+      // Pastikan format fotoKegiatan di lokal ternormalisasi
+      r.fotoKegiatan = (Array.isArray(r.fotoKegiatan) ? r.fotoKegiatan : [])
+        .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
+        .filter((item): item is { url: string } => item !== null && Boolean(item.url && item.url.trim().length > 20 && !item.url.startsWith('data:,'))) as any;
+
       if (id && seenIds.has(id)) continue;
 
       if (!byFingerprint.has(fp)) {
@@ -163,9 +168,11 @@ export default createEndpoint({
       } else {
         // Perkaya rekaman yang ada jika foto atau ttd di lokal lebih lengkap
         const existing = byFingerprint.get(fp);
-        const existingPhotos = existing.fotoKegiatan || [];
-        const rPhotos = r.fotoKegiatan || [];
+        const existingPhotos = (existing.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
+        const rPhotos = (r.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
         if (existingPhotos.length === 0 && rPhotos.length > 0) {
+          existing.fotoKegiatan = rPhotos;
+        } else if (rPhotos.length > existingPhotos.length) {
           existing.fotoKegiatan = rPhotos;
         }
         if ((!existing.tandaTangan || existing.tandaTangan.length === 0) && r.tandaTangan?.length) {

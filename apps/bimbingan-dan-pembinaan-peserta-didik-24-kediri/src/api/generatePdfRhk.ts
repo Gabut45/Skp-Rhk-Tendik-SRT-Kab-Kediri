@@ -53,14 +53,17 @@ function buildDocTable(records: any[]): string {
     const tglFormatted = tgl !== 'Tanpa Tanggal' ? formatTanggal(tgl) : tgl;
 
     for (const r of recsForDate) {
-      const allPhotos = r.fotoKegiatan || [];
+      const allPhotos = (r.fotoKegiatan || [])
+        .map((p: any) => (typeof p === 'string' ? p : (p?.url || '')))
+        .filter((p: string) => typeof p === 'string' && p.trim().length > 20 && !p.startsWith('data:,') && p !== 'null' && p !== 'undefined');
+
       if (allPhotos.length === 0 && !r.deskripsiKegiatan) continue;
 
       // Build photo grid for this record (adaptive uncropped layout)
       let photosHtml = '';
       if (allPhotos.length > 0) {
         const photos = allPhotos.slice(0, MAX_PHOTOS_PER_RECORD);
-        const getUrl = (p: any) => esc(typeof p === 'string' ? p : (p?.url || ''));
+        const getUrl = (p: any) => esc(p);
 
         if (photos.length === 1) {
           photosHtml = `<div style="text-align:center;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid;">

@@ -36,9 +36,15 @@ function expandRhk(rhk: string): string {
   return rhk;
 }
 
-function buildPhotosGrid(photos: string[]): string {
-  if (!photos || photos.length === 0) return '';
-  const limited = photos.slice(0, 10);
+function buildPhotosGrid(photos: any[]): string {
+  if (!photos || !Array.isArray(photos)) return '';
+  // Filter out any empty, whitespace-only, null, or invalid photo representations
+  const validPhotos = photos
+    .map((p: any) => (typeof p === 'string' ? p : (p?.url || '')))
+    .filter((p: string) => typeof p === 'string' && p.trim().length > 20 && !p.startsWith('data:,') && p !== 'null' && p !== 'undefined');
+
+  if (validPhotos.length === 0) return '';
+  const limited = validPhotos.slice(0, 20);
 
   // Jika hanya ada 1 foto: tampilkan di tengah secara proporsional dan jelas tanpa terpotong
   if (limited.length === 1) {

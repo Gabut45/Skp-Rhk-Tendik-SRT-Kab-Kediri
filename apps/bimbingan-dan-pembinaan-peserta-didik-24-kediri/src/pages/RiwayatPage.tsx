@@ -163,7 +163,9 @@ export default function RiwayatPage() {
         waktuSelesai: k.waktuSelesai || '',
         deskripsiKegiatan: k.deskripsiKegiatan || '',
         rhkKategori: k.rhkKategori || undefined,
-        fotoKegiatan: (k.fotoKegiatan || []).map(f => f.url),
+        fotoKegiatan: (k.fotoKegiatan || [])
+          .map(f => (typeof f === 'string' ? f : f?.url || ''))
+          .filter(u => typeof u === 'string' && u.trim().length > 20 && !u.startsWith('data:,')),
       })),
     });
 
