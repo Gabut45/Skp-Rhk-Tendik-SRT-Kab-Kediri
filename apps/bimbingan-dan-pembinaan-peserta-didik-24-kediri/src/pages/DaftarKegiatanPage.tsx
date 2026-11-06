@@ -142,6 +142,7 @@ export default function DaftarKegiatanPage() {
       // 1. Hapus dari backend zite & server MySQL cPanel
       await deleteKegiatan({
         id,
+        waktuMulai: targetRecord?.waktuMulai,
         tanggal: targetRecord?.tanggal,
         namaPelapor: targetRecord?.namaPelapor,
         rhkNomor: targetRecord?.rhkKategori,
@@ -152,16 +153,14 @@ export default function DaftarKegiatanPage() {
       // 2. Hapus langsung via client cPanel
       await deleteCpanelKegiatan({
         id,
+        waktuMulai: targetRecord?.waktuMulai,
         tanggal: targetRecord?.tanggal,
         namaPelapor: targetRecord?.namaPelapor,
       });
 
-      // 3. Purge dari browser localStorage dan tandai cascade
+      // 3. Purge dari browser storage (khusus item ini)
       purgeLocalDataForRiwayat({
         recordId: id,
-        tanggal: targetRecord?.tanggal,
-        namaPelapor: targetRecord?.namaPelapor,
-        rhkNomor: targetRecord?.rhkKategori,
         deletedActivityIds: [id],
       });
 
@@ -169,7 +168,7 @@ export default function DaftarKegiatanPage() {
       setRecords(prev => prev.filter(r => r.id !== id));
       setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
 
-      toast.success('Kegiatan berhasil dihapus secara permanen dari daftar, riwayat, dan laporan RHK');
+      toast.success('Kegiatan berhasil dihapus secara permanen dari database cPanel dan daftar aplikasi');
     } catch {
       toast.error('Gagal menghapus kegiatan');
     }

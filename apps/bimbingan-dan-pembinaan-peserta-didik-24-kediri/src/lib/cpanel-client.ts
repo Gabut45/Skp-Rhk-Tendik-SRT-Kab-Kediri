@@ -321,19 +321,36 @@ export async function saveCpanelBulk(payload: {
   }
 }
 
+function updateIndexedDbTable(tableName: string, records: any[]) {
+  if (typeof window === 'undefined' || !window.indexedDB) return;
+  try {
+    const req = window.indexedDB.open('zite_applet_storage', 1);
+    req.onsuccess = () => {
+      const db = req.result;
+      if (db.objectStoreNames.contains(tableName)) {
+        const tx = db.transaction(tableName, 'readwrite');
+        tx.objectStore(tableName).put(records, 'records');
+      }
+    };
+  } catch {}
+}
+
 /**
- * Directly purges records from browser localStorage tables (zite_table_KegiatanHarian / zite_table_RiwayatFile)
+ * Directly purges records from browser localStorage tables and IndexedDB
  */
 export function purgeLocalStorageTable(tableName: 'KegiatanHarian' | 'RiwayatFile', shouldRemove: (record: any) => boolean): void {
-  if (typeof window === 'undefined' || !window.localStorage) return;
+  if (typeof window === 'undefined') return;
   try {
     const key = `zite_table_${tableName}`;
-    const stored = localStorage.getItem(key);
-    if (!stored) return;
-    const list = JSON.parse(stored);
-    if (!Array.isArray(list)) return;
-    const filtered = list.filter(item => !shouldRemove(item));
-    localStorage.setItem(key, JSON.stringify(filtered));
+    const stored = window.localStorage ? localStorage.getItem(key) : null;
+    if (stored) {
+      const list = JSON.parse(stored);
+      if (Array.isArray(list)) {
+        const filtered = list.filter(item => !shouldRemove(item));
+        localStorage.setItem(key, JSON.stringify(filtered));
+        updateIndexedDbTable(tableName, filtered);
+      }
+    }
   } catch (err) {
     console.warn(`[purgeLocalStorageTable] Gagal membersihkan ${tableName}:`, err);
   }
@@ -396,9 +413,10 @@ export function purgeLocalDataForRiwayat(params: {
   // 2. Purge from zite_table_KegiatanHarian
   purgeLocalStorageTable('KegiatanHarian', item => {
     if (item.id && deletedActivityIds.includes(item.id)) return true;
-    const kDate = item.tanggal;
-    if (namaPelapor && item.namaPelapor === namaPelapor && kDate && start && end) {
-      if (kDate >= start && kDate <= end) {
+    if (recordId && item.id === recordId) return true;
+    // Only purge by date/range if specifically requested without single recordId
+    if (!recordId && namaPelapor && item.namaPelapor === namaPelapor && item.tanggal && start && end) {
+      if (item.tanggal >= start && item.tanggal <= end) {
         if (!rhkNomor) return true;
         const target = rhkNomor.toLowerCase();
         const kRhk = (item.rhkKategori || '').toLowerCase();
@@ -409,7 +427,7 @@ export function purgeLocalDataForRiwayat(params: {
   });
 
   // 3. Mark in deleted sets & ranges
-  if (start) {
+  if (start && !recordId) {
     addClientDeletedRange({
       tanggalMulai: start,
       tanggalSelesai: end,
@@ -427,22 +445,39 @@ export function purgeLocalDataForRiwayat(params: {
 }
 
 /**
+ * Helper to build cPanel API URLs without duplicate query marks
+ */
+function buildCpanelUrl(baseUrl: string, action: string, queryParams?: Record<string, string>): string {
+  const clean = baseUrl.trim();
+  const sep = clean.includes('?') ? '&' : '?';
+  let url = `${clean}${sep}action=${action}`;
+  if (queryParams) {
+    const params = new URLSearchParams(queryParams).toString();
+    if (params) url += `&${params}`;
+  }
+  return url;
+}
+
+/**
  * Delete activity from cPanel MySQL API permanently
  */
 export async function deleteCpanelKegiatan(params: string | {
   id?: string;
   id_numeric?: string;
+  ids?: string[];
   tanggal?: string;
   namaPelapor?: string;
+  waktuMulai?: string;
 }): Promise<boolean> {
   const payload = typeof params === 'string' ? { id: params } : params;
   if (payload.id) markDeletedId(payload.id);
+  if (payload.ids) payload.ids.forEach(id => markDeletedId(id));
 
   const { url, key } = getCpanelConfig();
   if (!url) return true;
 
   try {
-    const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_kegiatan`;
+    const targetUrl = buildCpanelUrl(url, 'delete_kegiatan');
     await fetch(targetUrl, {
       method: 'POST',
       headers: {
@@ -475,19 +510,30 @@ export async function deleteCpanelBulkKegiatan(params: string[] | {
   if (!url) return true;
 
   try {
-    const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_kegiatan`;
-    await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(key ? { 'X-API-KEY': key } : {}),
-      },
-      body: JSON.stringify({
-        ids: ids.length > 0 ? ids : undefined,
-        tanggal,
-        namaPelapor,
-      }),
-    });
+    const targetUrl = buildCpanelUrl(url, 'delete_kegiatan');
+    if (ids.length > 0) {
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        await fetch(targetUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(key ? { 'X-API-KEY': key } : {}),
+          },
+          body: JSON.stringify({ ids: chunk }),
+        });
+      }
+    }
+    if (tanggal && namaPelapor) {
+      await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(key ? { 'X-API-KEY': key } : {}),
+        },
+        body: JSON.stringify({ tanggal, namaPelapor }),
+      });
+    }
   } catch (err) {
     console.warn('[deleteCpanelBulkKegiatan] Error:', err);
   }
@@ -513,7 +559,7 @@ export async function deleteCpanelRiwayat(params: {
   if (!url) return true;
 
   try {
-    const targetUrl = `${url}${url.includes('?') ? '&' : '?'}&action=delete_riwayat`;
+    const targetUrl = buildCpanelUrl(url, 'delete_riwayat');
     await fetch(targetUrl, {
       method: 'POST',
       headers: {
@@ -616,6 +662,10 @@ export async function saveCpanelPresetTtd(params: {
   };
 
   try {
+    if (!params.url) {
+      await deleteCpanelKegiatan({ id: cleanId });
+    }
+
     const res = await fetch(targetUrl, {
       method: 'POST',
       headers: {

@@ -299,7 +299,6 @@ export default function LaporanRHKPage() {
 
       // 3. Hapus kegiatan terkait di backend
       await deleteKegiatan({
-        id: record.id,
         ids: idsToDelete.length > 0 ? idsToDelete : undefined,
         tanggalMulai: targetTanggalMulai,
         tanggalSelesai: targetTanggalSelesai,

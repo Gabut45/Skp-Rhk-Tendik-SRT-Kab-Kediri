@@ -310,8 +310,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $delNum = $data['id_numeric'] ?? null;
         $delIds = $data['ids'] ?? [];
         $tgl = $data['tanggal'] ?? ($_GET['tanggal'] ?? null);
+        $tglMulai = $data['tanggalMulai'] ?? ($data['tanggal_mulai'] ?? null);
+        $tglSelesai = $data['tanggalSelesai'] ?? ($data['tanggal_selesai'] ?? null);
+        $waktuMulai = $data['waktu_mulai'] ?? ($data['waktuMulai'] ?? null);
         $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
+        $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
+        if ($deleteAll) {
+            $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
+        }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
@@ -322,9 +329,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $stmt->execute([':id' => $delId, ':num' => $numVal]);
         }
-        if ($tgl && $pelapor) {
+        if ($waktuMulai && $tgl && $pelapor) {
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
+            $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
+        } elseif ($tgl && $pelapor && empty($delId)) {
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+        }
+        if ($tglMulai && $tglSelesai && $pelapor && empty($delId)) {
+            $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
+            $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
         echo json_encode([
             'success' => true,
@@ -336,9 +350,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Aksi: Hapus Riwayat File (Permanen Selamanya)
     if ($action === 'delete_riwayat') {
         $delId = $data['id'] ?? ($_GET['id'] ?? '');
+        $delIds = $data['ids'] ?? [];
         $tgl = $data['tanggal'] ?? ($_GET['tanggal'] ?? null);
+        $tglMulai = $data['tanggalMulai'] ?? ($data['tanggal_mulai'] ?? null);
+        $tglSelesai = $data['tanggalSelesai'] ?? ($data['tanggal_selesai'] ?? null);
         $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
+        $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
+        if ($deleteAll) {
+            $pdo->exec("DELETE FROM riwayat_file");
+        }
+        if (!empty($delIds) && is_array($delIds)) {
+            $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id IN ($inClause)");
+            $stmt->execute($delIds);
+        }
         if ($delId) {
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id = :id");
             $stmt->execute([':id' => $delId]);
@@ -346,6 +372,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($tgl && $pelapor) {
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+        }
+        if ($tglMulai && $tglSelesai && $pelapor) {
+            $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE tanggal_mulai >= :tm AND tanggal_selesai <= :ts AND nama_pelapor = :pelapor");
+            $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
         echo json_encode([
             'success' => true,

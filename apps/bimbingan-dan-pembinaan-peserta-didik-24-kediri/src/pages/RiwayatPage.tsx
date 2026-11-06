@@ -369,7 +369,6 @@ export default function RiwayatPage() {
       // 3. Hapus kegiatan di backend server (zite & cPanel)
       try {
         await deleteKegiatan({
-          id: record.id,
           ids: idsToDelete.length > 0 ? idsToDelete : undefined,
           tanggalMulai: targetTanggalMulai,
           tanggalSelesai: targetTanggalSelesai,
