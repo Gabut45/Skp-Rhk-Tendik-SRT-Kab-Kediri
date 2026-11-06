@@ -292,7 +292,7 @@ h2 { font-size: 12pt; margin: 16px 0 8px; }
 
 <h1>LAPORAN KEGIATAN</h1>
 <p class="doc-title">${esc(rhkInfo.judulLaporan)}</p>
-<p class="doc-title">SEKOLAH RAKYAT TERINTEGRASI KAB KEDIRI JAWA TIMUR</p>
+<p class="doc-title">SEKOLAH RAKYAT TERINTEGRASI KAB KEDIRI</p>
 <p class="doc-title">${esc(dateStr).toUpperCase()}</p>
 
 <h2>A. PENDAHULUAN</h2>

@@ -1,4 +1,3 @@
-// Browser-compatible deleted records store backed by localStorage and memory
 export interface DeletedDateRange {
   tanggalMulai?: string;
   tanggalSelesai?: string;
@@ -6,7 +5,7 @@ export interface DeletedDateRange {
   rhkKategori?: string;
 }
 
-interface DeletedStoreData {
+export interface DeletedStoreData {
   deletedAll: boolean;
   deletedIds: string[];
   deletedRiwayatKeys: string[];
@@ -24,6 +23,8 @@ function getDefaultStore(): DeletedStoreData {
   };
 }
 
+let memoryFallback: DeletedStoreData = getDefaultStore();
+
 function loadStore(): DeletedStoreData {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
@@ -38,41 +39,44 @@ function loadStore(): DeletedStoreData {
         };
       }
     } catch (err) {
-      console.warn('[deleted_store] Gagal membaca deleted_records dari localStorage:', err);
+      console.warn('[deleted_store] Gagal membaca deleted records dari localStorage:', err);
     }
+    return getDefaultStore();
   }
-  return getDefaultStore();
+  return memoryFallback;
 }
 
-let storeMemory: DeletedStoreData = loadStore();
-
-function saveStore(): void {
+function saveStore(data: DeletedStoreData): void {
+  memoryFallback = data;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(storeMemory));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
     } catch (err) {
-      console.warn('[deleted_store] Gagal menyimpan deleted_records ke localStorage:', err);
+      console.warn('[deleted_store] Gagal menyimpan deleted records ke localStorage:', err);
     }
   }
 }
 
 export function isDeletedAll(): boolean {
-  return storeMemory.deletedAll;
+  const store = loadStore();
+  return store.deletedAll;
 }
 
 export function setDeletedAll(value: boolean): void {
-  storeMemory.deletedAll = value;
+  const store = loadStore();
+  store.deletedAll = value;
   if (value) {
-    storeMemory.deletedIds = [];
-    storeMemory.deletedRiwayatKeys = [];
-    storeMemory.deletedRanges = [];
+    store.deletedIds = [];
+    store.deletedRiwayatKeys = [];
+    store.deletedRanges = [];
   }
-  saveStore();
+  saveStore(store);
 }
 
 export function addDeletedIds(ids: string[]): void {
   if (ids.length === 0) return;
-  const set = new Set(storeMemory.deletedIds);
+  const store = loadStore();
+  const set = new Set(store.deletedIds);
   ids.forEach(id => {
     if (id) {
       set.add(String(id));
@@ -83,30 +87,33 @@ export function addDeletedIds(ids: string[]): void {
       }
     }
   });
-  storeMemory.deletedIds = Array.from(set);
-  saveStore();
+  store.deletedIds = Array.from(set);
+  saveStore(store);
 }
 
 export function addDeletedRange(range: DeletedDateRange): void {
   if (!range.tanggalMulai && !range.tanggalSelesai) return;
-  storeMemory.deletedRanges.push(range);
-  saveStore();
+  const store = loadStore();
+  store.deletedRanges.push(range);
+  saveStore(store);
 }
 
 export function addDeletedRiwayatKey(key: string): void {
   if (!key) return;
-  const set = new Set(storeMemory.deletedRiwayatKeys);
+  const store = loadStore();
+  const set = new Set(store.deletedRiwayatKeys);
   set.add(key);
-  storeMemory.deletedRiwayatKeys = Array.from(set);
-  saveStore();
+  store.deletedRiwayatKeys = Array.from(set);
+  saveStore(store);
 }
 
 export function getDeletedStore(): DeletedStoreData {
+  const store = loadStore();
   return {
-    deletedAll: storeMemory.deletedAll,
-    deletedIds: [...storeMemory.deletedIds],
-    deletedRiwayatKeys: [...storeMemory.deletedRiwayatKeys],
-    deletedRanges: [...storeMemory.deletedRanges],
+    deletedAll: store.deletedAll,
+    deletedIds: [...store.deletedIds],
+    deletedRiwayatKeys: [...store.deletedRiwayatKeys],
+    deletedRanges: [...store.deletedRanges],
   };
 }
 
@@ -119,13 +126,14 @@ export function isRecordDeleted(r: {
   rhkKategori?: string;
   rhkNomor?: string;
 }): boolean {
-  if (storeMemory.deletedAll) return true;
+  const store = loadStore();
+  if (store.deletedAll) return true;
 
   const idStr = String(r.id || '');
-  if (idStr && storeMemory.deletedIds.includes(idStr)) return true;
+  if (idStr && store.deletedIds.includes(idStr)) return true;
   if (idStr.startsWith('keg_')) {
     const num = idStr.replace('keg_', '');
-    if (storeMemory.deletedIds.includes(num)) return true;
+    if (store.deletedIds.includes(num)) return true;
   }
 
   const recDate = r.tanggal || r.tanggalMulai;
@@ -135,11 +143,11 @@ export function isRecordDeleted(r: {
   // Check riwayat key
   if (recDate && r.namaPelapor) {
     const rKey = `${recDate}___${r.namaPelapor}`;
-    if (storeMemory.deletedRiwayatKeys.includes(rKey)) return true;
+    if (store.deletedRiwayatKeys.includes(rKey)) return true;
   }
 
   // Check date ranges
-  for (const range of storeMemory.deletedRanges) {
+  for (const range of store.deletedRanges) {
     const rangePelapor = (range.namaPelapor || '').trim().toLowerCase();
     if (rangePelapor && recPelapor && rangePelapor !== recPelapor) {
       continue;

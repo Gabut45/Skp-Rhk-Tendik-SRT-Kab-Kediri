@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, findMatchingPelapor } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -41,29 +41,38 @@ type FileRecord = GetRiwayatOutputType['records'][0];
 export default function LaporanRHKPage() {
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
-
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   const startOfMonth = `${year}-${month}-01`;
   const endOfMonth = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-  const matched = findMatchingPelapor(user);
+  
+  const matchedUserPelapor = user ? (matchPelapor(user.nama) || matchPelapor(user.username)) : undefined;
+  const initialNama = matchedUserPelapor?.nama || (user && user.role === 'wali_asuh' && user.nama ? user.nama : DEFAULT_PELAPOR.nama);
+  const initialNip = matchedUserPelapor?.nip || (user && user.role === 'wali_asuh' && user.nip ? user.nip : DEFAULT_PELAPOR.nip);
 
   const [rhkNomor, setRhkNomor] = useState('1');
   const [tanggalMulai, setTanggalMulai] = useState(startOfMonth);
   const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
-  const [namaPelapor, setNamaPelapor] = useState(matched.nama);
-  const [nip, setNip] = useState(matched.nip);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(matched.nama));
+  const [namaPelapor, setNamaPelapor] = useState(initialNama);
+  const [nip, setNip] = useState(initialNip);
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
 
   useEffect(() => {
     if (user) {
-      const currentMatched = findMatchingPelapor(user);
-      setNamaPelapor(currentMatched.nama);
-      setNip(currentMatched.nip);
-      const saved = getSavedTtd(currentMatched.nama);
-      setTandaTangan(saved);
+      const matched = matchPelapor(user.nama) || matchPelapor(user.username);
+      if (matched) {
+        setNamaPelapor(matched.nama);
+        setNip(matched.nip);
+        const saved = getSavedTtd(matched.nama);
+        setTandaTangan(saved || null);
+      } else if (user.role === 'wali_asuh' && user.nama) {
+        setNamaPelapor(user.nama);
+        if (user.nip) setNip(user.nip);
+        const saved = getSavedTtd(user.nama);
+        setTandaTangan(saved || null);
+      }
     }
   }, [user]);
 
@@ -171,10 +180,7 @@ export default function LaporanRHKPage() {
     }
   };
 
-  const cleanPelapor = (namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
-  const reportFilename = cleanPelapor
-    ? `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}-${cleanPelapor}`
-    : `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}`;
+  const reportFilename = `laporan-rhk${rhkNomor || '1'}-${tanggalMulai}-${tanggalSelesai}`;
 
   const handleDownloadPdf = async () => {
     if (isAppDeletedAll()) {
@@ -236,10 +242,6 @@ export default function LaporanRHKPage() {
    * Menghapus berkas Laporan RHK dan kegiatan terkait secara permanen selamanya
    */
   const handleDeleteRhkRecord = async (record: FileRecord) => {
-    if (!isSuperAdmin) {
-      toast.error('Hanya Super Admin yang diizinkan untuk menghapus berkas laporan');
-      return;
-    }
     try {
       toast.info('Menghapus berkas Laporan RHK dan data terkait secara permanen...');
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
@@ -524,9 +526,11 @@ export default function LaporanRHKPage() {
               Tersinkronisasi langsung dengan Riwayat File & Kegiatan
             </span>
           </CardTitle>
-          <CardDescription>
-            Menghapus berkas di sini akan otomatis menghapus kegiatan dan berkas di Riwayat File serta Daftar Kegiatan.
-          </CardDescription>
+          {isSuperAdmin && (
+            <CardDescription>
+              Menghapus berkas di sini akan otomatis menghapus kegiatan dan berkas di Riwayat File serta Daftar Kegiatan.
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           {loadingRecords ? (
@@ -536,9 +540,11 @@ export default function LaporanRHKPage() {
           ) : rhkRecords.length === 0 ? (
             <div className="text-center py-8 space-y-2">
               <p className="text-sm text-muted-foreground">Belum ada berkas Laporan RHK tersimpan</p>
-              <p className="text-xs text-muted-foreground">
-                Jika Anda telah menghapus berkas di Riwayat File, seluruh berkas di halaman ini otomatis terhapus bersih selamanya.
-              </p>
+              {isSuperAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  Jika Anda telah menghapus berkas di Riwayat File, seluruh berkas di halaman ini otomatis terhapus bersih selamanya.
+                </p>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

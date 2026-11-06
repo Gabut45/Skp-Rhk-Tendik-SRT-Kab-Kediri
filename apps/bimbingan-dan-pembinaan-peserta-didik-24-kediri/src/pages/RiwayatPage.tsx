@@ -14,9 +14,9 @@ import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, 
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
 import { DEFAULT_PELAPOR, getSavedTtd } from '@/lib/pelapor-data';
+import { useAuth } from '@/lib/auth-context';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
-import { useAuth } from '@/lib/auth-context';
 import {
   deleteCpanelBulkKegiatan,
   deleteCpanelRiwayat,
@@ -69,13 +69,10 @@ export default function RiwayatPage() {
   const [filterTanggalMulai, setFilterTanggalMulai] = useState(startOfMonth);
   const [filterTanggalSelesai, setFilterTanggalSelesai] = useState(endOfMonth);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 50;
 
-  // Reset ke halaman 1 ketika filter pencarian diubah
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterPelapor, filterTanggalMulai, filterTanggalSelesai]);
+  // Pagination state (50 berkas per halaman sesuai permintaan)
+  const PAGE_SIZE = 50;
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Edit dialog state
   const [editRecord, setEditRecord] = useState<FileRecord | null>(null);
@@ -173,23 +170,12 @@ export default function RiwayatPage() {
     return isWord ? preview.wordHtml : preview.pdfHtml;
   };
 
-  const getRecordFilename = (r: FileRecord): string => {
-    const sanitize = (name: string) => name.replace(/[/\\:*?"<>|]/g, '').trim();
-    if (r.jenisLaporan === 'Kinerja Harian' || !r.rhkNomor) {
-      const pelapor = r.namaPelapor ? `-${sanitize(r.namaPelapor)}` : '';
-      return `kinerja-harian-${r.tanggalMulai || 'harian'}${pelapor}`;
-    }
-    const rhkNum = (r.rhkNomor || '').replace(/[^0-9]/g, '') || '1';
-    const pelapor = r.namaPelapor ? `-${sanitize(r.namaPelapor)}` : '';
-    return `laporan-rhk${rhkNum}-${r.tanggalMulai || ''}-${r.tanggalSelesai || r.tanggalMulai || ''}${pelapor}`;
-  };
-
   const handleViewPreview = async (r: FileRecord) => {
     try {
       toast.info('Memuat preview laporan...');
       const html = await getRecordHtml(r, false);
       const wordHtml = await getRecordHtml(r, true);
-      const fname = getRecordFilename(r);
+      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       setPreviewState({
         open: true,
         title: r.namaFile || 'Preview Laporan',
@@ -205,7 +191,7 @@ export default function RiwayatPage() {
   const handleDownloadPdfRecord = async (r: FileRecord) => {
     try {
       toast.info('Menyiapkan unduhan PDF...');
-      const fname = getRecordFilename(r);
+      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
 
       // Hanya unduh langsung JIKA r.pdfUrl adalah binary PDF murni data URL
       if (r.pdfUrl && r.pdfUrl.startsWith('data:application/pdf')) {
@@ -233,7 +219,7 @@ export default function RiwayatPage() {
     try {
       toast.info('Menyiapkan unduhan Word (.doc)...');
       const html = await getRecordHtml(r, true);
-      const fname = getRecordFilename(r);
+      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       downloadWordFromHtml(html, `${fname}.doc`);
       toast.success('File Word (.doc) berhasil diunduh!');
     } catch (err: any) {
@@ -336,10 +322,6 @@ export default function RiwayatPage() {
    * baik di penyimpanan lokal (localStorage) maupun di database server (cPanel MySQL & zite)
    */
   const handleDelete = async (record: FileRecord) => {
-    if (!isSuperAdmin) {
-      toast.error('Hanya Super Admin yang diizinkan untuk menghapus data');
-      return;
-    }
     try {
       toast.info('Menghapus data secara permanen dari server dan penyimpanan...');
 
@@ -446,10 +428,6 @@ export default function RiwayatPage() {
    * Menghapus semua berkas riwayat, kegiatan, dan laporan RHK secara bersih menyeluruh
    */
   const handleDeleteAll = async () => {
-    if (!isSuperAdmin) {
-      toast.error('Hanya Super Admin yang diizinkan untuk menghapus data');
-      return;
-    }
     try {
       toast.info('Menghapus SEMUA berkas riwayat dan kegiatan secara permanen...');
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
@@ -522,11 +500,11 @@ export default function RiwayatPage() {
     return sortOrder === 'asc' ? dateA.localeCompare(dateB) : dateB.localeCompare(dateA);
   });
 
-  const totalPages = Math.max(1, Math.ceil(sortedRecords.length / pageSize));
-  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-  const startIndex = (safeCurrentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, sortedRecords.length);
-  const pagedRecords = sortedRecords.slice(startIndex, endIndex);
+  const totalRecords = sortedRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * PAGE_SIZE;
+  const paginatedRecords = sortedRecords.slice(startIndex, startIndex + PAGE_SIZE);
 
   const formatDateTime = (d?: string) => {
     if (!d) return '-';
@@ -661,15 +639,15 @@ export default function RiwayatPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
-            <span>
-              Daftar File ({records.length})
+          <CardTitle className="text-base flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>Daftar File ({totalRecords})</span>
               {totalPages > 1 && (
-                <span className="text-xs font-normal text-muted-foreground ml-2">
-                  (Halaman {safeCurrentPage} dari {totalPages})
-                </span>
+                <Badge variant="outline" className="text-xs text-primary font-medium">
+                  Halaman {validCurrentPage} dari {totalPages}
+                </Badge>
               )}
-            </span>
+            </div>
             <span className="text-xs font-normal text-muted-foreground">
               Klik &quot;Preview&quot;, &quot;PDF&quot;, atau &quot;Word&quot; pada baris manapun untuk mencetak/mengunduh
             </span>
@@ -680,13 +658,13 @@ export default function RiwayatPage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="animate-spin text-muted-foreground" size={24} />
             </div>
-          ) : records.length === 0 ? (
+          ) : totalRecords === 0 ? (
             <div className="text-center py-12 space-y-2">
               <p className="text-muted-foreground">Belum ada file atau kegiatan di rentang tanggal ini</p>
               <p className="text-xs text-muted-foreground">Gunakan tombol &quot;Bulan Ini&quot; atau &quot;Semua Tanggal&quot; untuk menampilkan semua data.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <>
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -709,11 +687,11 @@ export default function RiwayatPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {pagedRecords.map((r, i) => {
+                    {paginatedRecords.map((r, i) => {
                       const rowNumber = startIndex + i + 1;
                       return (
                         <TableRow key={r.id}>
-                          <TableCell className="text-center font-medium">{rowNumber}</TableCell>
+                          <TableCell className="text-center font-mono text-xs">{rowNumber}</TableCell>
                           <TableCell className="max-w-xs">
                             <p className="text-sm font-medium line-clamp-1">{r.namaFile || '-'}</p>
                             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -818,97 +796,93 @@ export default function RiwayatPage() {
                 </Table>
               </div>
 
-              {/* Baris Navigasi Paginasi 50 Data per Halaman */}
-              {sortedRecords.length > 0 && (
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t text-xs text-muted-foreground">
-                  <div>
-                    Menampilkan <span className="font-semibold text-foreground">{startIndex + 1}</span> - <span className="font-semibold text-foreground">{endIndex}</span> dari <span className="font-semibold text-foreground">{sortedRecords.length}</span> file
-                    {totalPages > 1 && (
-                      <span className="ml-1 text-muted-foreground">
-                        (50 data per tab • Halaman {safeCurrentPage} dari {totalPages})
-                      </span>
-                    )}
+              {/* Pagination Controller (50 data per halaman/tab) */}
+              {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t mt-4 text-xs">
+                  <div className="text-muted-foreground">
+                    Menampilkan <span className="font-semibold text-foreground">{startIndex + 1}</span> -{' '}
+                    <span className="font-semibold text-foreground">
+                      {Math.min(startIndex + PAGE_SIZE, totalRecords)}
+                    </span>{' '}
+                    dari <span className="font-semibold text-foreground">{totalRecords}</span> berkas (50 per halaman)
                   </div>
 
-                  {totalPages > 1 && (
-                    <div className="flex items-center gap-1 flex-wrap justify-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(1)}
-                        disabled={safeCurrentPage <= 1}
-                        className="h-8 w-8 p-0"
-                        title="Halaman Pertama"
-                      >
-                        <ChevronsLeft size={14} />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={safeCurrentPage <= 1}
-                        className="h-8 gap-1 px-2.5"
-                        title="Halaman Sebelumnya"
-                      >
-                        <ChevronLeft size={14} />
-                        <span>Sebelumnya</span>
-                      </Button>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={validCurrentPage <= 1}
+                      onClick={() => setCurrentPage(1)}
+                      title="Halaman Pertama"
+                    >
+                      <ChevronsLeft size={14} />
+                      <span className="sr-only sm:not-sr-only sm:ml-1">Awal</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={validCurrentPage <= 1}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      title="Halaman Sebelumnya"
+                    >
+                      <ChevronLeft size={14} />
+                      <span className="sr-only sm:not-sr-only sm:ml-1">Sebelumnya</span>
+                    </Button>
 
-                      <div className="flex items-center gap-1 mx-1">
-                        {Array.from({ length: totalPages }, (_, idx) => idx + 1)
-                          .filter(p => p === 1 || p === totalPages || Math.abs(p - safeCurrentPage) <= 2)
-                          .reduce((acc: (number | string)[], p, idx, arr) => {
-                            if (idx > 0 && p - (arr[idx - 1] as number) > 1) {
-                              acc.push('...');
-                            }
-                            acc.push(p);
-                            return acc;
-                          }, [])
-                          .map((item, idx) =>
-                            item === '...' ? (
-                              <span key={`dots-${idx}`} className="px-1 text-muted-foreground">...</span>
-                            ) : (
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, idx) => idx + 1)
+                        .filter(p => {
+                          return p === 1 || p === totalPages || Math.abs(p - validCurrentPage) <= 2;
+                        })
+                        .map((p, idx, arr) => {
+                          const prevPageNum = arr[idx - 1];
+                          const showEllipsis = prevPageNum && p - prevPageNum > 1;
+                          return (
+                            <span key={p} className="flex items-center">
+                              {showEllipsis && <span className="px-1 text-muted-foreground select-none">...</span>}
                               <Button
-                                key={`page-${item}`}
-                                variant={safeCurrentPage === item ? 'default' : 'outline'}
+                                variant={validCurrentPage === p ? 'default' : 'outline'}
                                 size="sm"
-                                onClick={() => setCurrentPage(item as number)}
-                                className={`h-8 w-8 p-0 text-xs font-semibold ${
-                                  safeCurrentPage === item ? 'pointer-events-none' : ''
+                                className={`h-8 min-w-8 px-2 text-xs font-semibold ${
+                                  validCurrentPage === p ? 'pointer-events-none' : ''
                                 }`}
+                                onClick={() => setCurrentPage(p)}
                               >
-                                {item}
+                                {p}
                               </Button>
-                            )
-                          )}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={safeCurrentPage >= totalPages}
-                        className="h-8 gap-1 px-2.5"
-                        title="Halaman Berikutnya"
-                      >
-                        <span>Berikutnya</span>
-                        <ChevronRight size={14} />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(totalPages)}
-                        disabled={safeCurrentPage >= totalPages}
-                        className="h-8 w-8 p-0"
-                        title="Halaman Terakhir"
-                      >
-                        <ChevronsRight size={14} />
-                      </Button>
+                            </span>
+                          );
+                        })}
                     </div>
-                  )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={validCurrentPage >= totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      title="Halaman Selanjutnya"
+                    >
+                      <span className="sr-only sm:not-sr-only sm:mr-1">Selanjutnya</span>
+                      <ChevronRight size={14} />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      disabled={validCurrentPage >= totalPages}
+                      onClick={() => setCurrentPage(totalPages)}
+                      title="Halaman Terakhir"
+                    >
+                      <span className="sr-only sm:not-sr-only sm:mr-1">Akhir</span>
+                      <ChevronsRight size={14} />
+                    </Button>
+                  </div>
                 </div>
               )}
-            </div>
+            </>
           )}
         </CardContent>
       </Card>

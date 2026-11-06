@@ -8,11 +8,11 @@ import {
   handleGenerateTextServer,
   handleStreamTextServer,
   hasValidGeminiKey,
-} from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/geminiServer.ts';
+} from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/geminiServer';
 import {
   getVocabularyStats,
   saveLearnedVocabularyServer,
-} from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/vocabularyService.ts';
+} from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/vocabularyService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

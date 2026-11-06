@@ -118,7 +118,7 @@
             "name": "Unit Kerja",
             "type": "single_line_text",
             "template": {
-              "defaultValue": "SRMA 24 KEDIRI"
+              "defaultValue": "Sekolah Rakyat Terintegrasi Kab Kediri"
             }
           }
         }

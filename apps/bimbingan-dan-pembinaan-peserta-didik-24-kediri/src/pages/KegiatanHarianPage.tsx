@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, findMatchingPelapor } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
@@ -31,23 +31,34 @@ function getLocalDateString(d: Date = new Date()): string {
 export default function KegiatanHarianPage() {
   const { user } = useAuth();
   const today = getLocalDateString(new Date());
-  const matched = findMatchingPelapor(user);
 
-  const [namaPelapor, setNamaPelapor] = useState(matched.nama);
-  const [nip, setNip] = useState(matched.nip);
+  // Otomatis deteksi wali asuh yang sedang login (misal 'ekowahyudi' -> 'Eko Wahyudi, S.Pd')
+  const matchedUserPelapor = user ? (matchPelapor(user.nama) || matchPelapor(user.username)) : undefined;
+  const initialNama = matchedUserPelapor?.nama || (user && user.role === 'wali_asuh' && user.nama ? user.nama : DEFAULT_PELAPOR.nama);
+  const initialNip = matchedUserPelapor?.nip || (user && user.role === 'wali_asuh' && user.nip ? user.nip : DEFAULT_PELAPOR.nip);
+
+  const [namaPelapor, setNamaPelapor] = useState(initialNama);
+  const [nip, setNip] = useState(initialNip);
   const [tanggal, setTanggal] = useState(today);
-  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(matched.nama));
+  const [tandaTangan, setTandaTangan] = useState<string | null>(() => getSavedTtd(initialNama));
   const [kegiatanList, setKegiatanList] = useState<KegiatanItem[]>(() =>
     Array.from({ length: 4 }, createKegiatan)
   );
 
   useEffect(() => {
     if (user) {
-      const currentMatched = findMatchingPelapor(user);
-      setNamaPelapor(currentMatched.nama);
-      setNip(currentMatched.nip);
-      const saved = getSavedTtd(currentMatched.nama);
-      setTandaTangan(saved);
+      const matched = matchPelapor(user.nama) || matchPelapor(user.username);
+      if (matched) {
+        setNamaPelapor(matched.nama);
+        setNip(matched.nip);
+        const saved = getSavedTtd(matched.nama);
+        setTandaTangan(saved || null);
+      } else if (user.role === 'wali_asuh' && user.nama) {
+        setNamaPelapor(user.nama);
+        if (user.nip) setNip(user.nip);
+        const saved = getSavedTtd(user.nama);
+        setTandaTangan(saved || null);
+      }
     }
   }, [user]);
   const [saving, setSaving] = useState(false);
@@ -204,11 +215,6 @@ export default function KegiatanHarianPage() {
     }
   };
 
-  const getHarianFilename = () => {
-    const cleanPelapor = (namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
-    return cleanPelapor ? `kinerja-harian-${tanggal}-${cleanPelapor}` : `kinerja-harian-${tanggal}`;
-  };
-
   const handleDownloadPdf = async () => {
     const filled = getFilledKegiatan();
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
@@ -226,8 +232,7 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      const fname = getHarianFilename();
-      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${fname}.pdf`);
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
       toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -253,8 +258,7 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      const fname = getHarianFilename();
-      downloadWordFromHtml(result.wordHtml || previewWordHtml, `${fname}.doc`);
+      downloadWordFromHtml(result.wordHtml || previewWordHtml, `kinerja-harian-${tanggal}.doc`);
       toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat Word: ' + (err?.message || 'Error'));
@@ -280,8 +284,7 @@ export default function KegiatanHarianPage() {
           fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
         })),
       });
-      const fname = getHarianFilename();
-      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${fname}.pdf`);
+      await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `kinerja-harian-${tanggal}.pdf`);
       toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -413,7 +416,7 @@ export default function KegiatanHarianPage() {
         onClose={() => setShowPreview(false)}
         pdfHtml={previewPdfHtml}
         wordHtml={previewWordHtml}
-        filename={getHarianFilename()}
+        filename={`kinerja-harian-${tanggal}`}
         onDownloadPdf={handleDownloadPdf}
         onDownloadWord={handleDownloadWord}
         downloadingPdf={downloadingPdf}

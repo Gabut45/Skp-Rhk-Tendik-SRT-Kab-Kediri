@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { PELAPOR_LIST } from './pelapor-data';
+import { PELAPOR_LIST, matchPelapor } from './pelapor-data';
 
 export type UserRole = 'super_admin' | 'wali_asuh';
 
@@ -25,6 +25,20 @@ export interface StoredAccount {
 const STORAGE_USERS_KEY = 'skp_accounts_store_v2';
 const STORAGE_SESSION_KEY = 'skp_current_session_v2';
 
+// Username resmi ramah pengguna untuk tiap wali asuh
+export const DEFAULT_USERNAMES: Record<string, string> = {
+  'A. Zainudin Sholeh, S.A.P.': 'zainudin',
+  'Abisarwan Rafif, S.T': 'abisarwan',
+  'Ahmad Fadkhurriza Ivakhudin, S.Gz': 'ahmad',
+  "Amirul Mu'minin Rofico Putra Kurnia, S.Pd": 'amirul',
+  'Dwi Chusnul Mufid, S.Kom': 'dwichusnul',
+  'Eko Wahyudi, S.Pd': 'ekowahyudi',
+  'Deni Furitrinofi, S.Pd': 'deni',
+  'Muji Santoso, S.Pd': 'mujisantoso',
+  'Nanang Arifin, S.Kom.': 'nanang',
+  'Teguh Cahyono, S.Pd': 'teguh',
+};
+
 // Kredensial default awal sesuai permintaan pengguna
 const INITIAL_SUPERADMIN: StoredAccount = {
   id: 'usr_superadmin_01',
@@ -41,10 +55,7 @@ function generateInitialWaliAsuh(): StoredAccount[] {
   const accounts: StoredAccount[] = [INITIAL_SUPERADMIN];
   
   PELAPOR_LIST.forEach((p, idx) => {
-    // Generate username unik ramah pengguna (contoh: zainudin, abisarwan, dll)
-    const rawFirst = p.nama.split(/[\s,.]+/).filter(Boolean)[0] || `wali${idx + 1}`;
-    const cleanUser = rawFirst.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const username = cleanUser.length >= 3 ? cleanUser : `wali_${idx + 1}`;
+    const username = DEFAULT_USERNAMES[p.nama] || p.nama.split(/[\s,.]+/).filter(Boolean)[0].toLowerCase();
 
     accounts.push({
       id: `usr_wali_${idx + 1}`,
@@ -91,8 +102,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const hasSuper = parsed.some(a => a.role === 'super_admin');
           if (!hasSuper) {
             parsed.unshift(INITIAL_SUPERADMIN);
-            localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(parsed));
           }
+
+          // Sinkronkan seluruh wali asuh resmi ke daftar akun
+          PELAPOR_LIST.forEach((p, idx) => {
+            const desiredUsername = DEFAULT_USERNAMES[p.nama] || p.nama.split(/[\s,.]+/).filter(Boolean)[0].toLowerCase();
+            const exists = parsed.find((a: StoredAccount) =>
+              a.nama.toLowerCase() === p.nama.toLowerCase() ||
+              a.username.toLowerCase() === desiredUsername ||
+              (desiredUsername.includes('wahyudi') && a.username.toLowerCase() === 'eko')
+            );
+            if (!exists) {
+              parsed.push({
+                id: `usr_wali_${idx + 1}`,
+                username: desiredUsername,
+                password: `Wali${idx + 1}#2026`,
+                nama: p.nama,
+                nip: p.nip,
+                role: 'wali_asuh',
+                createdAt: new Date().toISOString(),
+              });
+            } else {
+              exists.nama = p.nama;
+              if (p.nip) exists.nip = p.nip;
+            }
+          });
+
+          localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(parsed));
           return parsed;
         }
       }
@@ -125,15 +161,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const sessionUser = JSON.parse(sessionRaw) as AuthUser;
         // Verifikasi akun masih valid di store
         const accounts = getStoredAccounts();
-        const found = accounts.find(a => a.id === sessionUser.id && a.username === sessionUser.username);
+        const found = accounts.find(a => a.id === sessionUser.id || a.username.toLowerCase() === sessionUser.username.toLowerCase());
         if (found) {
+          const officialPelapor = matchPelapor(found.nama) || matchPelapor(found.username);
           setUser({
             id: found.id,
             username: found.username,
-            nama: found.nama,
-            nip: found.nip,
+            nama: officialPelapor ? officialPelapor.nama : found.nama,
+            nip: officialPelapor ? officialPelapor.nip : found.nip,
             role: found.role,
-            email: `${found.username}@sekolahrakyat.kedirikab.go.id`,
+            email: `${found.username}@srtkabkediri.sch.id`,
           });
         } else {
           localStorage.removeItem(STORAGE_SESSION_KEY);
@@ -150,21 +187,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const trimmedUser = usernameInput.trim();
     const accounts = getStoredAccounts();
 
-    const matched = accounts.find(
-      a => a.username.toLowerCase() === trimmedUser.toLowerCase() && a.password === passwordInput
-    );
+    const matched = accounts.find(a => {
+      if (a.password !== passwordInput) return false;
+      const uLower = trimmedUser.toLowerCase();
+      const aUserLower = a.username.toLowerCase();
+      const aNameLower = a.nama.toLowerCase();
+      const uClean = uLower.replace(/[^a-z0-9]/g, '');
+      const aUserClean = aUserLower.replace(/[^a-z0-9]/g, '');
+      const aNameClean = aNameLower.replace(/[^a-z0-9]/g, '');
+
+      return (
+        aUserLower === uLower ||
+        aNameLower === uLower ||
+        aUserClean === uClean ||
+        aNameClean.includes(uClean) ||
+        uClean.includes(aUserClean)
+      );
+    });
 
     if (!matched) {
       return { success: false, message: 'Username atau Password salah. Silakan periksa kembali.' };
     }
 
+    const officialPelapor = matchPelapor(matched.nama) || matchPelapor(matched.username);
+    const resolvedNama = officialPelapor ? officialPelapor.nama : matched.nama;
+    const resolvedNip = officialPelapor ? officialPelapor.nip : matched.nip;
+
     const authUser: AuthUser = {
       id: matched.id,
       username: matched.username,
-      nama: matched.nama,
-      nip: matched.nip,
+      nama: resolvedNama,
+      nip: resolvedNip,
       role: matched.role,
-      email: `${matched.username}@sekolahrakyat.kedirikab.go.id`,
+      email: `${matched.username}@srtkabkediri.sch.id`,
     };
 
     setUser(authUser);
@@ -176,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return {
       success: true,
-      message: matched.role === 'super_admin' ? 'Selamat datang Super Admin SKP' : `Selamat datang, ${matched.nama}`,
+      message: matched.role === 'super_admin' ? 'Selamat datang Super Admin SKP' : `Selamat datang, ${resolvedNama}`,
     };
   };
 

@@ -43,7 +43,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-white">
-              SR TERINTEGRASI 1 KEDIRI
+              SEKOLAH RAKYAT TERINTEGRASI KAB KEDIRI
             </h1>
             <p className="text-xs text-indigo-200/80">
               Sistem Pelaporan Kinerja Harian & Bimbingan Peserta Didik

@@ -194,11 +194,9 @@ export default function KegiatanForm({ index, item, onChange, onRemove, canRemov
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <Label>Foto Dokumen / Kegiatan</Label>
-              <span className="text-xs text-muted-foreground font-normal">({item.photos.length}/100)</span>
-            </div>
+          <div className="flex items-center gap-1.5">
+            <Label>Foto Dokumen / Kegiatan</Label>
+            <span className="text-xs text-muted-foreground font-normal">({item.photos.length}/100)</span>
           </div>
 
           <input
