@@ -172,12 +172,24 @@ export default function RiwayatPage() {
     return isWord ? preview.wordHtml : preview.pdfHtml;
   };
 
+  const getRecordFilename = (r: FileRecord, ext?: 'pdf' | 'doc') => {
+    if (r.jenisLaporan === 'Kinerja Harian' && r.tanggalMulai) {
+      const safePelapor = (r.namaPelapor || '').replace(/[/\\:*?"<>|]/g, '').trim();
+      const base = safePelapor
+        ? `kinerja-harian-${r.tanggalMulai}-${safePelapor}`
+        : `kinerja-harian-${r.tanggalMulai}`;
+      return ext ? `${base}.${ext}` : base;
+    }
+    const base = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    return ext ? `${base}.${ext}` : base;
+  };
+
   const handleViewPreview = async (r: FileRecord) => {
     try {
       toast.info('Memuat preview laporan...');
       const html = await getRecordHtml(r, false);
       const wordHtml = await getRecordHtml(r, true);
-      const fname = (r.namaFile || 'laporan').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const fname = getRecordFilename(r);
       setPreviewState({
         open: true,
         title: r.namaFile || 'Preview Laporan',
@@ -193,13 +205,13 @@ export default function RiwayatPage() {
   const handleDownloadPdfRecord = async (r: FileRecord) => {
     try {
       toast.info('Menyiapkan unduhan PDF...');
-      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const fnamePdf = getRecordFilename(r, 'pdf');
 
       // Hanya unduh langsung JIKA r.pdfUrl adalah binary PDF murni data URL
       if (r.pdfUrl && r.pdfUrl.startsWith('data:application/pdf')) {
         const a = document.createElement('a');
         a.href = r.pdfUrl;
-        a.download = `${fname}.pdf`;
+        a.download = fnamePdf;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -210,7 +222,7 @@ export default function RiwayatPage() {
       // Ambil HTML laporan lengkap
       const html = await getRecordHtml(r, false);
       // Konversi HTML ke file PDF biner asli
-      await downloadPdfFromHtml(html, `${fname}.pdf`);
+      await downloadPdfFromHtml(html, fnamePdf);
       toast.success('File PDF berhasil diunduh!');
     } catch (err: any) {
       toast.error('Gagal mengunduh PDF: ' + (err?.message || 'Error'));
@@ -221,8 +233,8 @@ export default function RiwayatPage() {
     try {
       toast.info('Menyiapkan unduhan Word (.doc)...');
       const html = await getRecordHtml(r, true);
-      const fname = (r.namaFile || `laporan-${r.tanggalMulai || 'harian'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-      downloadWordFromHtml(html, `${fname}.doc`);
+      const fnameDoc = getRecordFilename(r, 'doc');
+      downloadWordFromHtml(html, fnameDoc);
       toast.success('File Word (.doc) berhasil diunduh!');
     } catch (err: any) {
       toast.error('Gagal mengunduh Word: ' + (err?.message || 'Error'));
