@@ -24,6 +24,8 @@ export default function KelolaPenggunaPage() {
     createWaliAsuh,
     updateWaliAsuh,
     deleteWaliAsuh,
+    syncRemoteAccounts,
+    isSyncingRemote,
   } = useAuth();
 
   const accounts = getAccountsList();
@@ -45,6 +47,8 @@ export default function KelolaPenggunaPage() {
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [showDialogPass, setShowDialogPass] = useState(false);
+  const [savingWali, setSavingWali] = useState(false);
+  const [loadingSyncAccounts, setLoadingSyncAccounts] = useState(false);
 
   // State untuk Preset Tanda Tangan Wali Asuh (Database Server)
   const [serverPresets, setServerPresets] = useState<Record<string, string>>(() => getServerPresetMap());
@@ -57,6 +61,7 @@ export default function KelolaPenggunaPage() {
 
   // State untuk hapus akun
   const [deleteTarget, setDeleteTarget] = useState<StoredAccount | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // State filter pencarian
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,7 +79,7 @@ export default function KelolaPenggunaPage() {
   };
 
   // Simpan perubahan kredensial Super Admin
-  const handleSaveSuperAdmin = (e: React.FormEvent) => {
+  const handleSaveSuperAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminUsername.trim()) {
       toast.error('Username Super Admin tidak boleh kosong');
@@ -82,14 +87,18 @@ export default function KelolaPenggunaPage() {
     }
 
     setSavingAdmin(true);
-    const res = updateSuperAdminCredentials(adminUsername, adminPassword || undefined, adminNama);
-    setSavingAdmin(false);
-
-    if (res.success) {
-      toast.success(res.message);
-      setAdminPassword('');
-    } else {
-      toast.error(res.message);
+    try {
+      const res = await updateSuperAdminCredentials(adminUsername, adminPassword || undefined, adminNama);
+      if (res.success) {
+        toast.success(res.message);
+        setAdminPassword('');
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal menyimpan kredensial Super Admin');
+    } finally {
+      setSavingAdmin(false);
     }
   };
 
@@ -131,54 +140,81 @@ export default function KelolaPenggunaPage() {
   };
 
   // Simpan akun Wali Asuh (tambah atau edit)
-  const handleSaveWaliAsuh = (e: React.FormEvent) => {
+  const handleSaveWaliAsuh = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formNama.trim() || !formUsername.trim() || !formPassword.trim()) {
       toast.error('Nama, Username, dan Password wajib diisi');
       return;
     }
 
-    if (editingWaliId) {
-      // Mode Edit
-      const res = updateWaliAsuh(editingWaliId, {
-        nama: formNama,
-        nip: formNip,
-        username: formUsername,
-        password: formPassword,
-      });
-      if (res.success) {
-        toast.success(res.message);
-        setWaliDialogOpen(false);
+    setSavingWali(true);
+    try {
+      if (editingWaliId) {
+        // Mode Edit
+        const res = await updateWaliAsuh(editingWaliId, {
+          nama: formNama,
+          nip: formNip,
+          username: formUsername,
+          password: formPassword,
+        });
+        if (res.success) {
+          toast.success(res.message);
+          setWaliDialogOpen(false);
+        } else {
+          toast.error(res.message);
+        }
       } else {
-        toast.error(res.message);
+        // Mode Tambah
+        const res = await createWaliAsuh({
+          nama: formNama,
+          nip: formNip,
+          username: formUsername,
+          password: formPassword,
+        });
+        if (res.success) {
+          toast.success(res.message);
+          setWaliDialogOpen(false);
+        } else {
+          toast.error(res.message);
+        }
       }
-    } else {
-      // Mode Tambah
-      const res = createWaliAsuh({
-        nama: formNama,
-        nip: formNip,
-        username: formUsername,
-        password: formPassword,
-      });
-      if (res.success) {
-        toast.success(res.message);
-        setWaliDialogOpen(false);
-      } else {
-        toast.error(res.message);
-      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal menyimpan akun Wali Asuh');
+    } finally {
+      setSavingWali(false);
     }
   };
 
   // Konfirmasi hapus akun
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    const res = deleteWaliAsuh(deleteTarget.id);
-    if (res.success) {
-      toast.success(res.message);
-    } else {
-      toast.error(res.message);
+    setDeletingAccount(true);
+    try {
+      const res = await deleteWaliAsuh(deleteTarget.id);
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal menghapus akun');
+    } finally {
+      setDeletingAccount(false);
+      setDeleteTarget(null);
     }
-    setDeleteTarget(null);
+  };
+
+  // Manual trigger sinkronisasi akun dengan database cPanel
+  const handleManualSyncAccounts = async () => {
+    setLoadingSyncAccounts(true);
+    try {
+      const synced = await syncRemoteAccounts();
+      toast.success(`Berhasil menyinkronkan ${synced.length} akun pengguna dengan server database cPanel!`);
+    } catch {
+      toast.error('Gagal menyinkronkan akun dengan server database');
+    } finally {
+      setLoadingSyncAccounts(false);
+    }
   };
 
   // Sinkronkan preset tanda tangan dari MySQL server saat halaman dibuka
@@ -457,7 +493,7 @@ export default function KelolaPenggunaPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <div className="relative w-64">
+              <div className="relative w-56 sm:w-64">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQuery}
@@ -466,6 +502,17 @@ export default function KelolaPenggunaPage() {
                   className="h-8 pl-8 text-xs"
                 />
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualSyncAccounts}
+                disabled={loadingSyncAccounts || isSyncingRemote}
+                className="h-8 gap-1.5 text-xs border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100"
+                title="Sinkronkan Akun Pengguna dengan Database Server MySQL"
+              >
+                <RefreshCw size={13} className={loadingSyncAccounts || isSyncingRemote ? 'animate-spin' : ''} />
+                <span>{loadingSyncAccounts || isSyncingRemote ? 'Sinkron...' : 'Sinkron Server'}</span>
+              </Button>
               <Button onClick={handleOpenAddDialog} size="sm" className="h-8 gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
                 <UserPlus size={14} />
                 Tambah Akun

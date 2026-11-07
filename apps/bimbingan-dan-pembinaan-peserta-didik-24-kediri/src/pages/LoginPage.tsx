@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) {
       toast.error('Mohon isi username dan password');
@@ -22,15 +22,18 @@ export default function LoginPage() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      const res = login(username, password);
-      setLoading(false);
+    try {
+      const res = await login(username, password);
       if (res.success) {
         toast.success(res.message);
       } else {
         toast.error(res.message);
       }
-    }, 250);
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal masuk ke aplikasi');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

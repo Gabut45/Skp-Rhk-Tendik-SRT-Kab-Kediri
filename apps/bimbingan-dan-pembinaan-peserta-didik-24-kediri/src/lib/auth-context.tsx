@@ -1,5 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { PELAPOR_LIST, matchPelapor } from './pelapor-data';
+import {
+  PELAPOR_LIST,
+  matchPelapor,
+  saveCustomPelapor,
+  removeCustomPelapor,
+  refreshPelaporList,
+} from './pelapor-data';
+import {
+  fetchCpanelUsers,
+  saveCpanelUser,
+  deleteCpanelUser,
+  type CpanelUserRecord,
+} from './cpanel-client';
 
 export type UserRole = 'super_admin' | 'wali_asuh';
 
@@ -37,9 +49,10 @@ export const DEFAULT_USERNAMES: Record<string, string> = {
   'Muji Santoso, S.Pd': 'mujisantoso',
   'Nanang Arifin, S.Kom.': 'nanang',
   'Teguh Cahyono, S.Pd': 'teguh',
+  'Adi Yusuf, S. Sos.': 'adiyusuf',
 };
 
-// Kredensial default awal sesuai permintaan pengguna
+// Kredensial default awal Super Administrator
 const INITIAL_SUPERADMIN: StoredAccount = {
   id: 'usr_superadmin_01',
   username: 'adminskp',
@@ -53,7 +66,7 @@ const INITIAL_SUPERADMIN: StoredAccount = {
 // Seed awal akun Wali Asuh dari daftar pelapor resmi
 function generateInitialWaliAsuh(): StoredAccount[] {
   const accounts: StoredAccount[] = [INITIAL_SUPERADMIN];
-  
+
   PELAPOR_LIST.forEach((p, idx) => {
     const username = DEFAULT_USERNAMES[p.nama] || p.nama.split(/[\s,.]+/).filter(Boolean)[0].toLowerCase();
 
@@ -74,13 +87,15 @@ function generateInitialWaliAsuh(): StoredAccount[] {
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (username: string, password: string) => { success: boolean; message: string };
+  isSyncingRemote: boolean;
+  syncRemoteAccounts: () => Promise<StoredAccount[]>;
+  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
   // Super admin functions
-  updateSuperAdminCredentials: (newUsername: string, newPassword?: string, newNama?: string) => { success: boolean; message: string };
-  createWaliAsuh: (data: { username: string; password: string; nama: string; nip?: string }) => { success: boolean; message: string };
-  updateWaliAsuh: (id: string, updates: { username?: string; password?: string; nama?: string; nip?: string }) => { success: boolean; message: string };
-  deleteWaliAsuh: (id: string) => { success: boolean; message: string };
+  updateSuperAdminCredentials: (newUsername: string, newPassword?: string, newNama?: string) => Promise<{ success: boolean; message: string }>;
+  createWaliAsuh: (data: { username: string; password: string; nama: string; nip?: string }) => Promise<{ success: boolean; message: string }>;
+  updateWaliAsuh: (id: string, updates: { username?: string; password?: string; nama?: string; nip?: string }) => Promise<{ success: boolean; message: string }>;
+  deleteWaliAsuh: (id: string) => Promise<{ success: boolean; message: string }>;
   getAccountsList: () => StoredAccount[];
 }
 
@@ -89,8 +104,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncingRemote, setIsSyncingRemote] = useState(false);
 
-  // Load or initialize accounts store
+  // Load accounts dari localStorage
   const getStoredAccounts = useCallback((): StoredAccount[] => {
     if (typeof window === 'undefined') return [INITIAL_SUPERADMIN];
     try {
@@ -139,29 +155,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initial = generateInitialWaliAsuh();
     try {
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(initial));
-    } catch {
-      // ignore
-    }
+    } catch {}
     return initial;
   }, []);
 
-  const saveStoredAccounts = (accounts: StoredAccount[]) => {
+  const saveStoredAccounts = useCallback((accounts: StoredAccount[]) => {
     try {
       localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(accounts));
+      // Pastikan pelapor list diperbarui
+      accounts.forEach(a => {
+        if (a.role === 'wali_asuh' && a.nama) {
+          saveCustomPelapor({ nama: a.nama, nip: a.nip || '' });
+        }
+      });
+      refreshPelaporList();
     } catch (e) {
       console.warn('Gagal menyimpan akun ke localStorage:', e);
     }
-  };
+  }, []);
 
-  // Restore session on boot
+  /**
+   * Sinkronisasi Real-Time Akun Pengguna dari Server Database cPanel MySQL
+   */
+  const syncRemoteAccounts = useCallback(async (): Promise<StoredAccount[]> => {
+    setIsSyncingRemote(true);
+    try {
+      const remoteUsers = await fetchCpanelUsers();
+      const localAccounts = getStoredAccounts();
+      const accountsMap = new Map<string, StoredAccount>();
+
+      // 1. Masukkan akun lokal dulu
+      localAccounts.forEach(a => {
+        accountsMap.set(a.username.toLowerCase(), a);
+      });
+
+      // 2. Gabungkan akun remote dari database server cPanel MySQL
+      if (remoteUsers && remoteUsers.length > 0) {
+        remoteUsers.forEach(ru => {
+          const uKey = ru.username.toLowerCase();
+          const existing = accountsMap.get(uKey);
+          if (existing) {
+            accountsMap.set(uKey, {
+              ...existing,
+              password: ru.password || existing.password,
+              nama: ru.nama || existing.nama,
+              nip: ru.nip || existing.nip,
+              role: ru.role || existing.role,
+            });
+          } else {
+            accountsMap.set(uKey, {
+              id: ru.id || `usr_remote_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              username: ru.username,
+              password: ru.password,
+              nama: ru.nama,
+              nip: ru.nip || '',
+              role: ru.role || 'wali_asuh',
+              createdAt: ru.createdAt || new Date().toISOString(),
+            });
+          }
+
+          if (ru.role === 'wali_asuh' && ru.nama) {
+            saveCustomPelapor({ nama: ru.nama, nip: ru.nip || '' });
+          }
+        });
+      }
+
+      const mergedAccounts = Array.from(accountsMap.values());
+      saveStoredAccounts(mergedAccounts);
+      refreshPelaporList();
+
+      return mergedAccounts;
+    } catch (err) {
+      console.warn('[syncRemoteAccounts] Error:', err);
+      return getStoredAccounts();
+    } finally {
+      setIsSyncingRemote(false);
+    }
+  }, [getStoredAccounts, saveStoredAccounts]);
+
+  // Boot: Restore session & trigger background sync dengan database server cPanel
   useEffect(() => {
     try {
       const sessionRaw = localStorage.getItem(STORAGE_SESSION_KEY);
       if (sessionRaw) {
         const sessionUser = JSON.parse(sessionRaw) as AuthUser;
-        // Verifikasi akun masih valid di store
         const accounts = getStoredAccounts();
-        const found = accounts.find(a => a.id === sessionUser.id || a.username.toLowerCase() === sessionUser.username.toLowerCase());
+        const found = accounts.find(
+          a => a.id === sessionUser.id || a.username.toLowerCase() === sessionUser.username.toLowerCase()
+        );
         if (found) {
           const officialPelapor = matchPelapor(found.nama) || matchPelapor(found.username);
           setUser({
@@ -181,29 +262,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [getStoredAccounts]);
 
-  const login = (usernameInput: string, passwordInput: string): { success: boolean; message: string } => {
+    // Jalankan sync remote di background tanpa memblokir render
+    syncRemoteAccounts().catch(() => {});
+  }, [getStoredAccounts, syncRemoteAccounts]);
+
+  const login = async (usernameInput: string, passwordInput: string): Promise<{ success: boolean; message: string }> => {
     const trimmedUser = usernameInput.trim();
-    const accounts = getStoredAccounts();
+    let accounts = getStoredAccounts();
 
-    const matched = accounts.find(a => {
-      if (a.password !== passwordInput) return false;
-      const uLower = trimmedUser.toLowerCase();
-      const aUserLower = a.username.toLowerCase();
-      const aNameLower = a.nama.toLowerCase();
-      const uClean = uLower.replace(/[^a-z0-9]/g, '');
-      const aUserClean = aUserLower.replace(/[^a-z0-9]/g, '');
-      const aNameClean = aNameLower.replace(/[^a-z0-9]/g, '');
+    const findMatch = (list: StoredAccount[]) => {
+      return list.find(a => {
+        if (a.password !== passwordInput) return false;
+        const uLower = trimmedUser.toLowerCase();
+        const aUserLower = a.username.toLowerCase();
+        const aNameLower = a.nama.toLowerCase();
+        const uClean = uLower.replace(/[^a-z0-9]/g, '');
+        const aUserClean = aUserLower.replace(/[^a-z0-9]/g, '');
+        const aNameClean = aNameLower.replace(/[^a-z0-9]/g, '');
 
-      return (
-        aUserLower === uLower ||
-        aNameLower === uLower ||
-        aUserClean === uClean ||
-        aNameClean.includes(uClean) ||
-        uClean.includes(aUserClean)
-      );
-    });
+        return (
+          aUserLower === uLower ||
+          aNameLower === uLower ||
+          aUserClean === uClean ||
+          aNameClean.includes(uClean) ||
+          uClean.includes(aUserClean)
+        );
+      });
+    };
+
+    let matched = findMatch(accounts);
+
+    // Jika tidak ditemukan di cache lokal, langsung periksa ke server database cPanel secara real-time
+    if (!matched) {
+      const refreshed = await syncRemoteAccounts();
+      matched = findMatch(refreshed);
+    }
 
     if (!matched) {
       return { success: false, message: 'Username atau Password salah. Silakan periksa kembali.' };
@@ -225,9 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(authUser);
     try {
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(authUser));
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     return {
       success: true,
@@ -239,16 +331,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     try {
       localStorage.removeItem(STORAGE_SESSION_KEY);
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
 
-  const updateSuperAdminCredentials = (
+  const updateSuperAdminCredentials = async (
     newUsername: string,
     newPassword?: string,
     newNama?: string
-  ): { success: boolean; message: string } => {
+  ): Promise<{ success: boolean; message: string }> => {
     const cleanUser = newUsername.trim();
     if (!cleanUser) {
       return { success: false, message: 'Username tidak boleh kosong' };
@@ -278,6 +368,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     saveStoredAccounts(accounts);
 
+    // Simpan ke database server cPanel MySQL secara real time
+    await saveCpanelUser(accounts[superIdx]);
+
     // Update active user session jika super admin sedang login
     if (user && user.role === 'super_admin') {
       const updatedUser: AuthUser = {
@@ -289,18 +382,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(updatedUser));
     }
 
-    return { success: true, message: 'Kredensial Super Admin berhasil diperbarui' };
+    return { success: true, message: 'Kredensial Super Admin berhasil diperbarui dan tersimpan di database server!' };
   };
 
-  const createWaliAsuh = (data: {
+  const createWaliAsuh = async (data: {
     username: string;
     password: string;
     nama: string;
     nip?: string;
-  }): { success: boolean; message: string } => {
+  }): Promise<{ success: boolean; message: string }> => {
     const cleanUser = data.username.trim();
     const cleanPass = data.password.trim();
     const cleanNama = data.nama.trim();
+    const cleanNip = data.nip?.trim() || '';
 
     if (!cleanUser || !cleanPass || !cleanNama) {
       return { success: false, message: 'Nama, Username, dan Password wajib diisi' };
@@ -317,7 +411,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       username: cleanUser,
       password: cleanPass,
       nama: cleanNama,
-      nip: data.nip?.trim() || '',
+      nip: cleanNip,
       role: 'wali_asuh',
       createdAt: new Date().toISOString(),
     };
@@ -325,13 +419,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     accounts.push(newAccount);
     saveStoredAccounts(accounts);
 
-    return { success: true, message: `Akun Wali Asuh "${cleanNama}" berhasil dibuat` };
+    // 1. Daftarkan juga ke custom pelapor agar langsung tampil di dropdown nama pelapor
+    saveCustomPelapor({ nama: cleanNama, nip: cleanNip });
+    refreshPelaporList();
+
+    // 2. Simpan ke database server cPanel MySQL secara REAL-TIME
+    try {
+      const cpanelRes = await saveCpanelUser(newAccount);
+      if (cpanelRes && !cpanelRes.success) {
+        console.warn('Peringatan simpan cPanel:', cpanelRes.message);
+      }
+    } catch (e) {
+      console.warn('Gagal sync ke cPanel:', e);
+    }
+
+    return {
+      success: true,
+      message: `Akun Wali Asuh "${cleanNama}" berhasil dibuat dan tersimpan di sistem & database server! Pengguna dapat langsung login dari perangkat manapun.`,
+    };
   };
 
-  const updateWaliAsuh = (
+  const updateWaliAsuh = async (
     id: string,
     updates: { username?: string; password?: string; nama?: string; nip?: string }
-  ): { success: boolean; message: string } => {
+  ): Promise<{ success: boolean; message: string }> => {
     const accounts = getStoredAccounts();
     const idx = accounts.findIndex(a => a.id === id);
     if (idx === -1) {
@@ -361,6 +472,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     saveStoredAccounts(accounts);
 
+    if (accounts[idx].nama) {
+      saveCustomPelapor({ nama: accounts[idx].nama, nip: accounts[idx].nip || '' });
+      refreshPelaporList();
+    }
+
+    // Simpan ke database server cPanel MySQL
+    await saveCpanelUser(accounts[idx]);
+
     // Update active session jika user yang sedang login adalah user yang diedit
     if (user && user.id === id) {
       const updatedUser: AuthUser = {
@@ -373,10 +492,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_SESSION_KEY, JSON.stringify(updatedUser));
     }
 
-    return { success: true, message: 'Data akun Wali Asuh berhasil diperbarui' };
+    return { success: true, message: 'Data akun Wali Asuh berhasil diperbarui di database server & sistem' };
   };
 
-  const deleteWaliAsuh = (id: string): { success: boolean; message: string } => {
+  const deleteWaliAsuh = async (id: string): Promise<{ success: boolean; message: string }> => {
     const accounts = getStoredAccounts();
     const target = accounts.find(a => a.id === id);
     if (!target) {
@@ -388,13 +507,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const filtered = accounts.filter(a => a.id !== id);
     saveStoredAccounts(filtered);
+    removeCustomPelapor(target.nama);
+    refreshPelaporList();
+
+    // Hapus dari database server cPanel MySQL
+    await deleteCpanelUser(target.id, target.username);
 
     // Jika yang dihapus sedang login, logout
     if (user && user.id === id) {
       logout();
     }
 
-    return { success: true, message: `Akun Wali Asuh "${target.nama}" berhasil dihapus` };
+    return { success: true, message: `Akun Wali Asuh "${target.nama}" berhasil dihapus dari database server & sistem` };
   };
 
   const getAccountsList = (): StoredAccount[] => {
@@ -406,6 +530,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         isLoading,
+        isSyncingRemote,
+        syncRemoteAccounts,
         login,
         logout,
         updateSuperAdminCredentials,

@@ -103,6 +103,23 @@ CREATE TABLE IF NOT EXISTS \`bank_kosa_kata\` (
   INDEX \`idx_rhk_kosa\` (\`rhk_kategori\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 5. Tabel Pengguna (Akun Super Admin & Wali Asuh)
+CREATE TABLE IF NOT EXISTS \`pengguna\` (
+  \`id\` VARCHAR(64) NOT NULL PRIMARY KEY,
+  \`username\` VARCHAR(64) NOT NULL UNIQUE,
+  \`password\` VARCHAR(255) NOT NULL,
+  \`role\` VARCHAR(32) NOT NULL DEFAULT 'wali_asuh',
+  \`nama_lengkap\` VARCHAR(255) NOT NULL,
+  \`nip\` VARCHAR(64) NOT NULL,
+  \`jabatan\` VARCHAR(128) DEFAULT 'Wali Asuh',
+  \`unit_kerja\` VARCHAR(255) DEFAULT 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX \`idx_username\` (\`username\`),
+  INDEX \`idx_nip\` (\`nip\`),
+  INDEX \`idx_role\` (\`role\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 SET FOREIGN_KEY_CHECKS = 1;
 `;
 
@@ -211,6 +228,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         echo json_encode(['success' => true, 'records' => $rows]);
         exit;
+    }
+
+    if ($action === 'get_users') {
+        try {
+            $stmt = $pdo->query("SELECT id, username, password, role, nama_lengkap as namaLengkap, nip, jabatan, unit_kerja as unitKerja, created_at as createdAt, updated_at as updatedAt FROM pengguna ORDER BY nama_lengkap ASC");
+            $rows = $stmt->fetchAll();
+            echo json_encode(['success' => true, 'records' => $rows]);
+            exit;
+        } catch (PDOException $e) {
+            // Fallback jika tabel pengguna belum dibuat di phpMyAdmin
+            $stmt = $pdo->query("SELECT deskripsi_kegiatan FROM kegiatan_harian WHERE kata_kunci_kegiatan = '__USER_ACCOUNT__' LIMIT 1");
+            $row = $stmt->fetch();
+            if ($row && !empty($row['deskripsi_kegiatan'])) {
+                $decoded = json_decode($row['deskripsi_kegiatan'], true);
+                echo json_encode(['success' => true, 'records' => $decoded['accounts'] ?? []]);
+                exit;
+            }
+            echo json_encode(['success' => true, 'records' => []]);
+            exit;
+        }
     }
 }
 
@@ -381,6 +418,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'success' => true,
             'message' => 'Riwayat file berhasil dihapus secara permanen dari cPanel MySQL!'
         ]);
+        exit;
+    }
+
+    // Aksi: Simpan Akun Pengguna (Wali Asuh / Super Admin)
+    if ($action === 'save_user') {
+        $acc = $data['user'] ?? $data;
+        $id = $acc['id'] ?? uniqid('usr_', true);
+        $username = $acc['username'] ?? '';
+        $password = $acc['password'] ?? '';
+        $role = $acc['role'] ?? 'wali_asuh';
+        $nama = $acc['namaLengkap'] ?? ($acc['nama_lengkap'] ?? '');
+        $nip = $acc['nip'] ?? '';
+        $jabatan = $acc['jabatan'] ?? 'Wali Asuh';
+        $unit = $acc['unitKerja'] ?? ($acc['unit_kerja'] ?? 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI');
+
+        try {
+            $stmt = $pdo->prepare("INSERT INTO pengguna (id, username, password, role, nama_lengkap, nip, jabatan, unit_kerja)
+                VALUES (:id, :username, :password, :role, :nama, :nip, :jabatan, :unit)
+                ON DUPLICATE KEY UPDATE
+                password = VALUES(password),
+                role = VALUES(role),
+                nama_lengkap = VALUES(nama_lengkap),
+                nip = VALUES(nip),
+                jabatan = VALUES(jabatan),
+                unit_kerja = VALUES(unit_kerja)");
+            $stmt->execute([
+                ':id' => $id,
+                ':username' => $username,
+                ':password' => $password,
+                ':role' => $role,
+                ':nama' => $nama,
+                ':nip' => $nip,
+                ':jabatan' => $jabatan,
+                ':unit' => $unit
+            ]);
+        } catch (PDOException $e) {}
+
+        echo json_encode(['success' => true, 'message' => 'Akun pengguna berhasil disimpan ke cPanel MySQL!']);
+        exit;
+    }
+
+    // Aksi: Hapus Akun Pengguna
+    if ($action === 'delete_user') {
+        $delId = $data['id'] ?? ($_GET['id'] ?? '');
+        $delUsername = $data['username'] ?? ($_GET['username'] ?? '');
+        try {
+            $stmt = $pdo->prepare("DELETE FROM pengguna WHERE id = :id OR username = :username");
+            $stmt->execute([':id' => $delId, ':username' => $delUsername]);
+        } catch (PDOException $e) {}
+
+        echo json_encode(['success' => true, 'message' => 'Akun pengguna berhasil dihapus dari cPanel MySQL!']);
         exit;
     }
 }

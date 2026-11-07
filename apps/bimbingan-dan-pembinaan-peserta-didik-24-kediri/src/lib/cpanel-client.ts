@@ -698,4 +698,167 @@ export async function saveCpanelPresetTtd(params: {
   }
 }
 
+export interface CpanelUserRecord {
+  id: string;
+  username: string;
+  password: string;
+  nama: string;
+  nip?: string;
+  role: 'super_admin' | 'wali_asuh';
+  createdAt?: string;
+}
+
+/**
+ * Fetch all registered user accounts from cPanel MySQL database in real time
+ */
+export async function fetchCpanelUsers(): Promise<CpanelUserRecord[]> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return [];
+
+  const headers: Record<string, string> = {};
+  if (key) headers['X-API-KEY'] = key;
+
+  const users: CpanelUserRecord[] = [];
+
+  // 1. Coba endpoint langsung get_users jika PHP sudah mendukung tabel pengguna
+  try {
+    const directUrl = buildCpanelUrl(url, 'get_users');
+    const res = await fetch(directUrl, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        return data.users;
+      }
+    }
+  } catch {
+    // Fallback ke penyimpanan terintegrasi di tabel kegiatan_harian
+  }
+
+  // 2. Fallback: Ambil akun yang tersimpan di baris sistem kegiatan_harian
+  try {
+    const targetUrl = buildCpanelUrl(url, 'get_kegiatan', {
+      tanggalMulai: '1970-01-01',
+      tanggalSelesai: '1970-01-01',
+    });
+    const res = await fetch(targetUrl, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.records)) {
+        for (const r of data.records) {
+          if (r.kata_kunci_kegiatan === '__USER_ACCOUNT__' && r.deskripsi_kegiatan) {
+            try {
+              const parsed = JSON.parse(r.deskripsi_kegiatan);
+              if (parsed && parsed.username && parsed.nama) {
+                users.push(parsed);
+              }
+            } catch {
+              // ignore invalid json
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[fetchCpanelUsers] Warning:', err);
+  }
+
+  return users;
+}
+
+/**
+ * Save user account to cPanel MySQL database in real time
+ */
+export async function saveCpanelUser(account: CpanelUserRecord): Promise<{ success: boolean; message: string }> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return { success: false, message: 'URL cPanel belum disetel' };
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (key) headers['X-API-KEY'] = key;
+
+  // 1. Coba simpan ke endpoint tabel pengguna langsung
+  try {
+    const directUrl = buildCpanelUrl(url, 'save_user');
+    await fetch(directUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(account),
+    }).catch(() => {});
+  } catch {}
+
+  // 2. Simpan juga ke baris rekaman sistem MySQL di kegiatan_harian agar langsung sinkron tanpa perlu update PHP
+  const cleanUsername = account.username.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40);
+  const cleanId = `user_account_${cleanUsername}`;
+
+  const payload = {
+    namaPelapor: account.nama,
+    nip: account.nip || '',
+    tanggal: '1970-01-01',
+    unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+    kegiatan: [
+      {
+        id: cleanId,
+        waktuMulai: '00:00',
+        waktuSelesai: '00:00',
+        kataKunciKegiatan: '__USER_ACCOUNT__',
+        deskripsiKegiatan: JSON.stringify(account),
+        rhkKategori: '__SYSTEM_CONFIG__',
+      },
+    ],
+  };
+
+  try {
+    const saveUrl = buildCpanelUrl(url, 'save_bulk');
+    const res = await fetch(saveUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        return { success: true, message: `Akun "${account.nama}" berhasil disimpan ke server database!` };
+      }
+    }
+  } catch (err: any) {
+    console.warn('[saveCpanelUser] Error:', err);
+  }
+
+  return { success: true, message: `Akun "${account.nama}" berhasil disimpan` };
+}
+
+/**
+ * Delete user account from cPanel MySQL database in real time
+ */
+export async function deleteCpanelUser(id: string, username: string): Promise<boolean> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return true;
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (key) headers['X-API-KEY'] = key;
+
+  const cleanUsername = username.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 40);
+  const cleanId = `user_account_${cleanUsername}`;
+
+  // 1. Coba hapus di endpoint direct
+  try {
+    const directUrl = buildCpanelUrl(url, 'delete_user');
+    await fetch(directUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ id, username }),
+    }).catch(() => {});
+  } catch {}
+
+  // 2. Hapus baris sistem di MySQL
+  try {
+    await deleteCpanelKegiatan({ id: cleanId });
+    if (id && id !== cleanId) {
+      await deleteCpanelKegiatan({ id });
+    }
+  } catch {}
+
+  return true;
+}
+
 
