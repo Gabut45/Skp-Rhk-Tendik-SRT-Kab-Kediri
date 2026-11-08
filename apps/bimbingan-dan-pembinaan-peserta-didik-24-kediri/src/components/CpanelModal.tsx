@@ -192,8 +192,8 @@ function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
         return $base64Data;
     }
 
-    // Deteksi apakah format data base64 gambar
-    if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+    // Deteksi apakah format data base64 gambar (menggunakan delimiter # agar bebas escape karakter)
+    if (preg_match('#^data:image/([a-zA-Z0-9]+);base64,#', $base64Data, $type)) {
         $data = substr($base64Data, strpos($base64Data, ',') + 1);
         $ext = strtolower($type[1]);
         if ($ext === 'jpeg') $ext = 'jpg';
@@ -219,9 +219,11 @@ function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
     if (@file_put_contents($filePath, $data)) {
         // Otomatis bangun URL publik lengkap
         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
-        $protocol = $isHttps ? "https://" : "http://";
+        $protocol = $isHttps ? 'https://' : 'http://';
         $host = $_SERVER['HTTP_HOST'];
-        $scriptDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        $rawDir = dirname($_SERVER['SCRIPT_NAME']);
+        $cleanDir = str_replace(chr(92), '/', $rawDir);
+        $scriptDir = ($cleanDir === '/' || $cleanDir === '.') ? '' : rtrim($cleanDir, '/');
         return $protocol . $host . $scriptDir . '/' . $subfolder . '/' . $yearMonth . '/' . $fileName;
     }
 
