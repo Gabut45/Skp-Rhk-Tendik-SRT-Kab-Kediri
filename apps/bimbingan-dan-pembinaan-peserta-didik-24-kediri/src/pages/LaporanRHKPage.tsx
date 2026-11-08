@@ -278,6 +278,7 @@ export default function LaporanRHKPage() {
             tanggalSelesai: targetTanggalSelesai,
             namaPelapor: targetPelapor && targetPelapor !== 'Semua Pelapor' ? targetPelapor : undefined,
             deletedIds: Array.from(getDeletedIds()),
+            summaryOnly: true,
           });
           idsToDelete = kegData.records.map(k => k.id);
         } catch (e) {

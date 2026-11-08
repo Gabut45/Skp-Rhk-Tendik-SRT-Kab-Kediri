@@ -242,37 +242,57 @@ export default function RiwayatPage() {
   };
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    const cacheKey = `__cache_riwayat_${filterTanggalMulai || 'all'}_${filterTanggalSelesai || 'all'}_${filterPelapor || 'all'}`;
+
+    // 1. Instant Cache: Jika ada cache riwayat lokal, tampilkan seketika dalam 0 milidetik
+    let hasCache = false;
+    try {
+      const cachedStr = sessionStorage.getItem(cacheKey);
+      if (cachedStr) {
+        const cachedArr = JSON.parse(cachedStr);
+        if (Array.isArray(cachedArr)) {
+          setRecords(cachedArr.filter(r => !isClientRecordDeleted(r)));
+          setLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    if (!hasCache) {
+      setLoading(true);
+    }
+
     try {
       if (isAppDeletedAll()) {
         setRecords([]);
         setLoading(false);
+        sessionStorage.removeItem(cacheKey);
         return;
       }
 
       const deletedIdsArr = Array.from(getDeletedIds());
       syncServerPresets().catch(() => {});
 
-      // 1. Ambil data riwayat file tersimpan
-      const riwayatData = await getRiwayat({
-        namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
-        tanggalMulai: filterTanggalMulai || undefined,
-        tanggalSelesai: filterTanggalSelesai || undefined,
-        deletedIds: deletedIdsArr,
-      });
+      // 2. Ambil data riwayat dan ringkasan kegiatan secara paralel (Promise.all)
+      // Menggunakan summaryOnly: true untuk kegiatan sehingga data super ringan dan cepat
+      const [riwayatData, kegiatanData] = await Promise.all([
+        getRiwayat({
+          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
+          tanggalMulai: filterTanggalMulai || undefined,
+          tanggalSelesai: filterTanggalSelesai || undefined,
+          deletedIds: deletedIdsArr,
+        }),
+        getKegiatan({
+          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
+          tanggalMulai: filterTanggalMulai || undefined,
+          tanggalSelesai: filterTanggalSelesai || undefined,
+          deletedIds: deletedIdsArr,
+          summaryOnly: true,
+        }),
+      ]);
 
       // Filter yang sudah ditandai dihapus permanen
       const validRiwayat = riwayatData.records.filter(r => !isClientRecordDeleted(r));
-
-      // 2. Ambil data kegiatan harian dari backend
-      const kegiatanData = await getKegiatan({
-        namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
-        tanggalMulai: filterTanggalMulai || undefined,
-        tanggalSelesai: filterTanggalSelesai || undefined,
-        deletedIds: deletedIdsArr,
-      });
-
-      // Filter yang sudah dihapus permanen
       const validKegiatan = kegiatanData.records.filter(k => !isClientRecordDeleted(k));
 
       // 3. Kelompokkan kegiatan berdasarkan tanggal & namaPelapor
@@ -322,9 +342,15 @@ export default function RiwayatPage() {
         }
       }
 
-      setRecords(mergedRecords.filter(r => !isClientRecordDeleted(r)));
+      const finalRecords = mergedRecords.filter(r => !isClientRecordDeleted(r));
+      setRecords(finalRecords);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(finalRecords));
+      } catch {}
     } catch {
-      toast.error('Gagal memuat riwayat');
+      if (!hasCache) {
+        toast.error('Gagal memuat riwayat');
+      }
     } finally {
       setLoading(false);
     }
@@ -355,6 +381,7 @@ export default function RiwayatPage() {
             tanggalSelesai: targetTanggalSelesai,
             namaPelapor: targetPelapor && targetPelapor !== 'Semua Pelapor' ? targetPelapor : undefined,
             deletedIds: Array.from(getDeletedIds()),
+            summaryOnly: true,
           });
           idsToDelete = kegData.records.map(k => k.id);
         } catch (err) {
@@ -418,6 +445,15 @@ export default function RiwayatPage() {
         deletedActivityIds: idsToDelete,
       });
 
+      // Bersihkan cache sesi agar sinkronisasi instan
+      try {
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('__cache_riwayat_') || k.startsWith('__cache_keg_')) {
+            sessionStorage.removeItem(k);
+          }
+        });
+      } catch {}
+
       // 6. Update state UI langsung
       setRecords(prev =>
         prev.filter(item => {
@@ -450,6 +486,13 @@ export default function RiwayatPage() {
       await deleteKegiatan({ deleteAll: true, cpanelUrl, cpanelKey });
 
       purgeAllLocalData();
+      try {
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('__cache_riwayat_') || k.startsWith('__cache_keg_')) {
+            sessionStorage.removeItem(k);
+          }
+        });
+      } catch {}
       setRecords([]);
 
       toast.success('Semua berkas riwayat, kegiatan harian, dan laporan RHK telah terhapus bersih selamanya!');

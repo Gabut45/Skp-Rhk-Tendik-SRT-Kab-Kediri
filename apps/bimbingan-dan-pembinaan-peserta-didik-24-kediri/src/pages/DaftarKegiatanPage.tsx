@@ -61,19 +61,39 @@ export default function DaftarKegiatanPage() {
   }, []);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     setSelectedIds(new Set());
+    const cacheKey = `__cache_keg_${tanggalMulai || 'all'}_${tanggalSelesai || 'all'}_${namaPelapor || 'all'}`;
+
+    // 1. Instant Cache: Jika ada cache lokal, tampilkan seketika dalam 0 milidetik
+    let hasCache = false;
+    try {
+      const cachedStr = sessionStorage.getItem(cacheKey);
+      if (cachedStr) {
+        const cachedArr = JSON.parse(cachedStr);
+        if (Array.isArray(cachedArr)) {
+          setRecords(cachedArr.filter(r => !isClientRecordDeleted(r)));
+          setLoading(false);
+          hasCache = true;
+        }
+      }
+    } catch {}
+
+    if (!hasCache) {
+      setLoading(true);
+    }
+
     try {
       if (isAppDeletedAll()) {
         setRecords([]);
         setLoading(false);
+        sessionStorage.removeItem(cacheKey);
         return;
       }
 
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const deletedIdsArr = Array.from(getDeletedIds());
 
-      // 1. Data dari storage lokal & backend cPanel dengan deduplikasi terpusat
+      // 2. Fetch mode ringan (summaryOnly: true) berukuran kecil (~20KB) & super cepat
       const data = await getKegiatan({
         tanggalMulai: tanggalMulai || undefined,
         tanggalSelesai: tanggalSelesai || undefined,
@@ -81,9 +101,10 @@ export default function DaftarKegiatanPage() {
         deletedIds: deletedIdsArr,
         cpanelUrl,
         cpanelKey,
+        summaryOnly: true,
       });
 
-      // 2. Terapkan deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
+      // 3. Terapkan deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
       const byFingerprint = new Map<string, Activity>();
       const seenIds = new Set<string>();
 
@@ -104,7 +125,6 @@ export default function DaftarKegiatanPage() {
           if (id) seenIds.add(id);
           byFingerprint.set(fp, r);
         } else {
-          // Jika ada rekaman yang sama, simpan yang memiliki foto lebih banyak
           const existing = byFingerprint.get(fp)!;
           if ((r.fotoKegiatan?.length || 0) > (existing.fotoKegiatan?.length || 0)) {
             byFingerprint.set(fp, r);
@@ -125,8 +145,13 @@ export default function DaftarKegiatanPage() {
       });
 
       setRecords(combined);
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify(combined));
+      } catch {}
     } catch {
-      toast.error('Gagal memuat data');
+      if (!hasCache) {
+        toast.error('Gagal memuat data');
+      }
     } finally {
       setLoading(false);
     }
@@ -233,19 +258,45 @@ export default function DaftarKegiatanPage() {
     }
   };
 
-  const handleCopyToInput = () => {
+  const handleCopyToInput = async () => {
     const selected = records.filter(r => selectedIds.has(r.id));
     if (selected.length === 0) return toast.error('Pilih minimal 1 kegiatan');
 
-    const items = selected.map(r => ({
-      id: crypto.randomUUID(),
-      waktuMulai: r.waktuMulai || '',
-      waktuSelesai: r.waktuSelesai || '',
-      kataKunci: r.kataKunciKegiatan || '',
-      deskripsi: r.deskripsiKegiatan || '',
-      rhk: r.rhkKategori || '',
-      photos: (r.fotoKegiatan || []).map(f => f.url),
-    }));
+    const needsPhotos = selected.some(r => (r.fotoKegiatan?.length || 0) > 0 && !(r.fotoKegiatan || []).some(f => Boolean(f.url)));
+    let fullRecordsMap = new Map<string, Activity>();
+    if (needsPhotos) {
+      toast.info('Menyiapkan foto kegiatan...');
+      try {
+        const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+        const dates = Array.from(new Set(selected.map(r => r.tanggal).filter(Boolean))) as string[];
+        const sortedDates = dates.sort();
+        const minDate = sortedDates[0];
+        const maxDate = sortedDates[sortedDates.length - 1];
+        const res = await getKegiatan({
+          tanggalMulai: minDate,
+          tanggalSelesai: maxDate,
+          cpanelUrl,
+          cpanelKey,
+          summaryOnly: false,
+        });
+        for (const item of res.records) {
+          fullRecordsMap.set(item.id, item);
+        }
+      } catch {}
+    }
+
+    const items = selected.map(r => {
+      const full = fullRecordsMap.get(r.id) || r;
+      return {
+        id: crypto.randomUUID(),
+        waktuMulai: full.waktuMulai || '',
+        waktuSelesai: full.waktuSelesai || '',
+        kataKunci: full.kataKunciKegiatan || '',
+        deskripsi: full.deskripsiKegiatan || '',
+        rhk: full.rhkKategori || '',
+        photos: (full.fotoKegiatan || []).map(f => f.url).filter(Boolean),
+      };
+    });
 
     // Store in sessionStorage for the input page to pick up
     sessionStorage.setItem('__copiedKegiatan', JSON.stringify(items));
@@ -259,7 +310,27 @@ export default function DaftarKegiatanPage() {
     return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
-  const handleCopySingle = (r: Activity) => {
+  const handleCopySingle = async (r: Activity) => {
+    let photos = (r.fotoKegiatan || []).map(f => f.url).filter(Boolean);
+    if ((r.fotoKegiatan?.length || 0) > 0 && photos.length === 0) {
+      toast.info('Menyiapkan foto kegiatan...');
+      try {
+        const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
+        const res = await getKegiatan({
+          tanggalMulai: r.tanggal,
+          tanggalSelesai: r.tanggal,
+          namaPelapor: r.namaPelapor,
+          cpanelUrl,
+          cpanelKey,
+          summaryOnly: false,
+        });
+        const matched = res.records.find(item => item.id === r.id);
+        if (matched?.fotoKegiatan) {
+          photos = matched.fotoKegiatan.map(f => f.url).filter(Boolean);
+        }
+      } catch {}
+    }
+
     const item = {
       id: crypto.randomUUID(),
       waktuMulai: r.waktuMulai || '',
@@ -267,7 +338,7 @@ export default function DaftarKegiatanPage() {
       kataKunci: r.kataKunciKegiatan || '',
       deskripsi: r.deskripsiKegiatan || '',
       rhk: r.rhkKategori || '',
-      photos: (r.fotoKegiatan || []).map(f => f.url),
+      photos,
     };
     sessionStorage.setItem('__copiedKegiatan', JSON.stringify([item]));
     toast.success('1 kegiatan disalin ke form Input Kegiatan');

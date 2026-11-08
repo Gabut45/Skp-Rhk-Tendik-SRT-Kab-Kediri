@@ -24,6 +24,9 @@ import {
   AlertTriangle,
   Copy,
   ExternalLink,
+  FolderDown,
+  UploadCloud,
+  Loader2,
 } from 'lucide-react';
 import { getKegiatan, getRiwayat } from 'zitejs/api';
 
@@ -179,6 +182,53 @@ if (!empty($api_secret)) {
 }
 
 // ==========================================
+// FUNGSI PENYIMPANAN FOTO KE FILE MANAGER HOSTING
+// ==========================================
+function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
+    if (empty($base64Data) || !is_string($base64Data)) return $base64Data;
+    
+    // Jika sudah berupa URL online (http:// atau https://), tidak perlu dikonversi ulang
+    if (strpos($base64Data, 'http://') === 0 || strpos($base64Data, 'https://') === 0) {
+        return $base64Data;
+    }
+
+    // Deteksi apakah format data base64 gambar
+    if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+        $data = substr($base64Data, strpos($base64Data, ',') + 1);
+        $ext = strtolower($type[1]);
+        if ($ext === 'jpeg') $ext = 'jpg';
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+            $ext = 'jpg';
+        }
+        $data = base64_decode($data);
+        if ($data === false) return $base64Data;
+    } else {
+        return $base64Data;
+    }
+
+    // Buat subfolder rapi berdasarkan tahun dan bulan: uploads/2026/11
+    $yearMonth = date('Y/m');
+    $targetDir = __DIR__ . '/' . $subfolder . '/' . $yearMonth;
+    if (!is_dir($targetDir)) {
+        @mkdir($targetDir, 0755, true);
+    }
+
+    $fileName = 'foto_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $filePath = $targetDir . '/' . $fileName;
+
+    if (@file_put_contents($filePath, $data)) {
+        // Otomatis bangun URL publik lengkap
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        $protocol = $isHttps ? "https://" : "http://";
+        $host = $_SERVER['HTTP_HOST'];
+        $scriptDir = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+        return $protocol . $host . $scriptDir . '/' . $subfolder . '/' . $yearMonth . '/' . $fileName;
+    }
+
+    return $base64Data;
+}
+
+// ==========================================
 // 3. HANDLER REQUEST
 // ==========================================
 $action = $_GET['action'] ?? 'ping';
@@ -190,6 +240,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'message' => 'Server cPanel MySQL terkoneksi dengan sukses!',
             'server_time' => date('Y-m-d H:i:s'),
             'database' => $db_name
+        ]);
+        exit;
+    }
+
+    if ($action === 'migrate_photos') {
+        $batch = isset($_GET['limit']) ? intval($_GET['limit']) : 30;
+        $stmt = $pdo->prepare("SELECT id, foto_kegiatan, tanda_tangan FROM kegiatan_harian 
+            WHERE (foto_kegiatan LIKE '%data:image%' OR tanda_tangan LIKE '%data:image%') 
+            LIMIT :lim");
+        $stmt->bindValue(':lim', $batch, PDO::PARAM_INT);
+        $stmt->execute();
+        $rows = $stmt->fetchAll();
+
+        $migratedPhotos = 0;
+        $migratedRecords = 0;
+        $updateStmt = $pdo->prepare("UPDATE kegiatan_harian SET foto_kegiatan = :foto, tanda_tangan = :ttd WHERE id = :id");
+
+        foreach ($rows as $r) {
+            $fotos = !empty($r['foto_kegiatan']) ? json_decode($r['foto_kegiatan'], true) : [];
+            $changed = false;
+            if (is_array($fotos)) {
+                foreach ($fotos as &$f) {
+                    $u = is_string($f) ? $f : ($f['url'] ?? '');
+                    if (strpos($u, 'data:image') === 0) {
+                        $newUrl = saveBase64ToFile($u, 'uploads');
+                        if ($newUrl !== $u) {
+                            $f = is_string($f) ? $newUrl : ['url' => $newUrl];
+                            $changed = true;
+                            $migratedPhotos++;
+                        }
+                    }
+                }
+            }
+
+            $ttds = !empty($r['tanda_tangan']) ? json_decode($r['tanda_tangan'], true) : [];
+            if (is_array($ttds)) {
+                foreach ($ttds as &$t) {
+                    $u = is_string($t) ? $t : ($t['url'] ?? '');
+                    if (strpos($u, 'data:image') === 0) {
+                        $newTtdUrl = saveBase64ToFile($u, 'uploads/ttd');
+                        if ($newTtdUrl !== $u) {
+                            $t = is_string($t) ? $newTtdUrl : ['url' => $newTtdUrl];
+                            $changed = true;
+                        }
+                    }
+                }
+            }
+
+            if ($changed) {
+                $updateStmt->execute([
+                    ':id' => $r['id'],
+                    ':foto' => json_encode($fotos),
+                    ':ttd' => !empty($ttds) ? json_encode($ttds) : null,
+                ]);
+                $migratedRecords++;
+            }
+        }
+
+        $countStmt = $pdo->query("SELECT COUNT(*) as sisa FROM kegiatan_harian WHERE foto_kegiatan LIKE '%data:image%' OR tanda_tangan LIKE '%data:image%'");
+        $remaining = intval($countStmt->fetch()['sisa'] ?? 0);
+
+        echo json_encode([
+            'success' => true,
+            'message' => "Migrasi batch selesai: $migratedPhotos foto berhasil dipindahkan ke File Manager!",
+            'migrated_records' => $migratedRecords,
+            'migrated_photos' => $migratedPhotos,
+            'remaining_records' => $remaining
         ]);
         exit;
     }
@@ -220,10 +337,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
+        $is_summary = !empty($_GET['summary']) || !empty($_GET['summaryOnly']);
         // Decode JSON fields
         foreach ($rows as &$r) {
-            $r['foto_kegiatan'] = $r['foto_kegiatan'] ? json_decode($r['foto_kegiatan'], true) : [];
-            $r['tanda_tangan'] = $r['tanda_tangan'] ? json_decode($r['tanda_tangan'], true) : null;
+            $fotos = $r['foto_kegiatan'] ? json_decode($r['foto_kegiatan'], true) : [];
+            $r['foto_count'] = is_array($fotos) ? count($fotos) : 0;
+            if ($is_summary) {
+                $r['foto_kegiatan'] = [];
+                $r['tanda_tangan'] = null;
+            } else {
+                $r['foto_kegiatan'] = is_array($fotos) ? $fotos : [];
+                $r['tanda_tangan'] = $r['tanda_tangan'] ? json_decode($r['tanda_tangan'], true) : null;
+            }
         }
 
         echo json_encode(['success' => true, 'records' => $rows]);
@@ -266,9 +391,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $namaPelapor = $data['namaPelapor'] ?? '';
         $nip = $data['nip'] ?? '';
         $tanggal = $data['tanggal'] ?? date('Y-m-d');
-        $tandaTangan = isset($data['tandaTangan']) ? json_encode([['url' => $data['tandaTangan']]]) : null;
         $unitKerja = $data['unitKerja'] ?? 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI';
         $items = $data['kegiatan'] ?? [];
+
+        // Simpan Tanda Tangan ke file di folder uploads/ttd/ jika format base64
+        $processedTtd = null;
+        if (!empty($data['tandaTangan'])) {
+            $ttdUrl = saveBase64ToFile($data['tandaTangan'], 'uploads/ttd');
+            $processedTtd = json_encode([['url' => $ttdUrl]]);
+        }
 
         $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
             (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja)
@@ -281,7 +412,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $savedCount = 0;
         foreach ($items as $it) {
             $id = $it['id'] ?? uniqid('keg_', true);
-            $fotoJson = !empty($it['fotoKegiatan']) ? json_encode(array_map(function($u) { return ['url' => $u]; }, $it['fotoKegiatan'])) : json_encode([]);
+            $processedPhotos = [];
+            if (!empty($it['fotoKegiatan']) && is_array($it['fotoKegiatan'])) {
+                foreach ($it['fotoKegiatan'] as $photo) {
+                    $u = is_string($photo) ? $photo : ($photo['url'] ?? '');
+                    if (!empty($u)) {
+                        $savedUrl = saveBase64ToFile($u, 'uploads');
+                        $processedPhotos[] = ['url' => $savedUrl];
+                    }
+                }
+            }
+            $fotoJson = json_encode($processedPhotos);
 
             $stmt->execute([
                 ':id' => $id,
@@ -294,7 +435,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':deskripsi' => $it['deskripsiKegiatan'] ?? '',
                 ':rhk' => $it['rhkKategori'] ?? 'RHK 3',
                 ':foto' => $fotoJson,
-                ':ttd' => $tandaTangan,
+                ':ttd' => $processedTtd,
                 ':unit' => $unitKerja
             ]);
             $savedCount++;
@@ -491,6 +632,63 @@ export default function CpanelModal({
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
+  const [migratingPhotos, setMigratingPhotos] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState<string | null>(null);
+
+  const handleMigratePhotos = async () => {
+    if (!apiUrl.trim()) {
+      return toast.error('Harap masukkan URL API cPanel Anda terlebih dahulu');
+    }
+    setMigratingPhotos(true);
+    setMigrationProgress('Memulai pemindahan foto ke folder uploads hosting...');
+    try {
+      let totalMigratedPhotos = 0;
+      let totalMigratedRecords = 0;
+      let remaining = 1;
+      let cycle = 0;
+
+      while (remaining > 0 && cycle < 30) {
+        cycle++;
+        const targetUrl = apiUrl.trim().includes('?')
+          ? `${apiUrl.trim()}&action=migrate_photos&limit=25`
+          : `${apiUrl.trim()}?action=migrate_photos&limit=25`;
+
+        const headers: Record<string, string> = {};
+        if (apiKey.trim()) headers['X-API-KEY'] = apiKey.trim();
+
+        const res = await fetch(targetUrl, { method: 'GET', headers });
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'Gagal migrasi foto');
+
+        totalMigratedPhotos += (data.migrated_photos || 0);
+        totalMigratedRecords += (data.migrated_records || 0);
+        remaining = data.remaining_records || 0;
+
+        setMigrationProgress(`Sedang memproses... ${totalMigratedPhotos} foto berhasil dipindahkan (${totalMigratedRecords} kegiatan). Sisa ${remaining} kegiatan...`);
+
+        if (data.migrated_records === 0 || remaining === 0) {
+          break;
+        }
+      }
+
+      // Bersihkan cache sesi agar foto langsung tampil dari URL baru
+      try {
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('__cache_')) sessionStorage.removeItem(k);
+        });
+      } catch {}
+
+      toast.success(`Selesai! ${totalMigratedPhotos} foto berhasil dipindahkan ke folder uploads hosting dan database kini super ringan!`);
+      setMigrationProgress(`Selesai! ${totalMigratedPhotos} foto telah tersimpan sebagai file di folder uploads hosting cPanel.`);
+    } catch (err: any) {
+      toast.error('Gagal migrasi foto: ' + (err?.message || 'Error'));
+      setMigrationProgress(`Gagal: ${err?.message || 'Error'}`);
+    } finally {
+      setMigratingPhotos(false);
+    }
+  };
 
   const handleSaveConfig = () => {
     localStorage.setItem('cpanel_api_url', apiUrl.trim());
@@ -852,6 +1050,60 @@ export default function CpanelModal({
                   {connectionStatus}
                 </div>
               )}
+
+              {/* Opsi Migrasi Foto Base64 ke File Manager Hosting */}
+              <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-3.5 space-y-3 mt-4">
+                <div className="flex items-start gap-2.5">
+                  <FolderDown className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <h4 className="font-semibold text-xs text-blue-950 flex items-center gap-1.5">
+                      <span>Pindahkan Foto dari Database ke File Manager Hosting</span>
+                      <Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-800 border-blue-300">
+                        Rekomendasi Utama
+                      </Badge>
+                    </h4>
+                    <p className="text-[11px] text-blue-800 leading-relaxed">
+                      Ekstrak seluruh foto yang masih tersimpan sebagai teks Base64 di database MySQL menjadi file gambar asli (<code className="font-mono bg-blue-100 px-1 py-0.5 rounded">.jpg</code>) di dalam folder <code className="font-mono bg-blue-100 px-1 py-0.5 rounded">public_html/skp/uploads/</code> hosting Anda. Database MySQL akan menjadi super ramping dan proses buka laporan menjadi secepat kilat!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-blue-200/60">
+                  <Button
+                    onClick={handleMigratePhotos}
+                    disabled={migratingPhotos || !apiUrl.trim()}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs h-8"
+                  >
+                    {migratingPhotos ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Memindahkan Foto...
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        Mulai Pindahkan Foto ke File Manager
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    onClick={handleDownloadPhpApi}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5 border-blue-300 text-blue-900 hover:bg-blue-100 h-8"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download api_kegiatan.php Terbaru
+                  </Button>
+                </div>
+
+                {migrationProgress && (
+                  <div className="text-[11px] font-mono bg-white/90 border border-blue-200 rounded p-2 text-blue-900">
+                    {migrationProgress}
+                  </div>
+                )}
+              </div>
             </div>
           </TabsContent>
         </Tabs>
