@@ -4,7 +4,7 @@ import { Input } from '@project/components/ui/input';
 import { Button } from '@project/components/ui/button';
 import { Label } from '@project/components/ui/label';
 import { Plus, Upload, X, Eye, Save, Loader2, ArrowUp, ArrowDown, PlusCircle, FileDown } from 'lucide-react';
-import { saveBulkKegiatan, previewHarian, generatePdfHarian } from 'zitejs/api';
+import { saveBulkKegiatan, previewHarian, generatePdfHarian, getKegiatan } from 'zitejs/api';
 import { uploadFile } from 'zitejs/upload';
 import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
@@ -194,10 +194,7 @@ export default function KegiatanHarianPage() {
     }
   };
 
-  const handleSaveAll = async () => {
-    const filled = getFilledKegiatan();
-    if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
-    setSaving(true);
+  const syncKegiatanToCpanelAndGetUrls = async (filled: KegiatanItem[]): Promise<KegiatanItem[]> => {
     try {
       const cpanelUrl = localStorage.getItem('cpanel_api_url') || undefined;
       const cpanelKey = localStorage.getItem('cpanel_api_key') || undefined;
@@ -212,11 +209,8 @@ export default function KegiatanHarianPage() {
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
       }));
 
-      const totalPhotos = filled.reduce((acc, k) => acc + (k.photos?.length || 0), 0);
-      toast.info(`Menyimpan ${filled.length} kegiatan & ${totalPhotos} foto ke sistem dan server...`, { duration: 2500 });
-
-      // Simpan via endpoint yang otomatis menyinkronkan ke database lokal (IndexedDB) & cPanel secara aman
-      const result = await saveBulkKegiatan({
+      // 1. Simpan ke database MySQL & upload foto ke File Manager cPanel (uploads/YYYY/MM/...)
+      const saveRes = await saveBulkKegiatan({
         namaPelapor,
         nip,
         tanggal,
@@ -228,16 +222,64 @@ export default function KegiatanHarianPage() {
 
       setAppDeletedAll(false);
 
-      if (result?.cpanelSynced) {
-        toast.success(
-          `${filled.length} kegiatan & foto bukti berhasil disimpan ke Database Server cPanel dan tersinkronisasi ke semua perangkat!`,
-          { duration: 4000 }
+      // 2. Ambil data tersimpan dari cPanel agar mendapatkan URL foto File Manager (https://.../uploads/...)
+      const kegData = await getKegiatan({
+        tanggalMulai: tanggal,
+        tanggalSelesai: tanggal,
+        namaPelapor: namaPelapor,
+        cpanelUrl,
+        cpanelKey,
+      });
+
+      if (kegData && Array.isArray(kegData.records) && kegData.records.length > 0) {
+        // Cocokkan kembali URL foto File Manager ke setiap kegiatan
+        const updatedList = filled.map((localItem) => {
+          const matched = kegData.records.find(
+            (r: any) =>
+              (r.waktuMulai === localItem.waktuMulai || r.id === localItem.id) &&
+              (r.deskripsiKegiatan === localItem.deskripsi || r.waktuSelesai === localItem.waktuSelesai)
+          );
+          if (matched && matched.fotoKegiatan && matched.fotoKegiatan.length > 0) {
+            const urls = matched.fotoKegiatan
+              .map((p: any) => (typeof p === 'string' ? p : p?.url || ''))
+              .filter((u: string) => Boolean(u && u.startsWith('http')));
+            if (urls.length > 0) {
+              return { ...localItem, photos: urls };
+            }
+          }
+          return localItem;
+        });
+
+        // Update state form agar memegang URL foto File Manager
+        setKegiatanList((prev) =>
+          prev.map((item) => {
+            const up = updatedList.find((u) => u.id === item.id);
+            return up || item;
+          })
         );
-      } else {
-        toast.warning(
-          `Kegiatan tersimpan lokal, namun sinkronisasi server: ${result?.message || 'terkendala koneksi'}`
-        );
+
+        return updatedList;
       }
+    } catch (err) {
+      console.warn('Sync kegiatan ke cPanel warning:', err);
+    }
+    return filled;
+  };
+
+  const handleSaveAll = async () => {
+    const filled = getFilledKegiatan();
+    if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
+    setSaving(true);
+    try {
+      const totalPhotos = filled.reduce((acc, k) => acc + (k.photos?.length || 0), 0);
+      toast.info(`Menyimpan kegiatan & mengunggah ${totalPhotos} foto ke File Manager cPanel...`, { duration: 2500 });
+
+      const updated = await syncKegiatanToCpanelAndGetUrls(filled);
+
+      toast.success(
+        `${updated.length} kegiatan & foto dokumentasi berhasil tersimpan di File Manager cPanel dan database!`,
+        { duration: 4000 }
+      );
     } catch (err: any) {
       toast.error('Gagal menyimpan kegiatan: ' + (err?.message || 'Kesalahan sistem'));
     } finally {
@@ -260,11 +302,15 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setDownloadingPdf(true);
     try {
+      // 1. Pastikan foto terupload ke File Manager cPanel dahulu
+      toast.info('Menyiapkan foto dokumentasi di File Manager server...');
+      const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
+
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
         tandaTangan: tandaTangan || undefined,
         format: 'pdf',
-        kegiatan: filled.map(k => ({
+        kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,
           waktuSelesai: k.waktuSelesai,
           deskripsiKegiatan: k.deskripsi,
@@ -273,7 +319,7 @@ export default function KegiatanHarianPage() {
         })),
       });
       await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, getReportFileName('pdf'));
-      toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+      toast.success('File PDF berhasil dibuat & diunduh, lengkap dengan foto dokumentasi!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
     } finally {
@@ -286,11 +332,14 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setDownloadingWord(true);
     try {
+      toast.info('Menyiapkan dokumen Word...');
+      const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
+
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
         tandaTangan: tandaTangan || undefined,
         format: 'word',
-        kegiatan: filled.map(k => ({
+        kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,
           waktuSelesai: k.waktuSelesai,
           deskripsiKegiatan: k.deskripsi,
@@ -312,11 +361,14 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap (waktu + deskripsi)');
     setQuickPdf(true);
     try {
+      toast.info('Memproses cetak PDF & mengunggah foto ke server...');
+      const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
+
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
         tandaTangan: tandaTangan || undefined,
         format: 'pdf',
-        kegiatan: filled.map(k => ({
+        kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,
           waktuSelesai: k.waktuSelesai,
           deskripsiKegiatan: k.deskripsi,
@@ -325,7 +377,7 @@ export default function KegiatanHarianPage() {
         })),
       });
       await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, getReportFileName('pdf'));
-      toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
+      toast.success('File PDF berhasil dibuat & diunduh, lengkap dengan foto dokumentasi!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
     } finally {

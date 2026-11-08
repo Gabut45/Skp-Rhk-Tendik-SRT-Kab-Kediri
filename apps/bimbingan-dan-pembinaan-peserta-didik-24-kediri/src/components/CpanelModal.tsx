@@ -414,8 +414,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // 0. Handler Upload File Langsung (Multipart FormData / File Manager)
+    if (!empty($_FILES['file']) || !empty($_FILES['foto'])) {
+        $fileObj = !empty($_FILES['file']) ? $_FILES['file'] : $_FILES['foto'];
+        $tmp = $fileObj['tmp_name'] ?? '';
+        $origName = $fileObj['name'] ?? 'foto.jpg';
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) $ext = 'jpg';
+
+        $yearMonth = date('Y/m');
+        $targetDir = __DIR__ . '/uploads/' . $yearMonth;
+        if (!is_dir($targetDir)) @mkdir($targetDir, 0755, true);
+
+        $fileName = 'foto_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $filePath = $targetDir . '/' . $fileName;
+
+        if (@move_uploaded_file($tmp, $filePath)) {
+            $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+            $protocol = $isHttps ? 'https://' : 'http://';
+            $host = $_SERVER['HTTP_HOST'];
+            $rawDir = dirname($_SERVER['SCRIPT_NAME']);
+            $cleanDir = str_replace(chr(92), '/', $rawDir);
+            $scriptDir = ($cleanDir === '/' || $cleanDir === '.') ? '' : rtrim($cleanDir, '/');
+            $fullUrl = $protocol . $host . $scriptDir . '/uploads/' . $yearMonth . '/' . $fileName;
+            echo json_encode([
+                'success' => true,
+                'message' => 'Foto berhasil diunggah ke File Manager cPanel!',
+                'url' => $fullUrl
+            ]);
+            exit;
+        }
+    }
+
     $raw = file_get_contents('php://input');
     $data = json_decode($raw, true);
+
+    // Handler Upload Foto via JSON Base64
+    if ($action === 'upload_foto' || $action === 'upload') {
+        $fotoData = $data['foto'] ?? ($data['image'] ?? ($data['data'] ?? ''));
+        $subfolder = !empty($data['subfolder']) ? $data['subfolder'] : 'uploads';
+        if (!empty($fotoData)) {
+            $savedUrl = saveBase64ToFile($fotoData, $subfolder);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Foto berhasil disimpan ke File Manager hosting!',
+                'url' => $savedUrl
+            ]);
+            exit;
+        }
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Data foto kosong']);
+        exit;
+    }
 
     if (!$data) {
         http_response_code(400);

@@ -414,28 +414,25 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
           const naturalW = loaderImg.naturalWidth || img.naturalWidth;
           const naturalH = loaderImg.naturalHeight || img.naturalHeight;
 
+          const isKopLogo =
+            img.classList.contains('kop-logo-img') ||
+            img.closest('.kop-block') !== null ||
+            img.closest('td[style*="80px"], td[style*="85px"]') !== null ||
+            srcToUse.startsWith(LOGO_BASE64.substring(0, 40)) ||
+            srcToUse.includes('logo') ||
+            (img.getAttribute('alt') || '').toLowerCase().includes('logo');
+
+          const isSig =
+            img.classList.contains('signature-img') ||
+            img.closest('.signature-block') !== null ||
+            (img.getAttribute('alt') || '').toLowerCase().includes('tanda tangan') ||
+            (img.getAttribute('alt') || '').toLowerCase().includes('signature');
+
+          const isSingle = img.classList.contains('photo-single-img');
+
+          img.src = srcToUse;
+
           if (naturalW > 0 && naturalH > 0) {
-            const isKopLogo =
-              img.classList.contains('kop-logo-img') ||
-              img.closest('.kop-block') !== null ||
-              img.closest('td[style*="80px"], td[style*="85px"]') !== null ||
-              srcToUse.startsWith(LOGO_BASE64.substring(0, 40)) ||
-              srcToUse.includes('logo') ||
-              (img.getAttribute('alt') || '').toLowerCase().includes('logo');
-
-            const isSig =
-              img.classList.contains('signature-img') ||
-              img.closest('.signature-block') !== null ||
-              (img.getAttribute('alt') || '').toLowerCase().includes('tanda tangan') ||
-              (img.getAttribute('alt') || '').toLowerCase().includes('signature');
-
-            const isSingle = img.classList.contains('photo-single-img');
-
-            // CRITICAL: DO NOT convert images through canvas.toDataURL('image/jpeg')!
-            // Doing so strips alpha channels and turns transparent PNGs (kop logo & signatures) into solid black blocks!
-            // srcToUse is already a valid base64 data URL or direct image URI.
-            img.src = srcToUse;
-
             if (isKopLogo) {
               const kopW = 68;
               img.width = kopW;
@@ -478,14 +475,27 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
               img.style.background = 'transparent';
               img.style.backgroundColor = 'transparent';
             }
-
-            if (img.decode) {
-              await img.decode().catch(() => {});
-            }
           } else {
-            const parentBox = img.closest('.photo-single-box, .photo-proof-box');
-            if (parentBox) parentBox.remove();
-            else img.remove();
+            // Robust fallback: JANGAN PERNAH menghapus foto hanya karena naturalWidth belum siap
+            if (isKopLogo) {
+              img.style.width = '68px';
+              img.style.maxHeight = '90px';
+            } else if (isSig) {
+              img.style.maxWidth = '130px';
+              img.style.maxHeight = '48px';
+            } else {
+              img.style.maxWidth = '100%';
+              img.style.maxHeight = isSingle ? '240px' : '220px';
+              img.style.width = 'auto';
+              img.style.height = 'auto';
+              img.style.display = 'block';
+              img.style.margin = '0 auto';
+              img.style.objectFit = 'contain';
+            }
+          }
+
+          if (img.decode) {
+            await img.decode().catch(() => {});
           }
         } catch (e) {
           console.warn('[download-helper] Error processing image:', e);
