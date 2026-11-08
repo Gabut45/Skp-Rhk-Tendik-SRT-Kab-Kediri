@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { LOGO_BASE64 } from './logo-base64';
 
 /**
  * Trigger native browser Print dialog via hidden iframe (useful for high-quality Save as PDF)
@@ -248,18 +249,20 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
         border-radius: 2px !important;
       }
       .pdf-render-root .photo-single-box {
-        display: inline-block !important;
-        max-width: 100% !important;
+        display: block !important;
+        max-width: 340px !important;
+        margin: 0 auto !important;
         background: #f8fafc !important;
         border: 1px solid #cbd5e1 !important;
         border-radius: 4px !important;
         padding: 3px !important;
+        text-align: center !important;
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
       .pdf-render-root .photo-single-img {
         max-width: 100% !important;
-        max-height: 280px !important;
+        max-height: 240px !important;
         width: auto !important;
         height: auto !important;
         object-fit: contain !important;
@@ -273,6 +276,16 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
         page-break-inside: avoid !important;
         break-inside: avoid !important;
       }
+      .pdf-render-root .kop-logo-img,
+      .pdf-render-root .kop-block img {
+        width: 68px !important;
+        max-width: 68px !important;
+        height: auto !important;
+        display: block !important;
+        margin: 0 auto !important;
+        background: transparent !important;
+        background-color: transparent !important;
+      }
       .pdf-render-root .signature-img {
         max-height: 48px !important;
         max-width: 130px !important;
@@ -281,6 +294,8 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
         object-fit: contain !important;
         display: block !important;
         margin: 0 auto !important;
+        background: transparent !important;
+        background-color: transparent !important;
       }
       .pdf-render-root .signature-nip {
         font-size: 10pt !important;
@@ -298,15 +313,13 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
   document.body.appendChild(container);
 
   try {
-    // 1. Process all images: convert them to real raster canvas elements
-    // This completely bypasses html2canvas cloning/caching bugs and crossOrigin race conditions
+    // 1. Process all images: ensure loaded, normalized to local base64, and give explicit pixel dimensions
     const imgs = Array.from(container.querySelectorAll('img'));
     await Promise.all(
       imgs.map(async (img) => {
         try {
           const rawSrc = img.getAttribute('src') || '';
           if (!rawSrc || !rawSrc.trim() || rawSrc === 'data:,' || rawSrc === 'null' || rawSrc === 'undefined') {
-            // Remove empty image and clean up empty wrapper boxes
             const parentBox = img.closest('.photo-single-box, .photo-proof-box');
             if (parentBox) parentBox.remove();
             else img.remove();
@@ -314,7 +327,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
           }
 
           let srcToUse = rawSrc;
-          if (rawSrc.startsWith('http')) {
+          if (rawSrc.startsWith('http') || rawSrc.startsWith('blob:')) {
             try {
               const res = await fetch(rawSrc, { mode: 'cors' });
               if (res.ok) {
@@ -327,16 +340,15 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
                   reader.onerror = () => resolveReader(rawSrc);
                   reader.readAsDataURL(blob);
                 });
-                img.src = srcToUse;
               }
             } catch {
               // Keep original src if fetch fails
             }
           }
 
-          // Create an off-screen Image object to guarantee full asynchronous decode
+          // Preload in an Image object to ensure fully decoded bitmap
           const loaderImg = new Image();
-          if (srcToUse.startsWith('data:') || srcToUse.startsWith('blob:') || rawSrc.startsWith('http')) {
+          if (srcToUse.startsWith('http')) {
             loaderImg.crossOrigin = 'anonymous';
           }
 
@@ -350,7 +362,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
             };
             loaderImg.onload = finish;
             loaderImg.onerror = finish;
-            setTimeout(finish, 3500);
+            setTimeout(finish, 4000);
             loaderImg.src = srcToUse;
             if (loaderImg.complete && loaderImg.naturalWidth > 0) {
               finish();
@@ -361,33 +373,74 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
           const naturalH = loaderImg.naturalHeight || img.naturalHeight;
 
           if (naturalW > 0 && naturalH > 0) {
-            // Create a high-fidelity <canvas> element to replace <img>
-            // html2canvas renders <canvas> directly via ctx.drawImage without caching/cloning lag
-            const canvasEl = document.createElement('canvas');
-            canvasEl.width = naturalW;
-            canvasEl.height = naturalH;
-            const cCtx = canvasEl.getContext('2d');
-            if (cCtx) {
-              cCtx.drawImage(loaderImg, 0, 0, naturalW, naturalH);
+            const isKopLogo =
+              img.classList.contains('kop-logo-img') ||
+              img.closest('.kop-block') !== null ||
+              img.closest('td[style*="80px"], td[style*="85px"]') !== null ||
+              srcToUse.startsWith(LOGO_BASE64.substring(0, 40)) ||
+              srcToUse.includes('logo') ||
+              (img.getAttribute('alt') || '').toLowerCase().includes('logo');
+
+            const isSig =
+              img.classList.contains('signature-img') ||
+              img.closest('.signature-block') !== null ||
+              (img.getAttribute('alt') || '').toLowerCase().includes('tanda tangan') ||
+              (img.getAttribute('alt') || '').toLowerCase().includes('signature');
+
+            const isSingle = img.classList.contains('photo-single-img');
+
+            // CRITICAL: DO NOT convert images through canvas.toDataURL('image/jpeg')!
+            // Doing so strips alpha channels and turns transparent PNGs (kop logo & signatures) into solid black blocks!
+            // srcToUse is already a valid base64 data URL or direct image URI.
+            img.src = srcToUse;
+
+            if (isKopLogo) {
+              const kopW = 68;
+              img.width = kopW;
+              img.style.width = `${kopW}px`;
+              img.style.height = 'auto';
+              img.style.maxWidth = `${kopW}px`;
+              img.style.maxHeight = '90px';
+              img.style.display = 'block';
+              img.style.margin = '0 auto';
+              img.style.background = 'transparent';
+              img.style.backgroundColor = 'transparent';
+            } else if (isSig) {
+              img.style.maxWidth = '130px';
+              img.style.maxHeight = '48px';
+              img.style.width = 'auto';
+              img.style.height = 'auto';
+              img.style.display = 'block';
+              img.style.margin = '0 auto';
+              img.style.background = 'transparent';
+              img.style.backgroundColor = 'transparent';
+              img.style.objectFit = 'contain';
+            } else {
+              // Documentation photo: proportional scaling with explicit width/height in px
+              const maxW = isSingle ? 340 : 280;
+              const maxH = isSingle ? 240 : 220;
+              const ratio = Math.min(maxW / naturalW, maxH / naturalH, 1);
+              const displayW = Math.max(1, Math.round(naturalW * ratio));
+              const displayH = Math.max(1, Math.round(naturalH * ratio));
+
+              img.width = displayW;
+              img.height = displayH;
+              img.style.width = `${displayW}px`;
+              img.style.height = `${displayH}px`;
+              img.style.maxWidth = '100%';
+              img.style.maxHeight = `${maxH}px`;
+              img.style.display = 'block';
+              img.style.margin = '0 auto';
+              img.style.objectFit = 'contain';
+              img.style.borderRadius = '2px';
+              img.style.background = 'transparent';
+              img.style.backgroundColor = 'transparent';
             }
 
-            // Copy attributes & classNames
-            canvasEl.className = img.className;
-            if (img.id) canvasEl.id = img.id;
-
-            // Maintain exact responsive styling so layout matches iframe preview perfectly
-            canvasEl.style.maxWidth = img.style.maxWidth || '100%';
-            canvasEl.style.maxHeight = img.style.maxHeight || '280px';
-            canvasEl.style.width = 'auto';
-            canvasEl.style.height = 'auto';
-            canvasEl.style.display = img.style.display || 'block';
-            canvasEl.style.margin = img.style.margin || '0 auto';
-            canvasEl.style.borderRadius = img.style.borderRadius || '2px';
-            canvasEl.style.objectFit = 'contain';
-
-            img.parentNode?.replaceChild(canvasEl, img);
+            if (img.decode) {
+              await img.decode().catch(() => {});
+            }
           } else {
-            // Failed to load pixels, remove blank placeholder
             const parentBox = img.closest('.photo-single-box, .photo-proof-box');
             if (parentBox) parentBox.remove();
             else img.remove();
@@ -429,6 +482,7 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
       windowWidth: 794,
       scrollX: 0,
       scrollY: 0,
+      imageTimeout: 15000,
     });
 
     if (!canvas || canvas.width === 0 || canvas.height === 0) {

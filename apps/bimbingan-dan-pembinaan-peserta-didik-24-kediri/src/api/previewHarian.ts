@@ -46,13 +46,17 @@ function buildPhotosGrid(photos: any[]): string {
   if (validPhotos.length === 0) return '';
   const limited = validPhotos.slice(0, 20);
 
-  // Jika hanya ada 1 foto: tampilkan di tengah secara proporsional dan jelas tanpa terpotong
+  // Jika hanya ada 1 foto: tampilkan di tengah menggunakan wrapper table yang stabil, presisi dan proporsional
   if (limited.length === 1) {
-    return `<div style="text-align:center;margin-bottom:6px;page-break-inside:avoid;break-inside:avoid;">
-      <div class="photo-single-box" style="display:inline-block;max-width:100%;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">
-        <img class="photo-single-img" src="${esc(limited[0])}" style="max-width:100%;max-height:280px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
-      </div>
-    </div>`;
+    return `<table style="width:100%;border-collapse:collapse;margin-bottom:6px;border:none;page-break-inside:avoid;break-inside:avoid;">
+      <tr style="page-break-inside:avoid;break-inside:avoid;">
+        <td style="width:100%;padding:3px;text-align:center;vertical-align:middle;border:none;">
+          <div class="photo-proof-box photo-single-box" style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px;padding:3px;box-shadow:0 1px 2px rgba(0,0,0,0.04);display:block;max-width:340px;margin:0 auto;text-align:center;">
+            <img class="photo-proof-img photo-single-img" src="${esc(limited[0])}" style="max-width:100%;max-height:240px;width:auto;height:auto;object-fit:contain;display:block;margin:0 auto;border-radius:2px;" alt="Bukti Foto Kegiatan" />
+          </div>
+        </td>
+      </tr>
+    </table>`;
   }
 
   // Jika 2 foto atau lebih: tata berdampingan (2 kolom) dengan rasio aspek utuh
@@ -129,8 +133,8 @@ table.main tr { page-break-inside: avoid; break-inside: avoid; }
 .kop-line { border-top: 2.5px solid #000; border-bottom: 1px solid #000; height: 3px; margin: 4px 0 10px 0; }
 .photo-proof-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; display: block; text-align: center; }
 .photo-proof-img { max-width: 100% !important; max-height: 230px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
-.photo-single-box { display: inline-block; max-width: 100%; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; }
-.photo-single-img { max-width: 100% !important; max-height: 280px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.photo-single-box { display: block !important; max-width: 340px !important; margin: 0 auto !important; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 3px; text-align: center; }
+.photo-single-img { max-width: 100% !important; max-height: 240px !important; width: auto !important; height: auto !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; border-radius: 2px !important; }
 </style>
 </head>
 <body>
@@ -139,7 +143,7 @@ table.main tr { page-break-inside: avoid; break-inside: avoid; }
 <table class="kop-block" style="width:100%;border-collapse:collapse;margin-bottom:0;">
   <tr>
     <td style="width:80px;vertical-align:middle;padding-left:4px;padding-right:10px;">
-      <img src="${LOGO_URL}" style="width:68px;height:auto;" />
+      <img class="kop-logo-img" src="${LOGO_URL}" alt="Logo Kemensos" style="width:68px;height:auto;display:block;margin:0 auto;background:transparent;" />
     </td>
     <td style="text-align:center;vertical-align:middle;">
       <div style="font-weight:bold;font-size:10.5pt;margin:0;letter-spacing:0.2px;">KEMENTERIAN SOSIAL REPUBLIK INDONESIA</div>
