@@ -312,6 +312,65 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
 
   document.body.appendChild(container);
 
+// Multi-tier helper to convert external hosting images to in-memory Base64 Data URL
+// This bypasses browser CORS restrictions and guarantees html2canvas never drops images
+async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
+  if (!rawSrc || typeof rawSrc !== 'string') return rawSrc;
+  const s = rawSrc.trim();
+  if (s.startsWith('data:image/')) return s;
+  if (!s.startsWith('http://') && !s.startsWith('https://') && !s.startsWith('blob:')) return s;
+
+  const blobToDataUrl = (blob: Blob): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(typeof reader.result === 'string' ? reader.result : s);
+      };
+      reader.onerror = () => resolve(s);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  // Tier 1: Local server proxy (/api/proxy-image?url=...)
+  // Since the Node server fetches directly from hosting without browser CORS, this succeeds 100%
+  try {
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(s)}`;
+    const res = await fetch(proxyUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob && blob.size > 50) {
+        return await blobToDataUrl(blob);
+      }
+    }
+  } catch {}
+
+  // Tier 2: Direct fetch with CORS mode
+  try {
+    const res = await fetch(s, { mode: 'cors' });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob && blob.size > 50) {
+        return await blobToDataUrl(blob);
+      }
+    }
+  } catch {}
+
+  // Tier 3: cPanel API endpoint (?action=get_image&file=...)
+  try {
+    const cpanelApi = (typeof window !== 'undefined' ? localStorage.getItem('cpanel_api_url') : null) || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
+    const cpanelImgUrl = `${cpanelApi.split('?')[0]}?action=get_image&file=${encodeURIComponent(s)}`;
+    const res = await fetch(cpanelImgUrl);
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob && blob.size > 50) {
+        return await blobToDataUrl(blob);
+      }
+    }
+  } catch {}
+
+  return s;
+}
+
   try {
     // 1. Process all images: ensure loaded, normalized to local base64, and give explicit pixel dimensions
     const imgs = Array.from(container.querySelectorAll('img'));
@@ -326,25 +385,8 @@ export async function downloadPdfFromHtml(html: string, filename: string): Promi
             return;
           }
 
-          let srcToUse = rawSrc;
-          if (rawSrc.startsWith('http') || rawSrc.startsWith('blob:')) {
-            try {
-              const res = await fetch(rawSrc, { mode: 'cors' });
-              if (res.ok) {
-                const blob = await res.blob();
-                const reader = new FileReader();
-                srcToUse = await new Promise<string>((resolveReader) => {
-                  reader.onloadend = () => {
-                    resolveReader(typeof reader.result === 'string' ? reader.result : rawSrc);
-                  };
-                  reader.onerror = () => resolveReader(rawSrc);
-                  reader.readAsDataURL(blob);
-                });
-              }
-            } catch {
-              // Keep original src if fetch fails
-            }
-          }
+          // Convert any external URL to local Base64 data URL
+          const srcToUse = await resolveImageToDataUrl(rawSrc);
 
           // Preload in an Image object to ensure fully decoded bitmap
           const loaderImg = new Image();

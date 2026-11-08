@@ -35,6 +35,41 @@ export function geminiServerPlugin(): Plugin {
           return;
         }
 
+        // Endpoint: GET /api/proxy-image (Proxy gambar eksternal hosting cPanel tanpa blokir CORS browser)
+        if (url === '/api/proxy-image' && req.method === 'GET') {
+          try {
+            const parsedUrl = new URL(req.url || '', 'http://localhost');
+            const targetUrl = parsedUrl.searchParams.get('url');
+            if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
+              res.statusCode = 400;
+              res.end('Invalid URL');
+              return;
+            }
+
+            const response = await fetch(targetUrl);
+            if (!response.ok) {
+              res.statusCode = response.status;
+              res.end(`Failed to fetch image: ${response.statusText}`);
+              return;
+            }
+
+            const contentType = response.headers.get('content-type') || 'image/jpeg';
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = Buffer.from(arrayBuffer);
+
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.statusCode = 200;
+            res.end(buffer);
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.end(`Proxy error: ${err?.message || 'Error'}`);
+          }
+          return;
+        }
+
         // Endpoint: GET /api/vocabulary/stats
         if (url === '/api/vocabulary/stats' && req.method === 'GET') {
           res.setHeader('Content-Type', 'application/json');

@@ -213,6 +213,12 @@ function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
         @mkdir($targetDir, 0755, true);
     }
 
+    // Pastikan folder uploads memiliki .htaccess dengan izin CORS lengkap agar browser bisa merender gambar ke PDF tanpa blokir
+    $htPath = __DIR__ . '/uploads/.htaccess';
+    if (!file_exists($htPath)) {
+        @file_put_contents($htPath, "<IfModule mod_headers.c>\n    Header set Access-Control-Allow-Origin \"*\"\n    Header set Access-Control-Allow-Methods \"GET, OPTIONS\"\n</IfModule>\n");
+    }
+
     $fileName = 'foto_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
     $filePath = $targetDir . '/' . $fileName;
 
@@ -243,6 +249,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             'server_time' => date('Y-m-d H:i:s'),
             'database' => $db_name
         ]);
+        exit;
+    }
+
+    if ($action === 'get_image') {
+        $file = $_GET['file'] ?? '';
+        if (strpos($file, 'http') === 0) {
+            $parsed = parse_url($file, PHP_URL_PATH);
+            $file = preg_replace('#^.*?/skp/#', '', $parsed);
+        }
+        $file = ltrim(str_replace(['../', '..\\'], '', $file), '/');
+        $fullPath = __DIR__ . '/' . $file;
+        if (file_exists($fullPath) && is_file($fullPath)) {
+            $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+            $mimes = [
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'webp' => 'image/webp',
+                'gif' => 'image/gif'
+            ];
+            header('Access-Control-Allow-Origin: *');
+            header('Access-Control-Allow-Methods: GET, OPTIONS');
+            header('Content-Type: ' . ($mimes[$ext] ?? 'image/jpeg'));
+            header('Cache-Control: public, max-age=86400');
+            readfile($fullPath);
+            exit;
+        }
+        http_response_code(404);
+        echo json_encode(['error' => 'File not found']);
         exit;
     }
 

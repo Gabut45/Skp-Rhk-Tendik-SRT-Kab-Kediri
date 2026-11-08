@@ -46,6 +46,35 @@ app.get('/api/gemini/health', (_req, res) => {
   });
 });
 
+// Proxy for external hosting images to prevent browser CORS canvas tainting
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const targetUrl = req.query.url as string;
+    if (!targetUrl || (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://'))) {
+      res.status(400).send('Invalid URL');
+      return;
+    }
+
+    const response = await fetch(targetUrl);
+    if (!response.ok) {
+      res.status(response.status).send(`Failed to fetch image: ${response.statusText}`);
+      return;
+    }
+
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).send(`Proxy error: ${err?.message || 'Error'}`);
+  }
+});
+
 // Vocabulary stats and management
 app.get('/api/vocabulary/stats', (_req, res) => {
   res.json(getVocabularyStats());
