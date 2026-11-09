@@ -259,7 +259,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $parsed = parse_url($file, PHP_URL_PATH);
             $file = preg_replace('#^.*?/skp/#', '', $parsed);
         }
-        $file = ltrim(str_replace(['../', '..\\'], '', $file), '/');
+        $file = ltrim(str_replace('..', '', $file), '/');
         $fullPath = __DIR__ . '/' . $file;
         if (file_exists($fullPath) && is_file($fullPath)) {
             $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
