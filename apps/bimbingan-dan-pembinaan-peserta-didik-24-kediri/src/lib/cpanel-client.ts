@@ -94,44 +94,9 @@ export function addClientDeletedRange(range: ClientDeletedRange) {
   }
 }
 
-export function isClientRecordDeleted(r: any): boolean {
-  if (isAppDeletedAll()) return true;
-
-  const id = String(r.id || (r.id_kegiatan ? `keg_${r.id_kegiatan}` : ''));
-  const deleted = getDeletedIds();
-  if (id && deleted.has(id)) return true;
-  if (r.id_kegiatan && deleted.has(String(r.id_kegiatan))) return true;
-
-  const tgl = r.tanggal || r.tanggalMulai;
-  const pelapor = (r.namaPelapor || r.nama_pelapor || '').trim().toLowerCase();
-  const rhk = (r.rhkKategori || r.rhk_kategori || r.rhkNomor || '').trim().toLowerCase();
-
-  // Check riwayat key
-  if (tgl && pelapor) {
-    const deletedKeys = getDeletedRiwayatKeys();
-    if (deletedKeys.has(`${tgl}___${r.namaPelapor || r.nama_pelapor}`)) return true;
-  }
-
-  // Check ranges
-  const ranges = getDeletedRanges();
-  for (const range of ranges) {
-    const rangePelapor = (range.namaPelapor || '').trim().toLowerCase();
-    if (rangePelapor && pelapor && rangePelapor !== pelapor) continue;
-
-    const start = range.tanggalMulai;
-    const end = range.tanggalSelesai || range.tanggalMulai;
-
-    if (tgl && start && end) {
-      if (tgl >= start && tgl <= end) {
-        if (!range.rhkKategori) return true;
-        const targetRhk = range.rhkKategori.toLowerCase();
-        if (rhk && (rhk.includes(targetRhk) || targetRhk.includes(rhk))) {
-          return true;
-        }
-      }
-    }
-  }
-
+export function isClientRecordDeleted(_r: any): boolean {
+  // Seluruh penghapusan sekarang dilakukan langsung secara permanen di database server MySQL.
+  // Tidak ada penyaringan lokal per-perangkat agar data selalu 100% konsisten di semua perangkat.
   return false;
 }
 
@@ -1015,6 +980,15 @@ export async function autoPushLocalKegiatanToCpanel(): Promise<{ pushedCount: nu
       } catch (saveErr) {
         console.warn('[autoPushLocalKegiatanToCpanel] Gagal simpan ke cPanel:', saveErr);
       }
+    }
+
+    if (totalPushed > 0) {
+      try {
+        localStorage.removeItem('zite_table_KegiatanHarian');
+        localStorage.removeItem('cpanel_deleted_ids');
+        localStorage.removeItem('cpanel_deleted_riwayat_keys');
+        localStorage.removeItem('cpanel_deleted_ranges');
+      } catch {}
     }
 
     return {

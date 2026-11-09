@@ -1,4 +1,6 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, Modality } from '@google/genai';
+import { WebSocketServer, WebSocket } from 'ws';
+import type { Server as HttpServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -153,8 +155,7 @@ Instruksi:
    - RHK 6: Pengembangan Kompetensi Tenaga Kependidikan
    - RHK 7: Tugas Tambahan dari Kepala Sekolah`;
 
-      // Gunakan gemini-3.1-flash-lite terlebih dahulu karena responsif dan bebas antrean 503, lalu gemini-3.8-flash
-      const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+      const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       let parsed: any = null;
 
       for (const currentModel of modelsToTry) {
@@ -248,7 +249,7 @@ export async function handleGenerateTextServer(prompt: string, systemInstruction
     return 'Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.';
   }
 
-  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
   for (const model of modelsToTry) {
     try {
       const response = await ai.models.generateContent({
@@ -277,7 +278,7 @@ export async function handleStreamTextServer(
     return;
   }
 
-  const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
   for (const model of modelsToTry) {
     try {
       const responseStream = await ai.models.generateContentStream({
@@ -298,3 +299,76 @@ export async function handleStreamTextServer(
   }
   onChunk('Layanan sistem SKP Sekolah Rakyat Terintegrasi 1 Kediri aktif menggunakan bank kosakata lokal berstandar kedinasan.');
 }
+
+/**
+ * Setup WebSocket server for Gemini Live API audio streaming
+ */
+export function setupGeminiLiveWebSocket(server: any, path = '/api/gemini/live'): WebSocketServer {
+  const wss = new WebSocketServer({ server, path });
+
+  wss.on('connection', async (clientWs: WebSocket) => {
+    if (!hasValidGeminiKey()) {
+      clientWs.send(JSON.stringify({ error: 'Server Gemini API key not available' }));
+      clientWs.close();
+      return;
+    }
+
+    try {
+      const liveAi = getAi();
+      const session = await liveAi.live.connect({
+        model: 'gemini-3.8-live',
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+          },
+          systemInstruction: 'Anda adalah asisten virtual Wali Asuh di Sekolah Rakyat Terintegrasi 1 Kabupaten Kediri.',
+        },
+        callbacks: {
+          onmessage: (message: any) => {
+            for (const part of message.serverContent?.modelTurn?.parts ?? []) {
+              if (part.inlineData?.data) {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ audio: part.inlineData.data }));
+                }
+              }
+            }
+            if (message.serverContent?.interrupted) {
+              if (clientWs.readyState === WebSocket.OPEN) {
+                clientWs.send(JSON.stringify({ interrupted: true }));
+              }
+            }
+          },
+        },
+      });
+
+      clientWs.on('message', (data: any) => {
+        try {
+          const parsed = JSON.parse(data.toString());
+          if (parsed.audio) {
+            session.sendRealtimeInput({
+              audio: { data: parsed.audio, mimeType: 'audio/pcm;rate=16000' },
+            });
+          }
+        } catch {
+          // ignore invalid packet
+        }
+      });
+
+      clientWs.on('close', () => {
+        try {
+          session.close();
+        } catch {}
+      });
+    } catch (err: any) {
+      console.error('[Gemini Live WebSocket Error]:', err);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ error: err?.message || 'Live session error' }));
+        clientWs.close();
+      }
+    }
+  });
+
+  return wss;
+}
+

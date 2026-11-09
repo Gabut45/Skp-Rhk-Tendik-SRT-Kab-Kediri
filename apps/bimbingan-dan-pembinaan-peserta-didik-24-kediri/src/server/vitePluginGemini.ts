@@ -4,6 +4,7 @@ import {
   handleGenerateDeskripsiServer,
   handleGenerateTextServer,
   handleStreamTextServer,
+  setupGeminiLiveWebSocket,
   hasValidGeminiKey,
 } from './geminiServer.ts';
 import {
@@ -17,6 +18,9 @@ export function geminiServerPlugin(): Plugin {
   return {
     name: 'vite-plugin-gemini-server',
     configureServer(server) {
+      if (server.httpServer) {
+        setupGeminiLiveWebSocket(server.httpServer);
+      }
       server.middlewares.use(bodyParser.json({ limit: '10mb' }));
       server.middlewares.use(async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
         const url = req.url ? req.url.split('?')[0] : '';
@@ -103,7 +107,7 @@ export function geminiServerPlugin(): Plugin {
         if (url === '/api/gemini/generate-deskripsi' && req.method === 'POST') {
           try {
             const body = (req as any).body ?? {};
-            const kataKunci = body?.kataKunci ?? '';
+            const kataKunci = (body?.kataKunci || body?.namaKegiatan || '').trim();
             const result = await handleGenerateDeskripsiServer(kataKunci);
             res.setHeader('Content-Type', 'application/json');
             res.statusCode = 200;

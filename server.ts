@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import bodyParser from 'body-parser';
 import path from 'path';
 import fs from 'fs';
@@ -7,6 +8,7 @@ import {
   handleGenerateDeskripsiServer,
   handleGenerateTextServer,
   handleStreamTextServer,
+  setupGeminiLiveWebSocket,
   hasValidGeminiKey,
 } from './apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/src/server/geminiServer.ts';
 import {
@@ -97,8 +99,8 @@ app.post('/api/vocabulary/save', (req, res) => {
 // Server-side Deskripsi Generation with Gemini 3.8 Flash
 app.post('/api/gemini/generate-deskripsi', async (req, res) => {
   try {
-    const { kataKunci } = req.body;
-    const result = await handleGenerateDeskripsiServer(kataKunci || '');
+    const kataKunci = (req.body?.kataKunci || req.body?.namaKegiatan || '').trim();
+    const result = await handleGenerateDeskripsiServer(kataKunci);
     res.json(result);
   } catch (err: any) {
     console.error('Error generating deskripsi:', err);
@@ -150,6 +152,9 @@ app.get('*', (_req, res) => {
   res.sendFile(path.resolve(distPath, 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = http.createServer(app);
+setupGeminiLiveWebSocket(server);
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Production Full-Stack Server] Running on http://0.0.0.0:${PORT}`);
 });

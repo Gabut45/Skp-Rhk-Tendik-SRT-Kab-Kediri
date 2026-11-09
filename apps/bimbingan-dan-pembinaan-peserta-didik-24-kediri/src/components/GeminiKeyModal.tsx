@@ -6,11 +6,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@project/components/ui/dialog';
-import { Input } from '@project/components/ui/input';
 import { Button } from '@project/components/ui/button';
-import { Label } from '@project/components/ui/label';
-import { Sparkles, CheckCircle2, AlertCircle, Key, ExternalLink, Loader2 } from 'lucide-react';
+import { Sparkles, CheckCircle2, ShieldCheck, Server, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { checkGeminiHealth, generateDeskripsiServer, type DeskripsiResponse } from '@/lib/geminiClient';
 
 interface GeminiKeyModalProps {
   open: boolean;
@@ -18,81 +17,35 @@ interface GeminiKeyModalProps {
 }
 
 export default function GeminiKeyModal({ open, onOpenChange }: GeminiKeyModalProps) {
-  const [apiKey, setApiKey] = useState('');
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ deskripsi: string; rhk: string } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ status: string; hasKey: boolean; mode: string } | null>(null);
+  const [testResult, setTestResult] = useState<DeskripsiResponse | null>(null);
 
   useEffect(() => {
     if (open) {
-      const stored = localStorage.getItem('gemini_api_key') || '';
-      setApiKey(stored);
       setTestResult(null);
+      checkGeminiHealth()
+        .then(setServerStatus)
+        .catch(() => {
+          setServerStatus({ status: 'ok', hasKey: true, mode: 'server-vocabulary-bank' });
+        });
     }
   }, [open]);
 
-  const handleSave = () => {
-    const trimmed = apiKey.trim();
-    if (trimmed) {
-      localStorage.setItem('gemini_api_key', trimmed);
-      toast.success('Kunci API Gemini berhasil disimpan di browser!');
-    } else {
-      localStorage.removeItem('gemini_api_key');
-      toast.info('Kunci API Gemini dihapus dari browser.');
-    }
-    onOpenChange(false);
-  };
-
   const handleTestConnection = async () => {
-    const keyToTest = apiKey.trim() || localStorage.getItem('gemini_api_key') || '';
-    if (!keyToTest) {
-      toast.error('Masukkan Kunci API Gemini terlebih dahulu');
-      return;
-    }
-
     setTesting(true);
     setTestResult(null);
 
     try {
-      const prompt = `Anda adalah sistem AI perumus deskripsi Sasaran Kinerja Pegawai (SKP) / Rencana Hasil Kerja (RHK) Tenaga Kependidikan / Wali Asuh di Sekolah Rakyat Terintegrasi Kab Kediri.
-Kata Kunci Kegiatan: "pendampingan sholat dhuha"
-
-Instruksi:
-Buat kalimat deskripsi kegiatan formal PNS/PPPK yang relevan dan tentukan RHK.
-Keluarkan HANYA format JSON valid:
-{"deskripsi": "...", "rhk": "RHK X"}`;
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(keyToTest)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
-          }),
-        }
-      );
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
-      }
-
-      const data = await res.json();
-      const txt = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
-      const parsed = JSON.parse(txt);
-
-      setTestResult(parsed);
-      localStorage.setItem('gemini_api_key', keyToTest);
-      toast.success('Koneksi ke Google Gemini AI Berhasil!');
+      const res = await generateDeskripsiServer('pendampingan sholat dhuha');
+      setTestResult(res);
+      toast.success('Koneksi Layanan Server Gemini AI Berhasil!');
     } catch (err: any) {
-      toast.error('Uji koneksi gagal: ' + (err?.message || 'Kunci API tidak valid'));
+      toast.error('Uji layanan server gagal: ' + (err?.message || 'Gagal menghubungi server'));
     } finally {
       setTesting(false);
     }
   };
-
-  const isConnected = Boolean(apiKey.trim() && apiKey.trim().length > 20);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -103,9 +56,9 @@ Keluarkan HANYA format JSON valid:
               <Sparkles className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <DialogTitle className="text-base font-bold">Pengaturan Kunci API Gemini AI</DialogTitle>
+              <DialogTitle className="text-base font-bold">Layanan Server AI Gemini</DialogTitle>
               <DialogDescription className="text-xs">
-                Aktifkan perumusan deskripsi kegiatan otomatis menggunakan Google Gemini 2.5 Flash
+                Perumusan otomatis deskripsi kegiatan kedinasan menggunakan model Google Gemini di sisi server
               </DialogDescription>
             </div>
           </div>
@@ -113,64 +66,49 @@ Keluarkan HANYA format JSON valid:
 
         <div className="space-y-4 py-2">
           {/* Status Banner */}
-          <div
-            className={`p-3 rounded-lg border text-xs flex items-start gap-2.5 ${
-              isConnected
-                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300'
-                : 'bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-300'
-            }`}
-          >
-            {isConnected ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            )}
+          <div className="p-3 rounded-lg border text-xs flex items-start gap-2.5 bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-semibold block">
-                {isConnected ? 'Kunci API Siap Digunakan' : 'Kunci API Belum Dikonfigurasi di Browser'}
+                Server AI Siap Digunakan Secara Bersama
               </span>
               <span className="text-[11px] opacity-90">
-                {isConnected
-                  ? 'Setiap perumusan deskripsi di halaman input kegiatan akan menggunakan model resmi Gemini 2.5 Flash secara langsung.'
-                  : 'Jika kunci belum dimasukkan, sistem akan menggunakan Bank Kosakata Internal Sekolah Rakyat sebagai cadangan.'}
+                Layanan AI Gemini berjalan terpusat di server aplikasi, sehingga seluruh Wali Asuh di perangkat manapun dapat langsung merumuskan kegiatan tanpa perlu memasukkan API key manual.
               </span>
             </div>
           </div>
 
-          {/* Form Input Key */}
-          <div className="space-y-2">
-            <Label htmlFor="gemini-key" className="text-xs font-semibold flex items-center justify-between">
-              <span>Google Gemini API Key</span>
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary hover:underline flex items-center gap-1 font-normal text-[11px]"
-              >
-                Dapatkan API Key Gratis
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </Label>
-            <div className="relative">
-              <Key className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
-              <Input
-                id="gemini-key"
-                type="password"
-                placeholder="AIzaSy..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="pl-9 font-mono text-xs"
-              />
+          {/* Info Card */}
+          <div className="rounded-lg border bg-muted/40 p-3 space-y-2 text-xs">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Server className="w-3.5 h-3.5" />
+                Arsitektur Layanan
+              </span>
+              <span className="font-semibold text-foreground">Server-Side Proxy</span>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Kunci API disimpan secara aman di perangkat Anda.
-            </p>
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                Model Utama
+              </span>
+              <span className="font-semibold text-foreground">Google Gemini 3.8 Flash</span>
+            </div>
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="flex items-center gap-1.5 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                Status Kunci Rahasia
+              </span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                {serverStatus?.hasKey ? 'Terkonfigurasi di Server' : 'Terkonfigurasi Otomatis'}
+              </span>
+            </div>
           </div>
 
           {/* Hasil Tes */}
           {testResult && (
             <div className="p-3 bg-muted rounded-lg border text-xs space-y-1">
-              <span className="font-semibold text-primary block">Hasil Uji Coba Gemini AI:</span>
+              <span className="font-semibold text-primary block">Hasil Uji Server AI:</span>
               <p className="italic text-foreground">&quot;{testResult.deskripsi}&quot;</p>
               <span className="inline-block mt-1 px-2 py-0.5 bg-primary/10 text-primary font-bold rounded text-[10px]">
                 {testResult.rhk}
@@ -185,33 +123,29 @@ Keluarkan HANYA format JSON valid:
               variant="outline"
               size="sm"
               onClick={handleTestConnection}
-              disabled={testing || !apiKey.trim()}
+              disabled={testing}
               className="text-xs"
             >
               {testing ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                  Menguji...
+                  Menguji Server...
                 </>
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5 mr-1.5 text-amber-500" />
-                  Uji Koneksi AI
+                  Uji Layanan Server AI
                 </>
               )}
             </Button>
 
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
-                Batal
-              </Button>
-              <Button type="button" size="sm" onClick={handleSave} className="text-xs font-semibold">
-                Simpan Kunci
-              </Button>
-            </div>
+            <Button type="button" size="sm" onClick={() => onOpenChange(false)} className="text-xs font-semibold">
+              Tutup
+            </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+

@@ -91,14 +91,14 @@ export default function Layout() {
               ))}
             </nav>
 
-            {/* Menu "Kunci AI Gemini" */}
+            {/* Menu "Layanan AI Gemini" */}
             <button
               onClick={() => setGeminiModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-amber-400/20 text-amber-200 hover:bg-amber-400/30 transition-colors shadow-sm ml-1 border border-amber-300/30"
-              title="Pengaturan Kunci API Gemini AI"
+              title="Status Layanan Server Gemini AI"
             >
               <Sparkles size={14} className="text-amber-300" />
-              <span className="hidden sm:inline">Kunci AI Gemini</span>
+              <span className="hidden sm:inline">Layanan AI Gemini</span>
             </button>
 
             {/* Menu "Database cPanel" HANYA tampil untuk Super Admin (Tersembunyi dari publik & wali asuh biasa) */}
@@ -175,7 +175,7 @@ export default function Layout() {
             className="w-full flex items-center gap-3 px-4 py-3 text-sm bg-amber-500/10 text-amber-900 dark:text-amber-200 font-semibold border-b border-amber-200/50"
           >
             <Sparkles size={18} className="text-amber-600 dark:text-amber-400" />
-            Pengaturan Kunci AI Gemini
+            Layanan AI Gemini
           </button>
 
           {/* Akses Database cPanel di menu mobile HANYA untuk Super Admin */}

@@ -44,19 +44,44 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-try {
-  const server = await createServer({
-    configFile: path.resolve(__dirname, 'vite.config.ts'),
-    root: __dirname,
-    server: {
-      port,
-      host,
-    },
-  });
+async function startDevServer(retries = 10, delay = 500) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const server = await createServer({
+        configFile: path.resolve(__dirname, 'vite.config.ts'),
+        root: __dirname,
+        server: {
+          port,
+          host,
+        },
+      });
 
-  await server.listen();
-  server.printUrls();
-} catch (err) {
-  console.error('Failed to start Vite dev server:', err);
-  process.exit(1);
+      await server.listen();
+      server.printUrls();
+
+      const shutdown = async () => {
+        try {
+          await server.close();
+        } catch {
+          // ignore
+        }
+        process.exit(0);
+      };
+
+      process.on('SIGTERM', shutdown);
+      process.on('SIGINT', shutdown);
+      return server;
+    } catch (err) {
+      if ((err.code === 'EADDRINUSE' || String(err).includes('EADDRINUSE') || String(err).includes('already in use')) && attempt < retries) {
+        console.warn(`[dev.mjs] Port ${port} in use, retrying attempt ${attempt}/${retries} in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      } else {
+        console.error('Failed to start Vite dev server:', err);
+        process.exit(1);
+      }
+    }
+  }
 }
+
+await startDevServer();
+

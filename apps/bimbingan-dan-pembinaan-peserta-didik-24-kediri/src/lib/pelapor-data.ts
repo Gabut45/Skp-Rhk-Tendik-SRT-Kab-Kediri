@@ -55,9 +55,48 @@ export function removeCustomPelapor(nama: string): void {
 }
 
 export function getAllPelaporList(): PelaporInfo[] {
-  const map = new Map<string, PelaporInfo>();
-  INITIAL_PELAPOR_LIST.forEach(p => map.set(p.nama.toLowerCase(), p));
-  getCustomPelaporList().forEach(p => map.set(p.nama.toLowerCase(), p));
+  const nameMap = new Map<string, PelaporInfo>();
+  const nipMap = new Map<string, string>(); // nip -> nameKey
+
+  const addOrUpdate = (p: PelaporInfo) => {
+    if (!p || !p.nama) return;
+    const cleanNama = p.nama.trim();
+    const nameKey = cleanNama.toLowerCase();
+    const cleanNip = (p.nip || '').trim();
+
+    // Jika NIP sama dan valid (>= 8 karakter), gabungkan/perbarui dengan nama yang lebih lengkap
+    if (cleanNip && cleanNip.length >= 8 && nipMap.has(cleanNip)) {
+      const existingKey = nipMap.get(cleanNip)!;
+      const existing = nameMap.get(existingKey);
+      if (existing) {
+        if (cleanNama.length > existing.nama.length) {
+          nameMap.delete(existingKey);
+          nameMap.set(nameKey, { nama: cleanNama, nip: cleanNip });
+          nipMap.set(cleanNip, nameKey);
+        }
+        return;
+      }
+    }
+
+    if (!nameMap.has(nameKey)) {
+      nameMap.set(nameKey, { nama: cleanNama, nip: cleanNip });
+      if (cleanNip && cleanNip.length >= 8) {
+        nipMap.set(cleanNip, nameKey);
+      }
+    } else {
+      // Perbarui NIP jika sebelumnya kosong
+      const existing = nameMap.get(nameKey)!;
+      if (!existing.nip && cleanNip) {
+        existing.nip = cleanNip;
+        if (cleanNip.length >= 8) {
+          nipMap.set(cleanNip, nameKey);
+        }
+      }
+    }
+  };
+
+  INITIAL_PELAPOR_LIST.forEach(addOrUpdate);
+  getCustomPelaporList().forEach(addOrUpdate);
 
   // Ambil juga dari accounts store jika ada di browser
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -68,10 +107,7 @@ export function getAllPelaporList(): PelaporInfo[] {
         if (Array.isArray(accounts)) {
           accounts.forEach((a: any) => {
             if (a.role === 'wali_asuh' && a.nama) {
-              const key = a.nama.toLowerCase();
-              if (!map.has(key)) {
-                map.set(key, { nama: a.nama, nip: a.nip || '' });
-              }
+              addOrUpdate({ nama: a.nama, nip: a.nip || '' });
             }
           });
         }
@@ -79,7 +115,7 @@ export function getAllPelaporList(): PelaporInfo[] {
     } catch {}
   }
 
-  return Array.from(map.values());
+  return Array.from(nameMap.values());
 }
 
 export const PELAPOR_LIST: PelaporInfo[] = [...INITIAL_PELAPOR_LIST];
@@ -138,6 +174,77 @@ export function matchPelapor(nameOrUser?: string): PelaporInfo | undefined {
   });
   return partial;
 }
+
+/**
+ * Mengecek apakah suatu kegiatan atau file laporan dimiliki oleh akun yang sedang login.
+ * - Super Admin memiliki hak penuh (true untuk semua record).
+ * - Wali Asuh hanya memiliki hak (true) jika nama/NIP pada rekaman cocok dengan akunnya sendiri.
+ */
+export function isRecordOwnedByUser(
+  user: { role?: string; nama?: string; username?: string; nip?: string } | null | undefined,
+  recordNamaPelapor?: string,
+  recordNipPelapor?: string
+): boolean {
+  if (!user) return false;
+  if (user.role === 'super_admin') return true;
+
+  const targetNama = (recordNamaPelapor || '').trim();
+  const targetNip = (recordNipPelapor || '').trim();
+  const userNama = (user.nama || '').trim();
+  const userNip = (user.nip || '').trim();
+  const userUsername = (user.username || '').trim();
+
+  // 1. Cocok NIP jika ada dan valid
+  if (userNip && targetNip && userNip === targetNip) {
+    return true;
+  }
+
+  // 2. Cocok nama lengkap secara langsung (case-insensitive)
+  if (userNama && targetNama && userNama.toLowerCase() === targetNama.toLowerCase()) {
+    return true;
+  }
+
+  // 3. Cocok via normalisasi matchPelapor (gelar, ejaan resmi, dll)
+  const matchedUser = matchPelapor(userNama) || matchPelapor(userUsername);
+  const matchedTarget = matchPelapor(targetNama);
+
+  if (matchedUser && matchedTarget && matchedUser.nama.toLowerCase() === matchedTarget.nama.toLowerCase()) {
+    return true;
+  }
+
+  if (matchedUser && targetNama && matchedUser.nama.toLowerCase() === targetNama.toLowerCase()) {
+    return true;
+  }
+
+  if (matchedTarget && userNama && matchedTarget.nama.toLowerCase() === userNama.toLowerCase()) {
+    return true;
+  }
+
+  // 4. Cocok via perbandingan kata (contoh "Ilma Warta Fani" cocok dengan "Ilma Warta Fani, S.Pd")
+  if (userNama && targetNama) {
+    const userWords = userNama.toLowerCase().split(/[\s,.]+/).filter(w => w.length >= 3);
+    const targetWords = targetNama.toLowerCase().split(/[\s,.]+/).filter(w => w.length >= 3);
+    if (userWords.length >= 2 && targetWords.length >= 2) {
+      const matchAllInTarget = userWords.every(w => targetNama.toLowerCase().includes(w));
+      const matchAllInUser = targetWords.every(w => userNama.toLowerCase().includes(w));
+      if (matchAllInTarget || matchAllInUser) {
+        return true;
+      }
+    }
+  }
+
+  // 5. Cocok via username
+  if (userUsername && targetNama) {
+    const cleanUser = userUsername.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const cleanTarget = targetNama.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanUser && cleanUser.length >= 3 && cleanTarget.includes(cleanUser)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 
 // --- Pre-configured TTD URLs per pelapor (kosong secara default) ---
 const PRESET_TTD: Record<string, string> = {};

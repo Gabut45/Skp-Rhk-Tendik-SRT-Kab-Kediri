@@ -90,3 +90,74 @@ export async function streamTextServer(
     }
   }
 }
+
+export interface GeminiHealthResponse {
+  status: string;
+  serverSide: boolean;
+  hasKey: boolean;
+  mode: string;
+}
+
+/**
+ * Check server-side Gemini AI health and readiness
+ */
+export async function checkGeminiHealth(): Promise<GeminiHealthResponse> {
+  const res = await fetch('/api/gemini/health');
+  if (!res.ok) {
+    throw new Error('Health check failed');
+  }
+  return await res.json();
+}
+
+export interface LiveClientOptions {
+  onAudio?: (base64Pcm24k: string) => void;
+  onInterrupted?: () => void;
+  onError?: (err: any) => void;
+  onClose?: () => void;
+}
+
+/**
+ * Connect to server-side Gemini Live API via WebSocket
+ */
+export function connectGeminiLive(options: LiveClientOptions): {
+  sendAudioChunk: (base64Pcm16k: string) => void;
+  close: () => void;
+} {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}/api/gemini/live`;
+  const ws = new WebSocket(wsUrl);
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.audio && options.onAudio) {
+        options.onAudio(data.audio);
+      }
+      if (data.interrupted && options.onInterrupted) {
+        options.onInterrupted();
+      }
+      if (data.error && options.onError) {
+        options.onError(new Error(data.error));
+      }
+    } catch (e) {
+      options.onError?.(e);
+    }
+  };
+
+  ws.onerror = (e) => options.onError?.(e);
+  ws.onclose = () => options.onClose?.();
+
+  return {
+    sendAudioChunk: (base64Pcm16k: string) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ audio: base64Pcm16k }));
+      }
+    },
+    close: () => {
+      try {
+        ws.close();
+      } catch {}
+    },
+  };
+}
+

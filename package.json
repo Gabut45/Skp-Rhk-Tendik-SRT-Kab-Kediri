@@ -21,6 +21,7 @@
     "@google/genai": "^2.32.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^5.0.0",
     "body-parser": "^1.20.3",
     "express": "^4.21.2",
@@ -31,6 +32,7 @@
     "tsx": "^4.23.15",
     "typescript": "~5.7.3",
     "vite": "^8.1.0",
+    "ws": "^8.22.2",
     "zitejs": "0.9.148"
   }
 }

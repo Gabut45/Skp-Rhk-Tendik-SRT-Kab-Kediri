@@ -830,8 +830,8 @@ export default function KelolaPenggunaPage() {
                   defaultValue=""
                 >
                   <option value="" disabled>-- Pilih Wali Asuh untuk otomatis mengisi --</option>
-                  {PELAPOR_LIST.map(p => (
-                    <option key={p.nama} value={p.nama}>{p.nama}</option>
+                  {PELAPOR_LIST.map((p, idx) => (
+                    <option key={`preset_opt_${p.nama}_${idx}`} value={p.nama}>{p.nama}</option>
                   ))}
                 </select>
               </div>

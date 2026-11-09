@@ -13,7 +13,7 @@ import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
@@ -249,59 +249,23 @@ export default function RiwayatPage() {
   };
 
   const fetchData = useCallback(async () => {
-    const cacheKey = `__cache_riwayat_${filterTanggalMulai || 'all'}_${filterTanggalSelesai || 'all'}_${filterPelapor || 'all'}`;
-
-    // 1. Instant Cache: Jika ada cache riwayat lokal, tampilkan seketika dalam 0 milidetik
-    let hasCache = false;
-    try {
-      const cachedStr = sessionStorage.getItem(cacheKey);
-      if (cachedStr) {
-        const cachedArr = JSON.parse(cachedStr);
-        if (Array.isArray(cachedArr)) {
-          setRecords(cachedArr.filter(r => !isClientRecordDeleted(r)));
-          setLoading(false);
-          hasCache = true;
-        }
-      }
-    } catch {}
-
-    if (!hasCache) {
-      setLoading(true);
-    }
+    setLoading(true);
 
     try {
-      if (isAppDeletedAll()) {
-        setRecords([]);
-        setLoading(false);
-        sessionStorage.removeItem(cacheKey);
-        return;
-      }
-
-      const deletedIdsArr = Array.from(getDeletedIds());
       syncServerPresets().catch(() => {});
 
-      // 2. Ambil ringkasan kegiatan langsung dari database server cPanel
-      // Menggunakan summaryOnly: true sehingga data super ringan dan cepat
-      const [riwayatData, kegiatanData] = await Promise.all([
-        getRiwayat({
-          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
-          tanggalMulai: filterTanggalMulai || undefined,
-          tanggalSelesai: filterTanggalSelesai || undefined,
-          deletedIds: deletedIdsArr,
-        }),
-        getKegiatan({
-          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
-          tanggalMulai: filterTanggalMulai || undefined,
-          tanggalSelesai: filterTanggalSelesai || undefined,
-          deletedIds: deletedIdsArr,
-          summaryOnly: true,
-        }),
-      ]);
+      // Ambil ringkasan kegiatan langsung dari database server cPanel MySQL
+      // (summaryOnly: true agar transfer data super cepat & ringan)
+      const kegiatanData = await getKegiatan({
+        namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
+        tanggalMulai: filterTanggalMulai || undefined,
+        tanggalSelesai: filterTanggalSelesai || undefined,
+        summaryOnly: true,
+      });
 
-      const validRiwayat = riwayatData.records.filter(r => !isClientRecordDeleted(r));
-      const validKegiatan = kegiatanData.records.filter(k => !isClientRecordDeleted(k));
+      const validKegiatan = kegiatanData.records || [];
 
-      // 3. Kelompokkan kegiatan dari server MySQL berdasarkan tanggal & namaPelapor
+      // Kelompokkan kegiatan dari server MySQL berdasarkan tanggal & namaPelapor
       const groups = new Map<string, { tanggal: string; namaPelapor: string; items: Activity[] }>();
       for (const k of validKegiatan) {
         if (!k.tanggal || k.tanggal === '1970-01-01') continue;
@@ -313,7 +277,7 @@ export default function RiwayatPage() {
         groups.get(key)!.items.push(k);
       }
 
-      // 4. Bangun daftar berkas resmi yang 100% identik di semua perangkat
+      // Bangun daftar berkas resmi yang 100% identik di semua perangkat
       const unifiedRecords: FileRecord[] = [];
       const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
@@ -336,24 +300,28 @@ export default function RiwayatPage() {
           rhkNomor: g.items[0]?.rhkKategori || 'RHK 3',
         };
 
-        if (!isClientRecordDeleted(officialRecord)) {
-          unifiedRecords.push(officialRecord);
-        }
+        unifiedRecords.push(officialRecord);
       }
 
-      // Masukkan laporan RHK jika ada
-      const rhkReports = validRiwayat.filter(r => r.jenisLaporan === 'Laporan RHK');
-      for (const r of rhkReports) {
-        if (!isClientRecordDeleted(r)) {
+      // Ambil laporan RHK jika ada
+      try {
+        const riwayatData = await getRiwayat({
+          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
+          tanggalMulai: filterTanggalMulai || undefined,
+          tanggalSelesai: filterTanggalSelesai || undefined,
+        });
+        const rhkReports = (riwayatData.records || []).filter(r => r.jenisLaporan === 'Laporan RHK');
+        for (const r of rhkReports) {
           unifiedRecords.push(r);
         }
+      } catch (err) {
+        console.warn('Gagal memuat laporan RHK:', err);
       }
 
       setRecords(unifiedRecords);
-    } catch {
-      if (!hasCache) {
-        toast.error('Gagal memuat riwayat');
-      }
+    } catch (err) {
+      console.error('Gagal memuat riwayat dari server:', err);
+      toast.error('Gagal memuat riwayat dari server database');
     } finally {
       setLoading(false);
     }
@@ -375,6 +343,11 @@ export default function RiwayatPage() {
    */
   const handleDelete = async (record: FileRecord) => {
     try {
+      if (!isSuperAdmin && !isRecordOwnedByUser(user, record.namaPelapor)) {
+        toast.error('Anda tidak memiliki izin untuk menghapus berkas laporan milik pengguna lain');
+        return;
+      }
+
       toast.info('Menghapus data secara permanen dari server dan penyimpanan...');
 
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
@@ -821,7 +794,7 @@ export default function RiwayatPage() {
                               >
                                 <Pencil size={14} />
                               </Button>
-                              {isSuperAdmin && (
+                              {(isSuperAdmin || isRecordOwnedByUser(user, r.namaPelapor)) && (
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
                                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-red-50" title="Hapus Permanen">

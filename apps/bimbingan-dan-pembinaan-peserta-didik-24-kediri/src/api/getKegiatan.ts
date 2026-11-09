@@ -139,25 +139,36 @@ export default createEndpoint({
       filters.namaPelapor = input.namaPelapor;
     }
 
-    // 1 & 2. Ambil dari cPanel MySQL dan local db secara paralel (mengurangi waktu tunggu hingga 50%+)
-    const [cpanelRecords, localResult] = await Promise.all([
-      fetchFromCpanel(input),
-      zite.kegiatanHarian.findAll({ filters, limit: 500 }).catch(err => {
-        console.warn('[getKegiatan] Local db error:', err);
-        return { records: [] };
-      }),
-    ]);
-    const localRecords = localResult.records;
+    // 1. Ambil kegiatan langsung dari database server cPanel MySQL (Single Source of Truth)
+    const cpanelRecords = await fetchFromCpanel(input);
 
-    // 3. Gabungkan secara deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
+    let activeRecords: any[] = [];
+    if (cpanelRecords && cpanelRecords.length > 0) {
+      // Data server cPanel tersedia: gunakan cPanel 100% sebagai sumber data resmi bersama
+      activeRecords = cpanelRecords.filter(r => {
+        if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
+        if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) return false;
+        return true;
+      });
+    } else {
+      // Fallback cadangan hanya jika server cPanel offline atau koneksi gagal
+      try {
+        const localResult = await zite.kegiatanHarian.findAll({ filters, limit: 500 });
+        activeRecords = localResult.records.filter(r => {
+          if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
+          if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) return false;
+          return true;
+        });
+      } catch (err) {
+        console.warn('[getKegiatan] Fallback local error:', err);
+      }
+    }
+
+    // Deduplikasi jika ada ID atau fingerprint identik
     const byFingerprint = new Map<string, any>();
     const seenIds = new Set<string>();
 
-    // Masukkan cPanel records terlebih dahulu (server authoritative)
-    for (const r of cpanelRecords) {
-      if (isRecordDeleted(r)) continue;
-      if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') continue;
-      if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) continue;
+    for (const r of activeRecords) {
       const id = String(r.id || '');
       const fp = getKegiatanFingerprint(r);
 
@@ -167,46 +178,11 @@ export default createEndpoint({
         if (id) seenIds.add(id);
         byFingerprint.set(fp, r);
       } else {
-        // Jika duplikat di cPanel, prioritaskan yang memiliki foto valid lebih lengkap
         const existing = byFingerprint.get(fp);
         const existingPhotos = (existing.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
         const rPhotos = (r.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
         if (rPhotos.length > existingPhotos.length) {
           byFingerprint.set(fp, r);
-        }
-      }
-    }
-
-    // Masukkan local records, hindari duplikasi jika sudah ada di cPanel dengan fingerprint yang sama
-    for (const r of localRecords) {
-      if (isRecordDeleted(r)) continue;
-      if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') continue;
-      if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) continue;
-      const id = String(r.id || '');
-      const fp = getKegiatanFingerprint(r);
-
-      // Pastikan format fotoKegiatan di lokal ternormalisasi
-      r.fotoKegiatan = (Array.isArray(r.fotoKegiatan) ? r.fotoKegiatan : [])
-        .map((item: any) => (typeof item === 'string' ? { url: item } : (item?.url ? { url: String(item.url) } : null)))
-        .filter((item): item is { url: string } => item !== null && Boolean(item.url && item.url.trim().length > 20 && !item.url.startsWith('data:,'))) as any;
-
-      if (id && seenIds.has(id)) continue;
-
-      if (!byFingerprint.has(fp)) {
-        if (id) seenIds.add(id);
-        byFingerprint.set(fp, r);
-      } else {
-        // Perkaya rekaman yang ada jika foto atau ttd di lokal lebih lengkap
-        const existing = byFingerprint.get(fp);
-        const existingPhotos = (existing.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
-        const rPhotos = (r.fotoKegiatan || []).filter((f: any) => (f?.url || f)?.trim?.()?.length > 20);
-        if (existingPhotos.length === 0 && rPhotos.length > 0) {
-          existing.fotoKegiatan = rPhotos;
-        } else if (rPhotos.length > existingPhotos.length) {
-          existing.fotoKegiatan = rPhotos;
-        }
-        if ((!existing.tandaTangan || existing.tandaTangan.length === 0) && r.tandaTangan?.length) {
-          existing.tandaTangan = r.tandaTangan;
         }
       }
     }

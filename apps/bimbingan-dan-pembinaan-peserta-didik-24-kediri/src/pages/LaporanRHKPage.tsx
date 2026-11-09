@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -279,6 +279,11 @@ export default function LaporanRHKPage() {
    */
   const handleDeleteRhkRecord = async (record: FileRecord) => {
     try {
+      if (!isSuperAdmin && !isRecordOwnedByUser(user, record.namaPelapor)) {
+        toast.error('Anda tidak memiliki izin untuk menghapus berkas laporan milik pengguna lain');
+        return;
+      }
+
       toast.info('Menghapus berkas Laporan RHK dan data terkait secara permanen...');
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const targetTanggalMulai = record.tanggalMulai;
@@ -641,7 +646,7 @@ export default function LaporanRHKPage() {
                             <FileText size={13} />
                             <span>Word</span>
                           </Button>
-                          {isSuperAdmin && (
+                          {(isSuperAdmin || isRecordOwnedByUser(user, r.namaPelapor)) && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button

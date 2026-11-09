@@ -213,9 +213,9 @@ export default createEndpoint({
     const byFingerprint = new Map<string, any>();
     const seenIds = new Set<string>();
 
-    const allRecs = [...cpanelRecs, ...localRecs];
+    const allRecs = (cpanelRecs && cpanelRecs.length > 0) ? cpanelRecs : localRecs;
     for (const r of allRecs) {
-      if (!r || isRecordDeleted(r)) continue;
+      if (!r) continue;
       const id = String(r.id || '');
       if (id && seenIds.has(id)) continue;
 

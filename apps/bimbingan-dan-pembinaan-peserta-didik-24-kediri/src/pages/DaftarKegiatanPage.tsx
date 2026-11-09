@@ -12,7 +12,7 @@ import { Trash2, Search, Loader2, ImageIcon, Copy } from 'lucide-react';
 import { getKegiatan, deleteKegiatan, deleteRiwayat, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 
 import {
@@ -63,54 +63,27 @@ export default function DaftarKegiatanPage() {
 
   const fetchData = useCallback(async () => {
     setSelectedIds(new Set());
-    const cacheKey = `__cache_keg_${tanggalMulai || 'all'}_${tanggalSelesai || 'all'}_${namaPelapor || 'all'}`;
-
-    // 1. Instant Cache: Jika ada cache lokal, tampilkan seketika dalam 0 milidetik
-    let hasCache = false;
-    try {
-      const cachedStr = sessionStorage.getItem(cacheKey);
-      if (cachedStr) {
-        const cachedArr = JSON.parse(cachedStr);
-        if (Array.isArray(cachedArr)) {
-          setRecords(cachedArr.filter(r => !isClientRecordDeleted(r)));
-          setLoading(false);
-          hasCache = true;
-        }
-      }
-    } catch {}
-
-    if (!hasCache) {
-      setLoading(true);
-    }
+    setLoading(true);
 
     try {
-      if (isAppDeletedAll()) {
-        setRecords([]);
-        setLoading(false);
-        sessionStorage.removeItem(cacheKey);
-        return;
-      }
-
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
-      const deletedIdsArr = Array.from(getDeletedIds());
 
-      // 2. Fetch mode ringan (summaryOnly: true) berukuran kecil (~20KB) & super cepat
+      // Fetch mode ringan (summaryOnly: true) langsung dari server database MySQL
       const data = await getKegiatan({
         tanggalMulai: tanggalMulai || undefined,
         tanggalSelesai: tanggalSelesai || undefined,
         namaPelapor: (namaPelapor && namaPelapor !== 'Semua Pelapor') ? namaPelapor : undefined,
-        deletedIds: deletedIdsArr,
         cpanelUrl,
         cpanelKey,
         summaryOnly: true,
       });
 
-      // 3. Terapkan deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
+      // Terapkan deduplikasi ketat berdasarkan ID dan Konten (Fingerprint)
       const byFingerprint = new Map<string, Activity>();
       const seenIds = new Set<string>();
 
       for (const r of data.records) {
-        if (!r || isClientRecordDeleted(r)) continue;
+        if (!r) continue;
 
         const id = String(r.id || '');
         if (id && seenIds.has(id)) continue;
@@ -146,13 +119,9 @@ export default function DaftarKegiatanPage() {
       });
 
       setRecords(combined);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(combined));
-      } catch {}
-    } catch {
-      if (!hasCache) {
-        toast.error('Gagal memuat data');
-      }
+    } catch (err) {
+      console.error('Gagal memuat data:', err);
+      toast.error('Gagal memuat data dari server database');
     } finally {
       setLoading(false);
     }
@@ -170,8 +139,13 @@ export default function DaftarKegiatanPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const targetRecord = records.find(r => r.id === id);
+      if (!isSuperAdmin && !isRecordOwnedByUser(user, targetRecord?.namaPelapor, targetRecord?.nip)) {
+        toast.error('Anda hanya berhak menghapus kegiatan yang Anda input sendiri');
+        return;
+      }
+
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
       // 1. Hapus dari backend zite & server MySQL cPanel
       await deleteKegiatan({
@@ -225,25 +199,39 @@ export default function DaftarKegiatanPage() {
   };
 
   const handleBulkDelete = async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    const targetIds = isSuperAdmin
+      ? Array.from(selectedIds)
+      : Array.from(selectedIds).filter(id => {
+          const r = records.find(rec => rec.id === id);
+          return r && isRecordOwnedByUser(user, r.namaPelapor, r.nip);
+        });
+
+    if (targetIds.length === 0) {
+      toast.error('Tidak ada kegiatan milik Anda yang dipilih untuk dihapus');
+      return;
+    }
+
     try {
-      toast.info(`Menghapus ${ids.length} kegiatan secara permanen dari server dan penyimpanan...`);
+      toast.info(`Menghapus ${targetIds.length} kegiatan secara permanen dari server dan penyimpanan...`);
       const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
       // 1. Hapus di backend
-      await deleteKegiatan({ ids, cpanelUrl, cpanelKey });
+      await deleteKegiatan({ ids: targetIds, cpanelUrl, cpanelKey });
 
       // 2. Hapus di cPanel MySQL
-      await deleteCpanelBulkKegiatan({ ids });
+      await deleteCpanelBulkKegiatan({ ids: targetIds });
 
       // 3. Purge dari browser localStorage dan tandai cascade
-      purgeLocalDataForRiwayat({ deletedActivityIds: ids });
+      purgeLocalDataForRiwayat({ deletedActivityIds: targetIds });
 
       // 4. Update UI
-      setRecords(prev => prev.filter(r => !selectedIds.has(r.id)));
-      setSelectedIds(new Set());
-      toast.success(`${ids.length} kegiatan berhasil dihapus permanen`);
+      setRecords(prev => prev.filter(r => !targetIds.includes(r.id)));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        targetIds.forEach(id => next.delete(id));
+        return next;
+      });
+      toast.success(`${targetIds.length} kegiatan berhasil dihapus permanen`);
     } catch {
       toast.error('Gagal menghapus beberapa kegiatan');
     }
@@ -371,29 +359,42 @@ export default function DaftarKegiatanPage() {
               <Button onClick={handleCopyToInput} size="sm" className="gap-1.5 text-xs">
                 <Copy size={14} /> Salin {selectedIds.size} Kegiatan
               </Button>
-              {isSuperAdmin && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
-                      <Trash2 size={14} /> Hapus {selectedIds.size} Kegiatan
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle className="text-destructive">Hapus {selectedIds.size} Kegiatan Terpilih?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Batal</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
-                        Hapus Permanen
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
+              {(() => {
+                const ownedSelectedCount = isSuperAdmin
+                  ? selectedIds.size
+                  : Array.from(selectedIds).filter(id => {
+                      const r = records.find(rec => rec.id === id);
+                      return r && isRecordOwnedByUser(user, r.namaPelapor, r.nip);
+                    }).length;
+
+                if (ownedSelectedCount === 0) return null;
+
+                return (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="gap-1.5 text-xs">
+                        <Trash2 size={14} /> Hapus {ownedSelectedCount} Kegiatan
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-destructive">Hapus {ownedSelectedCount} Kegiatan Terpilih?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {isSuperAdmin
+                            ? 'Kegiatan yang dipilih akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.'
+                            : 'Kegiatan terpilih yang Anda input akan dihapus secara permanen dari server dan database. Tindakan ini tidak dapat dibatalkan.'}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive text-destructive-foreground">
+                          Hapus Permanen
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                );
+              })()}
             </>
           )}
 
@@ -577,7 +578,7 @@ export default function DaftarKegiatanPage() {
                           >
                             <Copy size={14} />
                           </Button>
-                          {isSuperAdmin && (
+                          {(isSuperAdmin || isRecordOwnedByUser(user, r.namaPelapor, r.nip)) && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Hapus Kegiatan">
