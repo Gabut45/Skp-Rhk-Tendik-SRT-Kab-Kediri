@@ -442,7 +442,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit;
     }
-    // Aksi: Hapus Kegiatan (Permanen Selamanya)
+    // Helper: Hapus berkas fisik di File Manager cPanel berdasarkan URL/path di folder uploads/
+    function deletePhysicalFileByUrl($fileUrl) {
+        if (!$fileUrl || !is_string($fileUrl)) return;
+        $trimmed = trim($fileUrl);
+        if (!$trimmed || strpos($trimmed, 'data:') === 0) return;
+        $parsedPath = parse_url($trimmed, PHP_URL_PATH);
+        if (!$parsedPath) $parsedPath = $trimmed;
+        $pos = strpos($parsedPath, '/uploads/');
+        if ($pos !== false) {
+            $rel = substr($parsedPath, $pos + 1); // uploads/...
+        } elseif (strpos($parsedPath, 'uploads/') === 0) {
+            $rel = $parsedPath;
+        } else {
+            return;
+        }
+        if (strpos($rel, '..') !== false) return;
+        $fullPath = __DIR__ . '/' . $rel;
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
+    }
+
+    function deletePhotosFromColumn($fotoCol) {
+        if (!$fotoCol) return;
+        $decoded = json_decode($fotoCol, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $u) {
+                deletePhysicalFileByUrl($u);
+            }
+        } elseif (is_string($fotoCol)) {
+            deletePhysicalFileByUrl($fotoCol);
+        }
+    }
+
+    // Aksi: Hapus Kegiatan (Permanen Selamanya + Hapus File Fisik)
     if ($action === 'delete_kegiatan') {
         $delId = $data['id'] ?? ($_GET['id'] ?? '');
         $delNum = $data['id_numeric'] ?? null;
@@ -455,26 +489,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
         if ($deleteAll) {
+            $q = $pdo->query("SELECT foto_url FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
+            while ($r = $q->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE id IN ($inClause)");
+            $sel->execute($delIds);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
             $numVal = $delNum ?? (is_numeric($delId) ? $delId : 0);
+            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
+            $sel->execute([':id' => $delId, ':num' => $numVal]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $stmt->execute([':id' => $delId, ':num' => $numVal]);
         }
         if ($waktuMulai && $tgl && $pelapor) {
+            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
+            $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
         } elseif ($tgl && $pelapor && empty($delId)) {
+            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
+            $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
         if ($tglMulai && $tglSelesai && $pelapor && empty($delId)) {
+            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
+            $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
@@ -496,22 +547,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
         if ($deleteAll) {
+            $q = $pdo->query("SELECT file_url FROM riwayat_file");
+            while ($r = $q->fetch(PDO::FETCH_ASSOC)) deletePhysicalFileByUrl($r['file_url'] ?? '');
             $pdo->exec("DELETE FROM riwayat_file");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            $sel = $pdo->prepare("SELECT file_url FROM riwayat_file WHERE id IN ($inClause)");
+            $sel->execute($delIds);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhysicalFileByUrl($r['file_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
+            $sel = $pdo->prepare("SELECT file_url FROM riwayat_file WHERE id = :id");
+            $sel->execute([':id' => $delId]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhysicalFileByUrl($r['file_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id = :id");
             $stmt->execute([':id' => $delId]);
         }
         if ($tgl && $pelapor) {
+            $sel = $pdo->prepare("SELECT file_url FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
+            $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhysicalFileByUrl($r['file_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
         if ($tglMulai && $tglSelesai && $pelapor) {
+            $sel = $pdo->prepare("SELECT file_url FROM riwayat_file WHERE tanggal_mulai >= :tm AND tanggal_selesai <= :ts AND nama_pelapor = :pelapor");
+            $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhysicalFileByUrl($r['file_url'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE tanggal_mulai >= :tm AND tanggal_selesai <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
