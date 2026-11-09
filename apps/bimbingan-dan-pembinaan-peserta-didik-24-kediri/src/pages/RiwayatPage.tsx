@@ -13,7 +13,7 @@ import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, syncServerPresets } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
@@ -28,6 +28,7 @@ import {
   isAppDeletedAll,
   getDeletedIds,
   isClientRecordDeleted,
+  autoPushLocalKegiatanToCpanel,
 } from '@/lib/cpanel-client';
 
 type FileRecord = GetRiwayatOutputType['records'][0];
@@ -122,7 +123,10 @@ export default function RiwayatPage() {
       const targetTanggalMulai = r.tanggalMulai || today;
       const targetTanggalSelesai = r.tanggalSelesai || r.tanggalMulai || today;
       const pelaporNama = r.namaPelapor || DEFAULT_PELAPOR.nama;
-      const savedTtd = getSavedTtd(pelaporNama);
+      let savedTtd = getSavedTtd(pelaporNama);
+      if (!savedTtd) {
+        savedTtd = await getSavedTtdAsync(pelaporNama);
+      }
 
       const rhkRes = await generatePdfRhk({
         rhkNomor: rhkNomor as any,
@@ -150,7 +154,10 @@ export default function RiwayatPage() {
 
     const first = kegData.records[0];
     const pelaporNama = r.namaPelapor || first.namaPelapor || DEFAULT_PELAPOR.nama;
-    const savedTtd = getSavedTtd(pelaporNama);
+    let savedTtd = getSavedTtd(pelaporNama);
+    if (!savedTtd) {
+      savedTtd = await getSavedTtdAsync(pelaporNama);
+    }
     const ttdUrl = first.tandaTangan?.[0]?.url || savedTtd || undefined;
 
     const preview = await previewHarian({
@@ -165,7 +172,7 @@ export default function RiwayatPage() {
         rhkKategori: k.rhkKategori || undefined,
         fotoKegiatan: (k.fotoKegiatan || [])
           .map(f => (typeof f === 'string' ? f : f?.url || ''))
-          .filter(u => typeof u === 'string' && u.trim().length > 20 && !u.startsWith('data:,')),
+          .filter(u => typeof u === 'string' && u.trim().length > 5 && !u.startsWith('data:,')),
       })),
     });
 
@@ -273,8 +280,8 @@ export default function RiwayatPage() {
       const deletedIdsArr = Array.from(getDeletedIds());
       syncServerPresets().catch(() => {});
 
-      // 2. Ambil data riwayat dan ringkasan kegiatan secara paralel (Promise.all)
-      // Menggunakan summaryOnly: true untuk kegiatan sehingga data super ringan dan cepat
+      // 2. Ambil ringkasan kegiatan langsung dari database server cPanel
+      // Menggunakan summaryOnly: true sehingga data super ringan dan cepat
       const [riwayatData, kegiatanData] = await Promise.all([
         getRiwayat({
           namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
@@ -291,14 +298,13 @@ export default function RiwayatPage() {
         }),
       ]);
 
-      // Filter yang sudah ditandai dihapus permanen
       const validRiwayat = riwayatData.records.filter(r => !isClientRecordDeleted(r));
       const validKegiatan = kegiatanData.records.filter(k => !isClientRecordDeleted(k));
 
-      // 3. Kelompokkan kegiatan berdasarkan tanggal & namaPelapor
+      // 3. Kelompokkan kegiatan dari server MySQL berdasarkan tanggal & namaPelapor
       const groups = new Map<string, { tanggal: string; namaPelapor: string; items: Activity[] }>();
       for (const k of validKegiatan) {
-        if (!k.tanggal) continue;
+        if (!k.tanggal || k.tanggal === '1970-01-01') continue;
         const key = `${k.tanggal}___${k.namaPelapor || 'Wali Asuh'}`;
 
         if (!groups.has(key)) {
@@ -307,46 +313,43 @@ export default function RiwayatPage() {
         groups.get(key)!.items.push(k);
       }
 
-      // 4. Merge: pastikan setiap hari yang memiliki kegiatan muncul di Riwayat File
-      const mergedRecords: FileRecord[] = [...validRiwayat];
-      const existingKeys = new Set(
-        mergedRecords.map(r => `${r.tanggalMulai}___${r.namaPelapor}`)
-      );
-
+      // 4. Bangun daftar berkas resmi yang 100% identik di semua perangkat
+      const unifiedRecords: FileRecord[] = [];
       const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
       const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-      for (const [key, g] of groups.entries()) {
-        if (!existingKeys.has(key)) {
-          const dateObj = new Date(g.tanggal + 'T00:00:00');
-          const dateFormatted = !isNaN(dateObj.getTime())
-            ? `${days[dateObj.getDay()]}, ${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`
-            : g.tanggal;
+      for (const [, g] of groups.entries()) {
+        const dateObj = new Date(g.tanggal + 'T00:00:00');
+        const dateFormatted = !isNaN(dateObj.getTime())
+          ? `${days[dateObj.getDay()]}, ${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+          : g.tanggal;
 
-          const syntheticRecord: FileRecord = {
-            id: `cpanel_harian_${g.tanggal}_${encodeURIComponent(g.namaPelapor)}`,
-            namaFile: `Kinerja Harian - ${dateFormatted} (${g.items.length} Kegiatan)`,
-            jenisLaporan: 'Kinerja Harian',
-            namaPelapor: g.namaPelapor,
-            pdfUrl: '',
-            dibuatPada: `${g.tanggal}T12:00:00.000Z`,
-            tanggalMulai: g.tanggal,
-            tanggalSelesai: g.tanggal,
-            rhkNomor: g.items[0]?.rhkKategori || 'RHK 3',
-          };
+        const officialRecord: FileRecord = {
+          id: `cpanel_harian_${g.tanggal}_${encodeURIComponent(g.namaPelapor)}`,
+          namaFile: `Kinerja Harian - ${dateFormatted} - ${g.namaPelapor} (PDF)`,
+          jenisLaporan: 'Kinerja Harian',
+          namaPelapor: g.namaPelapor,
+          pdfUrl: '',
+          dibuatPada: `${g.tanggal}T12:00:00.000Z`,
+          tanggalMulai: g.tanggal,
+          tanggalSelesai: g.tanggal,
+          rhkNomor: g.items[0]?.rhkKategori || 'RHK 3',
+        };
 
-          if (!isClientRecordDeleted(syntheticRecord)) {
-            mergedRecords.push(syntheticRecord);
-            existingKeys.add(key);
-          }
+        if (!isClientRecordDeleted(officialRecord)) {
+          unifiedRecords.push(officialRecord);
         }
       }
 
-      const finalRecords = mergedRecords.filter(r => !isClientRecordDeleted(r));
-      setRecords(finalRecords);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(finalRecords));
-      } catch {}
+      // Masukkan laporan RHK jika ada
+      const rhkReports = validRiwayat.filter(r => r.jenisLaporan === 'Laporan RHK');
+      for (const r of rhkReports) {
+        if (!isClientRecordDeleted(r)) {
+          unifiedRecords.push(r);
+        }
+      }
+
+      setRecords(unifiedRecords);
     } catch {
       if (!hasCache) {
         toast.error('Gagal memuat riwayat');
@@ -356,7 +359,15 @@ export default function RiwayatPage() {
     }
   }, [filterPelapor, filterTanggalMulai, filterTanggalSelesai]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    autoPushLocalKegiatanToCpanel().then(res => {
+      if (res && res.pushedCount > 0) {
+        toast.success(res.message);
+        fetchData();
+      }
+    }).catch(() => {});
+  }, [fetchData]);
 
   /**
    * Menghapus laporan dan seluruh data kegiatan terkait secara permanen selamanya

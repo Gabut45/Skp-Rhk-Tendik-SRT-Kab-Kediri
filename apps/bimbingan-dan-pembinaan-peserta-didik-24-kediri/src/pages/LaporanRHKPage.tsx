@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -78,9 +78,9 @@ export default function LaporanRHKPage() {
 
   // Sinkronkan preset tanda tangan dari database server cPanel saat halaman dimuat
   useEffect(() => {
-    syncServerPresets().then(presets => {
-      if (presets && presets[namaPelapor]) {
-        setTandaTangan(presets[namaPelapor]);
+    getSavedTtdAsync(namaPelapor).then(preset => {
+      if (preset) {
+        setTandaTangan(prev => prev || preset);
       }
     });
   }, [namaPelapor]);
@@ -98,7 +98,7 @@ export default function LaporanRHKPage() {
 
   const selectedRhk = RHK_DATA.find(r => r.nomor === rhkNomor);
 
-  const handlePelaporChange = (nama: string, nipVal: string) => {
+  const handlePelaporChange = async (nama: string, nipVal: string) => {
     setNamaPelapor(nama);
     setNip(nipVal);
     const saved = getSavedTtd(nama);
@@ -106,11 +106,10 @@ export default function LaporanRHKPage() {
       setTandaTangan(saved);
     } else {
       setTandaTangan(null);
-      syncServerPresets().then(presets => {
-        if (presets && presets[nama]) {
-          setTandaTangan(presets[nama]);
-        }
-      });
+      const asyncSaved = await getSavedTtdAsync(nama);
+      if (asyncSaved) {
+        setTandaTangan(asyncSaved);
+      }
     }
   };
 
@@ -174,6 +173,12 @@ export default function LaporanRHKPage() {
     if (!rhkNomor) return toast.error('Pilih RHK terlebih dahulu');
     setPreviewing(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       const deletedIdsArr = Array.from(getDeletedIds());
       const result = await previewRhk({
         rhkNomor,
@@ -181,7 +186,7 @@ export default function LaporanRHKPage() {
         tanggalSelesai,
         namaPelapor,
         nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         deletedIds: deletedIdsArr,
       });
 
@@ -208,6 +213,12 @@ export default function LaporanRHKPage() {
     if (!rhkNomor) return toast.error('Pilih RHK terlebih dahulu');
     setDownloadingPdf(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       const deletedIdsArr = Array.from(getDeletedIds());
       const result = await generatePdfRhk({
         rhkNomor,
@@ -215,7 +226,7 @@ export default function LaporanRHKPage() {
         tanggalSelesai,
         namaPelapor,
         nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         format: 'pdf',
         deletedIds: deletedIdsArr,
       });
@@ -236,6 +247,12 @@ export default function LaporanRHKPage() {
     if (!rhkNomor) return toast.error('Pilih RHK terlebih dahulu');
     setDownloadingWord(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       const deletedIdsArr = Array.from(getDeletedIds());
       const result = await generatePdfRhk({
         rhkNomor,
@@ -243,7 +260,7 @@ export default function LaporanRHKPage() {
         tanggalSelesai,
         namaPelapor,
         nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         format: 'word',
         deletedIds: deletedIdsArr,
       });

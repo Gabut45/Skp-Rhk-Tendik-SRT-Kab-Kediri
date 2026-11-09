@@ -592,27 +592,34 @@ export async function fetchCpanelPresetTtd(): Promise<Record<string, string>> {
     const data = await res.json();
     if (data.success && Array.isArray(data.records)) {
       const presets: Record<string, string> = {};
+
+      const extractUrl = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'string') {
+          const s = val.trim();
+          if (s.startsWith('http') || s.startsWith('data:image/')) return s;
+          try {
+            const parsed = JSON.parse(s);
+            return extractUrl(parsed);
+          } catch {}
+          return s;
+        }
+        if (Array.isArray(val) && val.length > 0) return extractUrl(val[0]);
+        if (typeof val === 'object') return val.url || val.src || '';
+        return '';
+      };
+
       for (const r of data.records) {
+        const isPresetRecord = r.kata_kunci_kegiatan === '__PRESET_TTD__' || r.kataKunciKegiatan === '__PRESET_TTD__';
+        if (!isPresetRecord && r.kata_kunci_kegiatan === '__USER_ACCOUNT__') continue;
+
         const nama = String(r.nama_pelapor || r.namaPelapor || '').trim();
         if (!nama) continue;
 
-        let signatureUrl = '';
-        if (Array.isArray(r.foto_kegiatan) && r.foto_kegiatan.length > 0) {
-          const item = r.foto_kegiatan[0];
-          signatureUrl = typeof item === 'string' ? item : (item?.url || '');
-        } else if (Array.isArray(r.fotoKegiatan) && r.fotoKegiatan.length > 0) {
-          const item = r.fotoKegiatan[0];
-          signatureUrl = typeof item === 'string' ? item : (item?.url || '');
-        }
-
-        if (!signatureUrl) {
-          if (Array.isArray(r.tanda_tangan) && r.tanda_tangan.length > 0) {
-            const item = r.tanda_tangan[0];
-            signatureUrl = typeof item === 'string' ? item : (item?.url || '');
-          } else if (Array.isArray(r.tandaTangan) && r.tandaTangan.length > 0) {
-            const item = r.tandaTangan[0];
-            signatureUrl = typeof item === 'string' ? item : (item?.url || '');
-          }
+        let signatureUrl = extractUrl(r.tanda_tangan || r.tandaTangan);
+        const photoUrl = extractUrl(r.foto_kegiatan || r.fotoKegiatan);
+        if (!signatureUrl || (photoUrl && photoUrl.includes('/ttd/'))) {
+          signatureUrl = photoUrl || signatureUrl;
         }
 
         if (signatureUrl && signatureUrl !== 'EMPTY_PRESET' && signatureUrl !== 'CLEARED') {
@@ -858,6 +865,167 @@ export async function deleteCpanelUser(id: string, username: string): Promise<bo
   } catch {}
 
   return true;
+}
+
+/**
+ * Auto-detect and push any unsynced offline activities stored in browser cache/localStorage
+ * to MySQL cPanel and File Manager. Runs automatically on startup.
+ */
+export async function autoPushLocalKegiatanToCpanel(): Promise<{ pushedCount: number; message: string }> {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return { pushedCount: 0, message: 'Tidak di lingkungan browser' };
+  }
+
+  const { url, key } = getCpanelConfig();
+  if (!url) return { pushedCount: 0, message: 'URL cPanel belum disetel' };
+
+  try {
+    const rawLocal = localStorage.getItem('zite_table_KegiatanHarian');
+    if (!rawLocal) return { pushedCount: 0, message: 'Tidak ada data lokal' };
+
+    const localItems = JSON.parse(rawLocal);
+    if (!Array.isArray(localItems) || localItems.length === 0) {
+      return { pushedCount: 0, message: 'Data lokal kosong' };
+    }
+
+    const deletedIds = getDeletedIds();
+
+    // Saring hanya kegiatan riil pengguna (bukan record sistem 1970-01-01 atau yang sudah dihapus)
+    const pendingItems = localItems.filter((item: any) => {
+      if (!item || !item.id || !item.tanggal) return false;
+      if (item.tanggal === '1970-01-01') return false;
+      if (item.kataKunciKegiatan === '__PRESET_TTD__' || item.kataKunciKegiatan === '__USER_ACCOUNT__') return false;
+      if (deletedIds.has(item.id)) return false;
+      return true;
+    });
+
+    if (pendingItems.length === 0) {
+      return { pushedCount: 0, message: 'Semua data lokal sudah bersih/sinkron' };
+    }
+
+    // Kelompokkan per (tanggal, namaPelapor)
+    const byGroup = new Map<string, any[]>();
+    for (const item of pendingItems) {
+      const gKey = `${item.tanggal}___${item.namaPelapor || 'Pelapor'}`;
+      if (!byGroup.has(gKey)) byGroup.set(gKey, []);
+      byGroup.get(gKey)!.push(item);
+    }
+
+    let totalPushed = 0;
+
+    for (const [groupKey, items] of byGroup.entries()) {
+      const [tgl, pelapor] = groupKey.split('___');
+
+      // Ambil daftar ID yang sudah ada di server cPanel untuk tanggal dan pelapor ini
+      const serverExistingIds = new Set<string>();
+      try {
+        const checkUrl = buildCpanelUrl(url, 'get_kegiatan', {
+          tanggalMulai: tgl,
+          tanggalSelesai: tgl,
+          namaPelapor: pelapor,
+        });
+        const res = await fetch(checkUrl, {
+          headers: key ? { 'X-API-KEY': key } : {},
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.records)) {
+            json.records.forEach((r: any) => {
+              if (r.id) serverExistingIds.add(String(r.id));
+              if (r.id_kegiatan) serverExistingIds.add(String(r.id_kegiatan));
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[autoPushLocalKegiatanToCpanel] Gagal verifikasi server:', err);
+      }
+
+      // Cari kegiatan lokal yang BELUM ADA di cPanel server
+      const unpushed = items.filter(it => !serverExistingIds.has(String(it.id)));
+      if (unpushed.length === 0) continue;
+
+      // Persiapkan payload & pastikan foto base64 diupload ke File Manager cPanel
+      const preparedForServer: any[] = [];
+      for (const it of unpushed) {
+        const rawPhotos = Array.isArray(it.fotoKegiatan) ? it.fotoKegiatan : [];
+        const finalPhotos: string[] = [];
+
+        for (const p of rawPhotos) {
+          const pUrl = typeof p === 'string' ? p : p?.url || '';
+          if (!pUrl) continue;
+          if (pUrl.startsWith('http')) {
+            finalPhotos.push(pUrl);
+          } else if (pUrl.startsWith('data:image/')) {
+            try {
+              // Upload base64 ke cPanel File Manager via upload_foto
+              const upRes = await fetch(buildCpanelUrl(url, 'upload_foto'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(key ? { 'X-API-KEY': key } : {}) },
+                body: JSON.stringify({ foto: pUrl, filename: `cached_${it.id}.jpg`, subfolder: 'uploads' }),
+              });
+              if (upRes.ok) {
+                const upJson = await upRes.json();
+                if (upJson.success && upJson.url) {
+                  finalPhotos.push(upJson.url);
+                  continue;
+                }
+              }
+            } catch {}
+            finalPhotos.push(pUrl);
+          }
+        }
+
+        preparedForServer.push({
+          id: it.id,
+          waktuMulai: it.waktuMulai || '08:00',
+          waktuSelesai: it.waktuSelesai || '09:00',
+          kataKunciKegiatan: it.kataKunciKegiatan || '',
+          deskripsiKegiatan: it.deskripsiKegiatan || '',
+          rhkKategori: it.rhkKategori || 'RHK 3',
+          fotoKegiatan: finalPhotos.length > 0 ? finalPhotos : undefined,
+        });
+      }
+
+      if (preparedForServer.length === 0) continue;
+
+      // Kirim per chunk ke cPanel MySQL save_bulk
+      const firstItem = items[0];
+      const payload = {
+        namaPelapor: pelapor,
+        nip: firstItem.nip || '',
+        tanggal: tgl,
+        unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+        kegiatan: preparedForServer,
+      };
+
+      try {
+        const saveUrl = buildCpanelUrl(url, 'save_bulk');
+        const sRes = await fetch(saveUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(key ? { 'X-API-KEY': key } : {}) },
+          body: JSON.stringify(payload),
+        });
+
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson.success) {
+            totalPushed += preparedForServer.length;
+          }
+        }
+      } catch (saveErr) {
+        console.warn('[autoPushLocalKegiatanToCpanel] Gagal simpan ke cPanel:', saveErr);
+      }
+    }
+
+    return {
+      pushedCount: totalPushed,
+      message: totalPushed > 0
+        ? `Berhasil menyinkronkan ${totalPushed} kegiatan offline dari cache perangkat ini ke database server cPanel!`
+        : 'Semua kegiatan sudah tersimpan di server database',
+    };
+  } catch (err: any) {
+    return { pushedCount: 0, message: err?.message || 'Error sinkronisasi lokal' };
+  }
 }
 
 

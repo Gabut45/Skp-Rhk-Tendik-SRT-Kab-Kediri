@@ -25,6 +25,7 @@ import {
   isClientRecordDeleted,
   purgeAllLocalData,
   purgeLocalDataForRiwayat,
+  autoPushLocalKegiatanToCpanel,
 } from '@/lib/cpanel-client';
 
 type Activity = GetKegiatanOutputType['records'][0];
@@ -157,7 +158,15 @@ export default function DaftarKegiatanPage() {
     }
   }, [tanggalMulai, tanggalSelesai, namaPelapor]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+    autoPushLocalKegiatanToCpanel().then(res => {
+      if (res && res.pushedCount > 0) {
+        toast.success(res.message);
+        fetchData();
+      }
+    }).catch(() => {});
+  }, [fetchData]);
 
   const handleDelete = async (id: string) => {
     try {

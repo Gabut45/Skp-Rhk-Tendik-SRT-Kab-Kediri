@@ -13,8 +13,10 @@ import {
   User as UserIcon,
   Sparkles,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { autoPushLocalKegiatanToCpanel } from '@/lib/cpanel-client';
+import { toast } from 'sonner';
 import CpanelModal from './CpanelModal';
 import GeminiKeyModal from './GeminiKeyModal';
 
@@ -31,6 +33,14 @@ export default function Layout() {
   const [cpanelOpen, setCpanelOpen] = useState(false);
   const [geminiModalOpen, setGeminiModalOpen] = useState(false);
   const { user, logout } = useAuth();
+
+  useEffect(() => {
+    autoPushLocalKegiatanToCpanel().then(res => {
+      if (res && res.pushedCount > 0) {
+        toast.success(res.message, { duration: 6000 });
+      }
+    }).catch(() => {});
+  }, []);
 
   const isSuperAdmin = user?.role === 'super_admin';
 

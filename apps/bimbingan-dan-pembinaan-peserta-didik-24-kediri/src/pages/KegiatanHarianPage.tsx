@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
@@ -64,9 +64,9 @@ export default function KegiatanHarianPage() {
 
   // Sinkronkan preset tanda tangan dari database server cPanel saat halaman dimuat
   useEffect(() => {
-    syncServerPresets().then(presets => {
-      if (presets && presets[namaPelapor]) {
-        setTandaTangan(presets[namaPelapor]);
+    getSavedTtdAsync(namaPelapor).then(preset => {
+      if (preset) {
+        setTandaTangan(prev => prev || preset);
       }
     });
   }, [namaPelapor]);
@@ -95,7 +95,7 @@ export default function KegiatanHarianPage() {
     }
   }, []);
 
-  const handlePelaporChange = (nama: string, nipVal: string) => {
+  const handlePelaporChange = async (nama: string, nipVal: string) => {
     setNamaPelapor(nama);
     setNip(nipVal);
     const saved = getSavedTtd(nama);
@@ -103,11 +103,10 @@ export default function KegiatanHarianPage() {
       setTandaTangan(saved);
     } else {
       setTandaTangan(null);
-      syncServerPresets().then(presets => {
-        if (presets && presets[nama]) {
-          setTandaTangan(presets[nama]);
-        }
-      });
+      const asyncSaved = await getSavedTtdAsync(nama);
+      if (asyncSaved) {
+        setTandaTangan(asyncSaved);
+      }
     }
   };
 
@@ -173,9 +172,15 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap (waktu + deskripsi)');
     setPreviewing(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       const result = await previewHarian({
         tanggal, namaPelapor, nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         kegiatan: filled.map(k => ({
           waktuMulai: k.waktuMulai,
           waktuSelesai: k.waktuSelesai,
@@ -199,7 +204,35 @@ export default function KegiatanHarianPage() {
       const cpanelUrl = localStorage.getItem('cpanel_api_url') || undefined;
       const cpanelKey = localStorage.getItem('cpanel_api_key') || undefined;
 
-      const payloadKegiatan = filled.map(k => ({
+      // Auto-resolve preset tanda tangan dari server database jika belum terisi di form
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) {
+          setTandaTangan(effectiveTtd);
+        }
+      }
+
+      // 0. Pastikan foto berformat base64 diunggah ke cPanel File Manager terlebih dahulu
+      const preparedList: KegiatanItem[] = [];
+      for (const item of filled) {
+        const uploadedPhotos: string[] = [];
+        for (const p of item.photos) {
+          if (p.startsWith('http')) {
+            uploadedPhotos.push(p);
+          } else if (p.startsWith('data:image/')) {
+            try {
+              const res = await uploadFile({ data: p, filename: `keg_${item.id}.jpg` });
+              uploadedPhotos.push(res.fileUrl || p);
+            } catch {
+              uploadedPhotos.push(p);
+            }
+          }
+        }
+        preparedList.push({ ...item, photos: uploadedPhotos });
+      }
+
+      const payloadKegiatan = preparedList.map(k => ({
         id: k.id,
         waktuMulai: k.waktuMulai,
         waktuSelesai: k.waktuSelesai,
@@ -214,11 +247,15 @@ export default function KegiatanHarianPage() {
         namaPelapor,
         nip,
         tanggal,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         cpanelUrl,
         cpanelKey,
         kegiatan: payloadKegiatan,
       });
+
+      if (!saveRes.success || saveRes.cpanelSynced === false) {
+        throw new Error(saveRes.message || 'Gagal tersinkron ke server cPanel MySQL');
+      }
 
       setAppDeletedAll(false);
 
@@ -233,7 +270,7 @@ export default function KegiatanHarianPage() {
 
       if (kegData && Array.isArray(kegData.records) && kegData.records.length > 0) {
         // Cocokkan kembali URL foto File Manager ke setiap kegiatan
-        const updatedList = filled.map((localItem) => {
+        const updatedList = preparedList.map((localItem) => {
           const matched = kegData.records.find(
             (r: any) =>
               (r.waktuMulai === localItem.waktuMulai || r.id === localItem.id) &&
@@ -260,10 +297,11 @@ export default function KegiatanHarianPage() {
 
         return updatedList;
       }
-    } catch (err) {
+      return preparedList;
+    } catch (err: any) {
       console.warn('Sync kegiatan ke cPanel warning:', err);
+      throw err;
     }
-    return filled;
   };
 
   const handleSaveAll = async () => {
@@ -302,13 +340,20 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setDownloadingPdf(true);
     try {
+      // Auto-resolve preset tanda tangan jika belum terisi di form
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       // 1. Pastikan foto terupload ke File Manager cPanel dahulu
       toast.info('Menyiapkan foto dokumentasi di File Manager server...');
       const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
 
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         format: 'pdf',
         kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,
@@ -332,12 +377,18 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setDownloadingWord(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       toast.info('Menyiapkan dokumen Word...');
       const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
 
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         format: 'word',
         kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,
@@ -361,12 +412,18 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap (waktu + deskripsi)');
     setQuickPdf(true);
     try {
+      let effectiveTtd = tandaTangan;
+      if (!effectiveTtd) {
+        effectiveTtd = (await getSavedTtdAsync(namaPelapor)) || null;
+        if (effectiveTtd) setTandaTangan(effectiveTtd);
+      }
+
       toast.info('Memproses cetak PDF & mengunggah foto ke server...');
       const readyKegiatan = await syncKegiatanToCpanelAndGetUrls(filled);
 
       const result = await generatePdfHarian({
         tanggal, namaPelapor, nip,
-        tandaTangan: tandaTangan || undefined,
+        tandaTangan: effectiveTtd || undefined,
         format: 'pdf',
         kegiatan: readyKegiatan.map(k => ({
           waktuMulai: k.waktuMulai,

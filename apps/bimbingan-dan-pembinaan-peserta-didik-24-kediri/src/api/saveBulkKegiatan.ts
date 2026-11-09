@@ -44,7 +44,7 @@ export default createEndpoint({
     // 1. Simpan ke database lokal dengan ID konsisten
     await zite.kegiatanHarian.bulkCreate({
       records: preparedKegiatan.map(k => {
-        const validPhotos = (k.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 20 && !url.startsWith('data:,'));
+        const validPhotos = (k.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 5 && !url.startsWith('data:,'));
         return {
           id: k.id,
           namaPelapor: input.namaPelapor,
@@ -75,7 +75,7 @@ export default createEndpoint({
     try {
       for (let i = 0; i < preparedKegiatan.length; i++) {
         const item = preparedKegiatan[i];
-        const validPhotos = (item.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 20 && !url.startsWith('data:,'));
+        const validPhotos = (item.fotoKegiatan || []).filter(url => typeof url === 'string' && url.trim().length > 5 && !url.startsWith('data:,'));
         const chunkPayload = {
           namaPelapor: input.namaPelapor,
           nip: input.nip,
@@ -129,15 +129,16 @@ export default createEndpoint({
       syncError = err.message || 'Gagal tersambung ke server';
     }
 
+    const isSuccess = cpanelSynced || savedCpanelCount > 0;
     return {
-      success: true,
-      count: preparedKegiatan.length,
+      success: isSuccess,
+      count: savedCpanelCount,
       cpanelSynced,
       message: cpanelSynced
         ? `${savedCpanelCount} kegiatan & seluruh foto dokumentasi berhasil tersimpan permanen di Database Server cPanel!`
         : (savedCpanelCount > 0
             ? `${savedCpanelCount} dari ${preparedKegiatan.length} kegiatan tersimpan di cPanel (${syncError})`
-            : (syncError || 'Tersimpan aman di sistem lokal, sinkronisasi cPanel belum selesai.')),
+            : `Gagal menyimpan ke Database Server cPanel: ${syncError || 'Koneksi ke server cPanel gagal'}`),
     };
   },
 });

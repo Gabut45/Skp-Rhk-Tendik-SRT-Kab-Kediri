@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@project/components/ui/alert-dialog';
 import { Shield, ShieldCheck, UserPlus, Users, Key, Pencil, Trash2, Eye, EyeOff, Copy, Check, Database, Search, PenTool, UploadCloud, RefreshCw, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useAuth, StoredAccount } from '@/lib/auth-context';
-import { PELAPOR_LIST, getServerPresetMap, saveServerPresetLocalCache, syncServerPresets } from '@/lib/pelapor-data';
+import { PELAPOR_LIST, getServerPresetMap, saveServerPresetLocalCache, syncServerPresets, findInMapFuzzy } from '@/lib/pelapor-data';
 import { saveCpanelPresetTtd } from '@/lib/cpanel-client';
 import { compressSignature } from '@/lib/compress-image';
 import { uploadFile } from 'zitejs/upload';
@@ -694,7 +694,7 @@ export default function KelolaPenggunaPage() {
                   </TableRow>
                 ) : (
                   filteredPresetList.map((p, idx) => {
-                    const presetUrl = serverPresets[p.nama];
+                    const presetUrl = findInMapFuzzy(serverPresets, p.nama);
                     const isUploading = uploadingTargetNama === p.nama;
 
                     return (

@@ -198,18 +198,75 @@ function getTtdMap(): Record<string, string> {
   }
 }
 
+export function findInMapFuzzy(map: Record<string, string>, targetName: string): string | null {
+  if (!targetName || !map || typeof map !== 'object') return null;
+  // 1. Exact match
+  if (map[targetName]) return map[targetName];
+
+  const targetClean = targetName.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!targetClean) return null;
+
+  // 2. Case-insensitive exact match
+  for (const [key, val] of Object.entries(map)) {
+    if (!val || typeof val !== 'string') continue;
+    if (key.toLowerCase() === targetName.toLowerCase()) return val;
+  }
+
+  // 3. Alphanumeric clean match (ignores dots, commas, spaces, punctuation)
+  for (const [key, val] of Object.entries(map)) {
+    if (!val || typeof val !== 'string') continue;
+    const keyClean = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (keyClean === targetClean) return val;
+  }
+
+  // 4. Substring / words match (e.g. "Sauca Arsa Dewanta" matches "Sauca Arsa Dewanta, S.Pd.")
+  const words = targetName.toLowerCase().split(/[\s,.]+/).filter(w => w.length >= 3);
+  if (words.length >= 2) {
+    for (const [key, val] of Object.entries(map)) {
+      if (!val || typeof val !== 'string') continue;
+      const keyLower = key.toLowerCase();
+      if (words.every(w => keyLower.includes(w))) {
+        return val;
+      }
+    }
+  }
+
+  return null;
+}
+
 export function getSavedTtd(namaPelapor: string): string | null {
   if (!namaPelapor) return null;
   // 1. Cek unggahan lokal sesi saat ini
   const userMap = getTtdMap();
-  if (userMap[namaPelapor]) return userMap[namaPelapor];
+  const userTtd = findInMapFuzzy(userMap, namaPelapor);
+  if (userTtd) return userTtd;
 
   // 2. Cek preset terpusat dari database server yang ditambahkan oleh Super Admin
   const serverMap = getServerPresetMap();
-  if (serverMap[namaPelapor]) return serverMap[namaPelapor];
+  const serverTtd = findInMapFuzzy(serverMap, namaPelapor);
+  if (serverTtd) return serverTtd;
 
   // 3. Fallback ke preset default sistem
-  return PRESET_TTD[namaPelapor] || null;
+  return findInMapFuzzy(PRESET_TTD, namaPelapor) || null;
+}
+
+/**
+ * Mengambil tanda tangan tersimpan secara asinkron (dengan auto-fetch dari server database cPanel jika belum tercache)
+ */
+export async function getSavedTtdAsync(namaPelapor: string): Promise<string | null> {
+  if (!namaPelapor) return null;
+  const cached = getSavedTtd(namaPelapor);
+  if (cached) return cached;
+
+  try {
+    const freshPresets = await syncServerPresets();
+    const serverTtd = findInMapFuzzy(freshPresets, namaPelapor);
+    if (serverTtd) return serverTtd;
+  } catch (err) {
+    console.warn('[getSavedTtdAsync] Sync warning:', err);
+  }
+
+  return null;
 }
 
 export function saveTtd(namaPelapor: string, url: string): void {
@@ -225,4 +282,5 @@ export function removeTtd(namaPelapor: string): void {
   delete map[namaPelapor];
   localStorage.setItem(TTD_STORAGE_KEY, JSON.stringify(map));
 }
+
 

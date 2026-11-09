@@ -331,38 +331,88 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
     });
   };
 
-  // Tier 1: Local server proxy (/api/proxy-image?url=...)
-  // Since the Node server fetches directly from hosting without browser CORS, this succeeds 100%
-  try {
-    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(s)}`;
-    const res = await fetch(proxyUrl);
-    if (res.ok) {
-      const blob = await res.blob();
-      if (blob && blob.size > 50) {
-        return await blobToDataUrl(blob);
-      }
-    }
-  } catch {}
-
-  // Tier 2: Direct fetch with CORS mode
+  // Tier 1: Direct fetch with CORS mode (cPanel static uploads support Access-Control-Allow-Origin: *)
   try {
     const res = await fetch(s, { mode: 'cors' });
-    if (res.ok) {
+    const ct = res.headers.get('content-type') || '';
+    if (res.ok && (ct.startsWith('image/') || ct.includes('octet-stream'))) {
       const blob = await res.blob();
-      if (blob && blob.size > 50) {
+      if (blob && blob.size > 50 && (blob.type.startsWith('image/') || ct.startsWith('image/'))) {
         return await blobToDataUrl(blob);
       }
     }
   } catch {}
 
-  // Tier 3: cPanel API endpoint (?action=get_image&file=...)
+  // Tier 2: cPanel API endpoint (?action=get_image&file=...)
   try {
     const cpanelApi = (typeof window !== 'undefined' ? localStorage.getItem('cpanel_api_url') : null) || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
     const cpanelImgUrl = `${cpanelApi.split('?')[0]}?action=get_image&file=${encodeURIComponent(s)}`;
     const res = await fetch(cpanelImgUrl);
-    if (res.ok) {
+    const ct = res.headers.get('content-type') || '';
+    if (res.ok && (ct.startsWith('image/') || ct.includes('octet-stream'))) {
       const blob = await res.blob();
       if (blob && blob.size > 50) {
+        return await blobToDataUrl(blob);
+      }
+    }
+  } catch {}
+
+  // Tier 3: Offscreen Canvas conversion with crossOrigin Image loader
+  try {
+    const canvasDataUrl = await new Promise<string>((resolve) => {
+      const offImg = new Image();
+      offImg.crossOrigin = 'anonymous';
+      let done = false;
+      offImg.onload = () => {
+        if (done) return;
+        done = true;
+        try {
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = offImg.naturalWidth || 800;
+          offCanvas.height = offImg.naturalHeight || 600;
+          const ctx = offCanvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(offImg, 0, 0);
+            const dataUrl = offCanvas.toDataURL('image/jpeg', 0.90);
+            if (dataUrl && dataUrl.startsWith('data:image/')) {
+              resolve(dataUrl);
+              return;
+            }
+          }
+        } catch {}
+        resolve(s);
+      };
+      offImg.onerror = () => {
+        if (!done) {
+          done = true;
+          resolve(s);
+        }
+      };
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          resolve(s);
+        }
+      }, 3500);
+      offImg.src = s;
+      if (offImg.complete && offImg.naturalWidth > 0) {
+        offImg.onload?.(new Event('load'));
+      }
+    });
+    if (canvasDataUrl && canvasDataUrl.startsWith('data:image/')) {
+      return canvasDataUrl;
+    }
+  } catch {}
+
+  // Tier 4: Local server proxy (/api/proxy-image?url=...)
+  // Only accept if content-type is strictly an image (not HTML SPA fallback)
+  try {
+    const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(s)}`;
+    const res = await fetch(proxyUrl);
+    const ct = res.headers.get('content-type') || '';
+    if (res.ok && ct.startsWith('image/')) {
+      const blob = await res.blob();
+      if (blob && blob.size > 50 && blob.type.startsWith('image/')) {
         return await blobToDataUrl(blob);
       }
     }
@@ -386,13 +436,11 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
           }
 
           // Convert any external URL to local Base64 data URL
-          const srcToUse = await resolveImageToDataUrl(rawSrc);
+          let srcToUse = await resolveImageToDataUrl(rawSrc);
 
           // Preload in an Image object to ensure fully decoded bitmap
           const loaderImg = new Image();
-          if (srcToUse.startsWith('http')) {
-            loaderImg.crossOrigin = 'anonymous';
-          }
+          loaderImg.crossOrigin = 'anonymous';
 
           await new Promise<void>((resolveLoad) => {
             let done = false;
@@ -414,6 +462,26 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
           const naturalW = loaderImg.naturalWidth || img.naturalWidth;
           const naturalH = loaderImg.naturalHeight || img.naturalHeight;
 
+          // If still an external HTTP URL but loaderImg successfully loaded into memory,
+          // render it to a local canvas to extract pure Base64 so html2canvas never makes network requests
+          if (srcToUse.startsWith('http') && naturalW > 0 && naturalH > 0) {
+            try {
+              const tempCanvas = document.createElement('canvas');
+              tempCanvas.width = naturalW;
+              tempCanvas.height = naturalH;
+              const ctx = tempCanvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(loaderImg, 0, 0);
+                const out = tempCanvas.toDataURL('image/jpeg', 0.90);
+                if (out && out.startsWith('data:image/')) {
+                  srcToUse = out;
+                }
+              }
+            } catch (err) {
+              console.warn('[download-helper] Canvas conversion note:', err);
+            }
+          }
+
           const isKopLogo =
             img.classList.contains('kop-logo-img') ||
             img.closest('.kop-block') !== null ||
@@ -430,6 +498,8 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
 
           const isSingle = img.classList.contains('photo-single-img');
 
+          img.crossOrigin = 'anonymous';
+          img.setAttribute('crossorigin', 'anonymous');
           img.src = srcToUse;
 
           if (naturalW > 0 && naturalH > 0) {

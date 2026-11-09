@@ -53,7 +53,7 @@ function buildDocTable(records: any[]): string {
     for (const r of recsForDate) {
       const allPhotos = (r.fotoKegiatan || [])
         .map((p: any) => (typeof p === 'string' ? p : (p?.url || '')))
-        .filter((p: string) => typeof p === 'string' && p.trim().length > 20 && !p.startsWith('data:,') && p !== 'null' && p !== 'undefined');
+        .filter((p: string) => typeof p === 'string' && p.trim().length > 5 && !p.startsWith('data:,') && p !== 'null' && p !== 'undefined');
 
       if (allPhotos.length === 0 && !r.deskripsiKegiatan) continue;
 
