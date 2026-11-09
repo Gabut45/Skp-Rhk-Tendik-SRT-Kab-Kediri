@@ -59,15 +59,14 @@ export interface ClientDeletedRange {
 }
 
 export function isAppDeletedAll(): boolean {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return localStorage.getItem('app_deleted_all') === 'true';
-  }
   return false;
 }
 
 export function setAppDeletedAll(val: boolean) {
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem('app_deleted_all', String(val));
+    if (!val) {
+      localStorage.removeItem('app_deleted_all');
+    }
   }
 }
 

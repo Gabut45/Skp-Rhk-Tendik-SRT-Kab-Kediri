@@ -88,7 +88,8 @@ function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
     // Pastikan folder uploads memiliki .htaccess dengan izin CORS lengkap agar browser bisa merender gambar ke PDF tanpa blokir
     $htPath = __DIR__ . '/uploads/.htaccess';
     if (!file_exists($htPath)) {
-        @file_put_contents($htPath, "<IfModule mod_headers.c>\n    Header set Access-Control-Allow-Origin \"*\"\n    Header set Access-Control-Allow-Methods \"GET, OPTIONS\"\n</IfModule>\n");
+        $htData = "<IfModule mod_headers.c>\n    Header set Access-Control-Allow-Origin *\n    Header set Access-Control-Allow-Methods GET,OPTIONS\n</IfModule>\n";
+        @file_put_contents($htPath, $htData);
     }
 
     $fileName = 'foto_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
