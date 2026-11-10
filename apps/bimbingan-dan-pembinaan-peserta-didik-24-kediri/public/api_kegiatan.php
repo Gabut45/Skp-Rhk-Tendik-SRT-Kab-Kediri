@@ -489,43 +489,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
         if ($deleteAll) {
-            $q = $pdo->query("SELECT foto_url FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
-            while ($r = $q->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            $q = $pdo->query("SELECT foto_kegiatan FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
+            while ($r = $q->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
-            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE id IN ($inClause)");
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id IN ($inClause)");
             $sel->execute($delIds);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
             $numVal = $delNum ?? (is_numeric($delId) ? $delId : 0);
-            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $sel->execute([':id' => $delId, ':num' => $numVal]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $stmt->execute([':id' => $delId, ':num' => $numVal]);
         }
         if ($waktuMulai && $tgl && $pelapor) {
-            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
         } elseif ($tgl && $pelapor && empty($delId)) {
-            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
         if ($tglMulai && $tglSelesai && $pelapor && empty($delId)) {
-            $sel = $pdo->prepare("SELECT foto_url FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_url'] ?? '');
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) deletePhotosFromColumn($r['foto_kegiatan'] ?? '');
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
