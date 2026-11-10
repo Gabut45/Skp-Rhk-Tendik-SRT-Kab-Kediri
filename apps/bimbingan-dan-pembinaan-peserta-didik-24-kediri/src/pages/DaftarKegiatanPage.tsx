@@ -56,6 +56,8 @@ export default function DaftarKegiatanPage() {
   const [tanggalSelesai, setTanggalSelesai] = useState(endOfMonth);
   const [namaPelapor, setNamaPelapor] = useState('Semua Pelapor');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const ITEMS_PER_PAGE = 100;
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     syncServerPresets();
@@ -63,6 +65,7 @@ export default function DaftarKegiatanPage() {
 
   const fetchData = useCallback(async () => {
     setSelectedIds(new Set());
+    setCurrentPage(1);
     setLoading(true);
 
     try {
@@ -541,7 +544,7 @@ export default function DaftarKegiatanPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {records.map((r, i) => (
+                  {records.slice((Math.min(currentPage, Math.max(1, Math.ceil(records.length / ITEMS_PER_PAGE))) - 1) * ITEMS_PER_PAGE, Math.min(currentPage, Math.max(1, Math.ceil(records.length / ITEMS_PER_PAGE))) * ITEMS_PER_PAGE).map((r, i) => (
                     <TableRow key={r.id} className={selectedIds.has(r.id) ? 'bg-primary/5' : ''}>
                       <TableCell>
                         <Checkbox
@@ -549,7 +552,7 @@ export default function DaftarKegiatanPage() {
                           onCheckedChange={() => toggleSelect(r.id)}
                         />
                       </TableCell>
-                      <TableCell className="text-center">{i + 1}</TableCell>
+                      <TableCell className="text-center">{(Math.min(currentPage, Math.max(1, Math.ceil(records.length / ITEMS_PER_PAGE))) - 1) * ITEMS_PER_PAGE + i + 1}</TableCell>
                       <TableCell className="whitespace-nowrap font-medium">{formatDate(r.tanggal)}</TableCell>
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground max-w-[140px] truncate" title={r.namaPelapor}>
                         {r.namaPelapor || '-'}
@@ -605,6 +608,52 @@ export default function DaftarKegiatanPage() {
               </Table>
             </div>
           )}
+          {!loading && records.length > 0 && (() => {
+            const totalPages = Math.max(1, Math.ceil(records.length / ITEMS_PER_PAGE));
+            const safePage = Math.min(currentPage, totalPages);
+            const startIdx = (safePage - 1) * ITEMS_PER_PAGE + 1;
+            const endIdx = Math.min(safePage * ITEMS_PER_PAGE, records.length);
+            return (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t mt-4">
+                <p className="text-xs text-muted-foreground">
+                  Menampilkan <span className="font-semibold text-foreground">{startIdx}–{endIdx}</span> dari <span className="font-semibold text-foreground">{records.length}</span> kegiatan (Halaman {safePage} dari {totalPages})
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      className="h-8 px-2.5 text-xs"
+                    >
+                      Prev
+                    </Button>
+                    {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(pageNum => (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === safePage ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="h-8 w-8 p-0 text-xs"
+                      >
+                        {pageNum}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={safePage >= totalPages}
+                      className="h-8 px-2.5 text-xs"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
