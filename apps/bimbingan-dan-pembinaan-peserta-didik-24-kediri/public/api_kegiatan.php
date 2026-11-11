@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $params['pelapor'] = $pelapor;
         }
 
-        $sql .= " ORDER BY tanggal ASC, waktu_mulai ASC LIMIT 500";
+        $sql .= " ORDER BY tanggal DESC, waktu_mulai DESC";
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();

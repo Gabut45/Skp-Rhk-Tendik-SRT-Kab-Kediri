@@ -153,7 +153,7 @@ export default createEndpoint({
     } else {
       // Fallback cadangan hanya jika server cPanel offline atau koneksi gagal
       try {
-        const localResult = await zite.kegiatanHarian.findAll({ filters, limit: 500 });
+        const localResult = await zite.kegiatanHarian.findAll({ filters, limit: 1000000 });
         activeRecords = localResult.records.filter(r => {
           if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
           if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) return false;
@@ -189,14 +189,14 @@ export default createEndpoint({
 
     const merged = Array.from(byFingerprint.values());
 
-    // Sort by tanggal ASC then waktuMulai ASC
+    // Sort by tanggal DESC (terbaru di atas) then waktuMulai DESC
     const sorted = merged.sort((a, b) => {
       const dateA = a.tanggal || '';
       const dateB = b.tanggal || '';
-      if (dateA !== dateB) return dateA.localeCompare(dateB);
-      const timeA = a.waktuMulai || '99:99';
-      const timeB = b.waktuMulai || '99:99';
-      return timeA.localeCompare(timeB);
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+      const timeA = a.waktuMulai || '00:00';
+      const timeB = b.waktuMulai || '00:00';
+      return timeB.localeCompare(timeA);
     });
 
     const isSummary = Boolean(input.summaryOnly);

@@ -41,8 +41,15 @@ export default createEndpoint({
       if (input.tanggalSelesai) filters.tanggalMulai.lte = input.tanggalSelesai;
     }
 
-    const { records } = await zite.riwayatFile.findAll({ filters, limit: 500 });
-    const validRecords = records.filter(r => !isRecordDeleted(r));
+    const { records } = await zite.riwayatFile.findAll({ filters, limit: 1000000 });
+    const validRecords = records
+      .filter(r => !isRecordDeleted(r))
+      .sort((a, b) => {
+        const dA = a.tanggalSelesai || a.tanggalMulai || '';
+        const dB = b.tanggalSelesai || b.tanggalMulai || '';
+        if (dA !== dB) return dB.localeCompare(dA);
+        return (b.dibuatPada || '').localeCompare(a.dibuatPada || '');
+      });
     return {
       records: validRecords.map(r => ({
         id: r.id,
