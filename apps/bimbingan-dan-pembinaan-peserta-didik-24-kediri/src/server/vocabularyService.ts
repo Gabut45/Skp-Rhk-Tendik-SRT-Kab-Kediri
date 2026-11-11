@@ -50,7 +50,7 @@ function initStorage() {
 
 initStorage();
 
-const MAX_LEARNED_CAPACITY = 50000;
+const MAX_LEARNED_CAPACITY = 300000;
 let _saveDebounceTimer: NodeJS.Timeout | null = null;
 
 function saveToDisk() {

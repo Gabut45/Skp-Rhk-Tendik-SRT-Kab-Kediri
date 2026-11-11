@@ -20,6 +20,88 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
   const items: CompactVocabItem[] = [];
 
   // =========================================================================
+  // KOSA KATA SPESIFIK HARIAN WALI ASUH SRT 1 KAB. KEDIRI (PRIORITAS UTAMA)
+  // =========================================================================
+  const curatedSrtEntries: CompactVocabItem[] = [
+    { k: 'membangunkan siswa', r: 'RHK 3', t: 'subuh', d: 'Membangunkan peserta didik di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri pada waktu subuh dengan pendekatan persuasif dan penuh kehangatan agar siswa siap melaksanakan ibadah dan aktivitas pagi.' },
+    { k: 'makan sahur', r: 'RHK 3', t: 'subuh', d: 'Mendampingi peserta didik melaksanakan makan sahur bersama di ruang makan asrama dengan tertib, memastikan asupan gizi tercukupi agar siswa kuat menjalankan ibadah puasa.' },
+    { k: 'sholat subuh', r: 'RHK 3', t: 'subuh', d: 'Mendampingi dan membimbing peserta didik melaksanakan sholat Subuh berjamaah di masjid/mushola asrama dengan khusyuk serta menertibkan shaf jamaah.' },
+    { k: 'kultum pagi', r: 'RHK 4', t: 'pagi', d: 'Mendampingi dan menyimak kegiatan kultum pagi bersama peserta didik sebagai sarana pembinaan karakter, penguatan nilai spiritual, dan motivasi belajar sebelum beraktivitas.' },
+    { k: 'evaluasi pagi dari wali asuh', a: ['evaluasi pagi'], r: 'RHK 3', t: 'pagi', d: 'Melaksanakan evaluasi pagi bersama anak asuh terkait kedisiplinan, kesiapan perlengkapan sekolah, serta penyampaian arahan harian dari Wali Asuh.' },
+    { k: 'olahraga pagi di depan aula', a: ['olahraga pagi'], r: 'RHK 4', t: 'pagi', d: 'Mendampingi peserta didik melaksanakan olahraga pagi di depan aula asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri untuk menjaga kebugaran jasmani dan semangat kebersamaan.' },
+    { k: 'olahraga pagi', r: 'RHK 4', t: 'pagi', d: 'Memandu dan mendampingi kegiatan olahraga pagi peserta didik di lingkungan asrama guna melatih kebugaran fisik, sportivitas, dan kesiapan mengikuti pembelajaran.' },
+    { k: 'bersih diri', a: ['kebersihan diri', 'mandi pagi'], r: 'RHK 2', t: 'pagi', d: 'Membimbing dan mengawasi peserta didik dalam menjaga kebersihan diri (mandi, sikat gigi, dan kerapian pribadi) sebelum berangkat ke sekolah.' },
+    { k: 'bersih asrama', a: ['bersih lingkungan asrama'], r: 'RHK 2', t: 'pagi', d: 'Mendampingi peserta didik melaksanakan kerja bakti bersih asrama dan lingkungan sekitar agar tercipta hunian belajar yang sehat, rapi, dan nyaman.' },
+    { k: 'mandi pagi', r: 'RHK 2', t: 'pagi', d: 'Mengatur antrean serta mengawasi ketertiban peserta didik saat mandi pagi agar seluruh siswa selesai tepat waktu dan tampil bersih sebelum berangkat sekolah.' },
+    { k: 'bersih lingkungan asrama', r: 'RHK 2', t: 'pagi', d: 'Mengkoordinasikan dan mendampingi peserta didik membersihkan halaman serta lingkungan asrama secara gotong royong guna menanamkan kepedulian terhadap kebersihan.' },
+    { k: 'menyapu', a: ['menyapu kantin'], r: 'RHK 2', t: 'pagi', d: 'Membimbing peserta didik melaksanakan piket menyapu lantai kamar, teras, dan area bersama asrama secara bertanggung jawab.' },
+    { k: 'mencuci pakaian', a: ['mencuci'], r: 'RHK 2', t: 'sore', d: 'Mendampingi dan melatih kemandirian peserta didik dalam mencuci pakaian pribadi dengan benar serta menjemurnya secara rapi di area jemuran asrama.' },
+    { k: 'merapikan baju di almari', a: ['merapikan baju'], r: 'RHK 2', t: 'pagi', d: 'Membimbing peserta didik melipat dan merapikan baju di dalam almari masing-masing agar tertata rapi dan mudah ditemukan saat dibutuhkan.' },
+    { k: 'mendampingi potong rambut', r: 'RHK 2', t: 'sore', d: 'Mendampingi peserta didik dalam kegiatan potong rambut berkala guna menjaga kerapian penampilan sesuai tata tertib Sekolah Rakyat Terintegrasi 1 Kab. Kediri.' },
+    { k: 'membersihkan kamar', r: 'RHK 2', t: 'pagi', d: 'Mengawasi dan membimbing peserta didik membersihkan kamar tidur, merapikan tempat tidur, serta menata barang pribadi agar kamar selalu bersih dan nyaman.' },
+    { k: 'mengepel lantai kamar', a: ['mengepel lantai'], r: 'RHK 2', t: 'pagi', d: 'Mendampingi peserta didik mengepel lantai kamar dan koridor asrama setelah disapu agar kebersihan dan kesehatan ruang istirahat tetap terjaga.' },
+    { k: 'menata sepatu', r: 'RHK 2', t: 'pagi', d: 'Membiasakan peserta didik menata sepatu secara rapi pada rak sepatu asrama setelah beraktivitas guna melatih kedisiplinan dan kerapian.' },
+    { k: 'menyetrika baju', r: 'RHK 2', t: 'sore', d: 'Mendampingi peserta didik menyetrika baju dan seragam sekolah secara mandiri dengan tetap memperhatikan keselamatan penggunaan alat listrik.' },
+    { k: 'seragam bersih', r: 'RHK 2', t: 'pagi', d: 'Memeriksa kebersihan dan kerapian seragam sekolah peserta didik sebelum berangkat ke kelas agar siswa tampil rapi dan percaya diri.' },
+    { k: 'sholat dhuha', r: 'RHK 3', t: 'pagi', d: 'Mendampingi peserta didik melaksanakan sholat sunnah Dhuha berjamaah untuk membiasakan ibadah pagi dan memohon keberkahan dalam menuntut ilmu.' },
+    { k: 'sholat berjamaah', a: ['sholat di asrama', 'sholat di masjid'], r: 'RHK 3', t: 'fleksibel', d: 'Mendampingi dan memastikan seluruh peserta didik mengikuti sholat fardhu berjamaah tepat waktu dengan tertib dan khusyuk.' },
+    { k: 'berangkat sekolah', r: 'RHK 3', t: 'pagi', d: 'Mengawal dan melepas keberangkatan peserta didik menuju sekolah setelah memastikan kelengkapan seragam, buku pelajaran, serta kondisi fisik siswa prima.' },
+    { k: 'makan siang di kantin', a: ['makan siang dengan tertib', 'makan siang'], r: 'RHK 3', t: 'siang', d: 'Mendampingi peserta didik melaksanakan makan siang di kantin/ruang makan dengan tertib, membiasakan antre, berdoa sebelum makan, dan merapikan peralatan makan.' },
+    { k: 'sholat dzuhur', r: 'RHK 3', t: 'siang', d: 'Mendampingi peserta didik melaksanakan sholat Dzuhur berjamaah di sela-sela aktivitas pembelajaran siang hari dengan tertib.' },
+    { k: 'kembali ke sekolah', r: 'RHK 3', t: 'siang', d: 'Mengawal dan memastikan peserta didik kembali ke kelas/sekolah tepat waktu setelah jam istirahat dan sholat Dzuhur selesai.' },
+    { k: 'menemani bermain', a: ['menemani siswa bermain', 'bermain dengan anak asuh'], r: 'RHK 3', t: 'sore', d: 'Menemani peserta didik bermain pada waktu luang di lingkungan asrama guna membangun keakraban, keceriaan, dan kebersamaan antar-anak asuh.' },
+    { k: 'mendampingi belajar', a: ['mendampingi siswa belajar', 'belajar di kelas', 'membantu belajar'], r: 'RHK 1', t: 'malam', d: 'Mendampingi dan membimbing peserta didik saat kegiatan belajar di asrama/kelas, membantu siswa memahami materi pelajaran yang dirasa sulit.' },
+    { k: 'mendengarkan cerita siswa', a: ['mendengarkan curhatan anak asuh', 'mendengarkan cerita anak asuh'], r: 'RHK 4', t: 'malam', d: 'Meluangkan waktu mendengarkan cerita dan curhatan anak asuh secara empatik untuk memahami kondisi psikologis serta memberikan penguatan emosional.' },
+    { k: 'sesi diskusi dengan anak asuh', a: ['diskusi bersama'], r: 'RHK 1', t: 'malam', d: 'Memfasilitasi sesi diskusi bersama anak asuh mengenai perkembangan belajar, kehidupan asrama, serta pencarian solusi atas kendala yang dihadapi.' },
+    { k: 'mengerjakan pr', a: ['mendampingi mengerjakan PR'], r: 'RHK 1', t: 'malam', d: 'Mendampingi dan mengarahkan peserta didik dalam mengerjakan pekerjaan rumah (PR) serta tugas sekolah hingga tuntas dan tepat waktu.' },
+    { k: 'mendapatkan mengaji', a: ['mengaji di masjid', 'mengaji di kelas', 'mengaji bersama'], r: 'RHK 4', t: 'malam', d: 'Mendampingi peserta didik mengikuti kegiatan mengaji Al-Quran di masjid/kelas guna meningkatkan kemampuan membaca Al-Quran dan pemahaman keagamaan.' },
+    { k: 'yasin dan tahlil', r: 'RHK 4', t: 'malam', d: 'Mendampingi peserta didik melaksanakan pembacaan surat Yasin dan tahlil bersama secara khidmat sebagai pembiasaan ibadah rutin di asrama.' },
+    { k: 'melantunkan mahalul qiyam', a: ['mahalul qiyam dengan kidmat'], r: 'RHK 4', t: 'malam', d: 'Mendampingi peserta didik melantunkan shalawat Mahalul Qiyam dengan penuh khidmat guna menumbuhkan kecintaan kepada Rasulullah SAW.' },
+    { k: 'berbuka puasa', r: 'RHK 3', t: 'sore', d: 'Mendampingi peserta didik saat waktu berbuka puasa bersama di ruang makan asrama, memastikan hidangan berbuka tersedia tertib dan penuh kekeluargaan.' },
+    { k: 'bermain voly', r: 'RHK 4', t: 'sore', d: 'Mendampingi dan mengawasi peserta didik bermain bola voli di lapangan asrama pada sore hari untuk melatih kekompakan tim dan kebugaran fisik.' },
+    { k: 'bermain pingpong', a: ['bermain tenis meja'], r: 'RHK 4', t: 'sore', d: 'Mendampingi peserta didik bermain tenis meja (pingpong) di ruang rekreasi asrama untuk menyalurkan hobi dan melatih ketangkasan.' },
+    { k: 'mendampingi lkbb(berbaris)', r: 'RHK 4', t: 'sore', d: 'Mendampingi peserta didik berlatih LKBB (Latihan Keterampilan Baris-Berbaris) guna melatih kedisiplinan, kekompakan, dan sikap tegap.' },
+    { k: 'mendampingi ekstra rebana', r: 'RHK 4', t: 'sore', d: 'Mendampingi peserta didik mengikuti ekstrakurikuler rebana/hadrah untuk mengembangkan bakat seni islami dan kekompakan grup.' },
+    { k: 'mendampingi ekstra pramuka', a: ['pramuka'], r: 'RHK 4', t: 'sore', d: 'Mendampingi peserta didik dalam kegiatan ekstrakurikuler Pramuka guna membentuk karakter mandiri, tangguh, dan jiwa kepemimpinan.' },
+    { k: 'mendampingi siswa sd', r: 'RHK 3', t: 'fleksibel', d: 'Melaksanakan pendampingan khusus bagi peserta didik jenjang SD di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan penuh kesabaran dan perhatian.' },
+    { k: 'mendampingi ekstra peternakan', r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik mengikuti ekstrakurikuler peternakan untuk mengenalkan keterampilan budidaya ternak dan tanggung jawab merawat makhluk hidup.' },
+    { k: 'pertanian', r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik dalam kegiatan ekstrakurikuler pertanian, mulai dari pengolahan lahan hingga perawatan tanaman secara praktik langsung.' },
+    { k: 'mendampingi ekstra tata boga', r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik mengikuti ekstrakurikuler tata boga dalam mempraktikkan keterampilan memasak dan penyajian makanan yang higienis.' },
+    { k: 'mendampingi ekstra perhotelan', r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik pada kegiatan ekstrakurikuler perhotelan guna melatih keterampilan tata graha, keramahan layanan, dan etika profesi.' },
+    { k: 'mendampingi ekstra coding', a: ['ekstra robotik'], r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik mengikuti ekstrakurikuler coding/robotik untuk mengasah logika pemrograman, kreativitas teknologi, dan pemecahan masalah.' },
+    { k: 'mendampingi kegiatan kunjungan', a: ['kunjungan aman dan tertib', 'memastikan kunjungan berjalan lancar', 'memastikan orang tua bertemu dengan anaknya saat kunjungan'], r: 'RHK 3', t: 'siang', d: 'Mendampingi kegiatan kunjungan orang tua/wali di asrama, memastikan pertemuan orang tua dan anak asuh berjalan aman, tertib, dan lancar.' },
+    { k: 'pengecekan barang', a: ['pengecekan barang kunjungan'], r: 'RHK 4', t: 'siang', d: 'Melaksanakan pengecekan barang bawaan saat kunjungan orang tua/wali sesuai tata tertib asrama guna menjaga keamanan dan ketertiban lingkungan.' },
+    { k: 'mendamaikan siswa yang berselisih faham', r: 'RHK 4', t: 'fleksibel', d: 'Melakukan mediasi secara bijak dan kekeluargaan untuk mendamaikan peserta didik yang berselisih paham agar kembali rukun dan saling menghargai.' },
+    { k: 'makan malam dengan tertib', a: ['makan malam'], r: 'RHK 3', t: 'malam', d: 'Mendampingi peserta didik melaksanakan makan malam bersama di ruang makan asrama dengan tertib, berdoa, serta menjaga kebersihan meja makan.' },
+    { k: 'evaluasi malam', a: ['evaluasi kegiatan'], r: 'RHK 3', t: 'malam', d: 'Melaksanakan evaluasi malam bersama anak asuh untuk merefleksikan kegiatan sepanjang hari, mengecek kehadiran kamar, dan menyampaikan pesan motivasi sebelum tidur.' },
+    { k: 'belajar di malam hari', r: 'RHK 1', t: 'malam', d: 'Mendampingi dan mengawasi jam wajib belajar di malam hari agar peserta didik dapat belajar dengan tenang, fokus, dan menyelesaikan tugas sekolah.' },
+    { k: 'dzikir bersama', a: ['doa bersama', 'berdoa'], r: 'RHK 4', t: 'fleksibel', d: 'Memimpin dan mendampingi peserta didik melaksanakan dzikir dan doa bersama untuk ketenangan hati serta keberkahan menuntut ilmu.' },
+    { k: 'sholat jum\'at berjamaah', r: 'RHK 3', t: 'siang', d: 'Mendampingi peserta didik putra melaksanakan sholat Jum\'at berjamaah di masjid dengan tertib dan berpakaian rapi.' },
+    { k: 'pendampingan keputrian di hari jum\'at', r: 'RHK 4', t: 'siang', d: 'Melaksanakan pendampingan kegiatan keputrian bagi peserta didik putri pada hari Jum\'at guna membina akhlak, adab muslimah, dan keterampilan diri.' },
+    { k: 'ekstrakulikuler', r: 'RHK 1', t: 'sore', d: 'Mendampingi peserta didik mengikuti kegiatan ekstrakurikuler sesuai minat dan bakat guna mengoptimalkan potensi non-akademik siswa.' },
+    { k: 'outing class', a: ['rekreasi'], r: 'RHK 1', t: 'pagi', d: 'Mendampingi peserta didik dalam kegiatan outing class/rekreasi edukatif di luar kampus dengan tetap menjaga keselamatan, ketertiban, dan nilai pembelajaran.' },
+    { k: 'berkunjung ke rumah siswa', r: 'RHK 4', t: 'siang', d: 'Melaksanakan kunjungan rumah (home visit) ke kediaman orang tua peserta didik untuk menjalin silaturahmi dan koordinasi perkembangan anak asuh.' },
+    { k: 'bermain basket', a: ['bermain kasti', 'bermain bulu tangkis'], r: 'RHK 4', t: 'sore', d: 'Mendampingi peserta didik berolahraga dan bermain bersama di lapangan asrama pada sore hari guna menjaga kebugaran serta sportivitas.' },
+    { k: 'olahraga mandiri', a: ['olahraga sore'], r: 'RHK 4', t: 'sore', d: 'Mengawasi dan mendampingi peserta didik melaksanakan olahraga mandiri di sore hari agar tetap bugar dan terarah.' },
+    { k: 'mendampingi melakukan pendisiplinan', r: 'RHK 4', t: 'fleksibel', d: 'Melaksanakan pendampingan pembinaan kedisiplinan secara edukatif dan humanis terhadap peserta didik guna menumbuhkan kesadaran menaati tata tertib asrama.' },
+    { k: 'membersihkan kamar mandi', a: ['membersihkan toilet'], r: 'RHK 2', t: 'pagi', d: 'Membimbing dan mengawasi peserta didik membersihkan kamar mandi/toilet asrama secara berkala agar tetap higienis dan bebas bau.' },
+    { k: 'membersihkan kantin', a: ['menyapu kantin'], r: 'RHK 2', t: 'siang', d: 'Mendampingi peserta didik membersihkan dan menyapu area kantin/ruang makan setelah digunakan agar selalu bersih dan nyaman.' },
+    { k: 'mendampingi kegiatan di masjid', r: 'RHK 3', t: 'fleksibel', d: 'Mendampingi peserta didik selama mengikuti berbagai kegiatan pembinaan keagamaan dan ibadah di masjid asrama.' },
+    { k: 'mendampingi adzan', a: ['adzan subuh', 'adzan magrib'], r: 'RHK 3', t: 'fleksibel', d: 'Membimbing dan mendampingi peserta didik yang bertugas mengumandangkan adzan di mushola/masjid asrama tepat waktu.' },
+    { k: 'mengaji diba\'', r: 'RHK 4', t: 'malam', d: 'Mendampingi peserta didik melaksanakan pembacaan shalawat Maulid Diba\' bersama di masjid/aula asrama dengan penuh khidmat.' },
+    { k: 'menonton bioskop di aula', a: ['menonton di aula', 'mendampingi menonton', 'menonton di ruang makan'], r: 'RHK 3', t: 'malam', d: 'Mendampingi peserta didik dalam kegiatan menonton film edukatif bersama di aula/ruang makan sebagai sarana hiburan positif dan kebersamaan di asrama.' },
+    { k: 'makan pagi', r: 'RHK 3', t: 'pagi', d: 'Mendampingi peserta didik melaksanakan makan pagi (sarapan) di ruang makan asrama sebelum berangkat sekolah agar memiliki energi optimal untuk belajar.' },
+    { k: 'mendampingi siswa sakit', r: 'RHK 4', t: 'fleksibel', d: 'Melaksanakan pendampingan dan perawatan intensif terhadap peserta didik yang sedang sakit di asrama/UKS Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memantau kondisi kesehatan serta memastikan siswa beristirahat dengan nyaman.' },
+    { k: 'mengantarkan makanan ke siswa sakit', r: 'RHK 4', t: 'fleksibel', d: 'Mengantarkan makanan bergizi serta memastikan asupan nutrisi dan waktu minum obat peserta didik yang sedang sakit terpenuhi dengan baik di kamar perawatan/UKS.' },
+    { k: 'mengantarkan ke gereja', a: ['mendampingi ibadah non muslim'], r: 'RHK 4', t: 'pagi', d: 'Mengantarkan dan mendampingi peserta didik beragama non-Muslim melaksanakan ibadah ke gereja dengan aman, tertib, serta menanamkan nilai toleransi antarumat beragama.' },
+    { k: 'menjaga siswa sakit di puskesmas', a: ['mengantarkan periksa ke puskesmas'], r: 'RHK 4', t: 'fleksibel', d: 'Mengantarkan dan menjaga peserta didik yang membutuhkan pemeriksaan serta perawatan medis di Puskesmas, sekaligus berkoordinasi dengan tenaga kesehatan terkait kondisi siswa.' },
+    { k: 'menjaga siswa sakit di rumah sakit', r: 'RHK 4', t: 'fleksibel', d: 'Melaksanakan pendampingan dan penjagaan intensif bagi peserta didik yang menjalani perawatan di rumah sakit serta melaporkan perkembangan kondisi kesehatannya kepada pimpinan dan orang tua.' },
+    { k: 'mengantarkan berobat', r: 'RHK 4', t: 'fleksibel', d: 'Mengantarkan peserta didik yang mengalami gangguan kesehatan untuk berobat ke fasilitas kesehatan terdekat guna mendapatkan penanganan medis yang tepat.' },
+    { k: 'mengikuti upacara', r: 'RHK 3', t: 'pagi', d: 'Mendampingi dan menertibkan barisan peserta didik dalam mengikuti upacara bendera di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara khidmat untuk menanamkan jiwa nasionalisme dan kedisiplinan.' },
+  ];
+  items.push(...curatedSrtEntries);
+
+  // =========================================================================
   // RHK 1: Bimbingan dan Pengajaran Peserta Didik (Tepat 10.000 entri)
   // =========================================================================
   const rhk1Subjects = [
@@ -117,13 +199,13 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
   ];
 
   let c2 = 0;
-  for (let aIdx = 0; aIdx < rhk2Areas.length && c2 < 10000; aIdx++) {
+  for (let aIdx = 0; aIdx < rhk2Areas.length && c2 < 40000; aIdx++) {
     const area = rhk2Areas[aIdx];
-    for (let iIdx = 0; iIdx < area.items.length && c2 < 10000; iIdx++) {
+    for (let iIdx = 0; iIdx < area.items.length && c2 < 40000; iIdx++) {
       const itm = area.items[iIdx];
-      for (let actIdx = 0; actIdx < rhk2Actions.length && c2 < 10000; actIdx++) {
+      for (let actIdx = 0; actIdx < rhk2Actions.length && c2 < 40000; actIdx++) {
         const act = rhk2Actions[actIdx];
-        for (let v = 0; v < 10 && c2 < 10000; v++) {
+        for (let v = 0; v < 10 && c2 < 40000; v++) {
           items.push({
             k: `${act.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
             a: [itm, `${act.prefix} ${area.name.toLowerCase()}`, `mandiri ${itm}`],
@@ -168,13 +250,13 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
   ];
 
   let c3 = 0;
-  for (let rIdx = 0; rIdx < rhk3Routines.length && c3 < 10000; rIdx++) {
+  for (let rIdx = 0; rIdx < rhk3Routines.length && c3 < 40000; rIdx++) {
     const r = rhk3Routines[rIdx];
-    for (let itIdx = 0; itIdx < r.items.length && c3 < 10000; itIdx++) {
+    for (let itIdx = 0; itIdx < r.items.length && c3 < 40000; itIdx++) {
       const itm = r.items[itIdx];
-      for (let mIdx = 0; mIdx < rhk3Modifiers.length && c3 < 10000; mIdx++) {
+      for (let mIdx = 0; mIdx < rhk3Modifiers.length && c3 < 40000; mIdx++) {
         const mod = rhk3Modifiers[mIdx];
-        for (let v = 0; v < 11 && c3 < 10000; v++) {
+        for (let v = 0; v < 11 && c3 < 40000; v++) {
           items.push({
             k: `${mod.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
             a: [itm, `${mod.prefix} ${r.name.toLowerCase()}`, `asrama ${itm}`],
@@ -219,13 +301,13 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
   ];
 
   let c4 = 0;
-  for (let tIdx = 0; tIdx < rhk4Themes.length && c4 < 10000; tIdx++) {
+  for (let tIdx = 0; tIdx < rhk4Themes.length && c4 < 40000; tIdx++) {
     const thm = rhk4Themes[tIdx];
-    for (let itIdx = 0; itIdx < thm.items.length && c4 < 10000; itIdx++) {
+    for (let itIdx = 0; itIdx < thm.items.length && c4 < 40000; itIdx++) {
       const itm = thm.items[itIdx];
-      for (let apIdx = 0; apIdx < rhk4Approaches.length && c4 < 10000; apIdx++) {
+      for (let apIdx = 0; apIdx < rhk4Approaches.length && c4 < 40000; apIdx++) {
         const app = rhk4Approaches[apIdx];
-        for (let v = 0; v < 11 && c4 < 10000; v++) {
+        for (let v = 0; v < 11 && c4 < 40000; v++) {
           items.push({
             k: `${app.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
             a: [itm, `${app.prefix} ${thm.name.toLowerCase()}`, `rohani ${itm}`],
@@ -330,11 +412,11 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
 
   // --- RHK 5: Tepat 3.334 entri (Peserta Didik Berkebutuhan Khusus) ---
   let c5 = 0;
-  for (let itIdx = 0; itIdx < rhk5Items.length && c5 < 3334; itIdx++) {
+  for (let itIdx = 0; itIdx < rhk5Items.length && c5 < 13334; itIdx++) {
     const itm = rhk5Items[itIdx];
-    for (let mIdx = 0; mIdx < extraModifiers.length && c5 < 3334; mIdx++) {
+    for (let mIdx = 0; mIdx < extraModifiers.length && c5 < 13334; mIdx++) {
       const mod = extraModifiers[mIdx];
-      for (let v = 0; v < 15 && c5 < 3334; v++) {
+      for (let v = 0; v < 15 && c5 < 13334; v++) {
         items.push({
           k: `${mod.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
           a: [itm, `${mod.prefix} ${itm}`, `inklusi ${itm}`],
@@ -349,11 +431,11 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
 
   // --- RHK 6: Tepat 3.333 entri (Pengembangan Kompetensi Tenaga Kependidikan) ---
   let c6 = 0;
-  for (let itIdx = 0; itIdx < rhk6Items.length && c6 < 3333; itIdx++) {
+  for (let itIdx = 0; itIdx < rhk6Items.length && c6 < 13334; itIdx++) {
     const itm = rhk6Items[itIdx];
-    for (let mIdx = 0; mIdx < extraModifiers.length && c6 < 3333; mIdx++) {
+    for (let mIdx = 0; mIdx < extraModifiers.length && c6 < 13334; mIdx++) {
       const mod = extraModifiers[mIdx];
-      for (let v = 0; v < 15 && c6 < 3333; v++) {
+      for (let v = 0; v < 15 && c6 < 13334; v++) {
         items.push({
           k: `${mod.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
           a: [itm, `${mod.prefix} ${itm}`, `kompetensi ${itm}`],
@@ -368,11 +450,11 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
 
   // --- RHK 7: Tepat 3.333 entri (Tugas Tambahan dari Pimpinan / Kepala Sekolah) ---
   let c7 = 0;
-  for (let itIdx = 0; itIdx < rhk7Items.length && c7 < 3333; itIdx++) {
+  for (let itIdx = 0; itIdx < rhk7Items.length && c7 < 13334; itIdx++) {
     const itm = rhk7Items[itIdx];
-    for (let mIdx = 0; mIdx < extraModifiers.length && c7 < 3333; mIdx++) {
+    for (let mIdx = 0; mIdx < extraModifiers.length && c7 < 13334; mIdx++) {
       const mod = extraModifiers[mIdx];
-      for (let v = 0; v < 15 && c7 < 3333; v++) {
+      for (let v = 0; v < 15 && c7 < 13334; v++) {
         items.push({
           k: `${mod.prefix} ${itm} ${v > 0 ? (v + 1) : ''}`.trim(),
           a: [itm, `${mod.prefix} ${itm}`, `tugas tambahan ${itm}`],
