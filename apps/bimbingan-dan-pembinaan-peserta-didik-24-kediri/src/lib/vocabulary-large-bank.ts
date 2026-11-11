@@ -97,7 +97,14 @@ function buildLargeVocabularyBank(): CompactVocabItem[] {
     { k: 'menjaga siswa sakit di puskesmas', a: ['mengantarkan periksa ke puskesmas'], r: 'RHK 4', t: 'fleksibel', d: 'Mengantarkan dan menjaga peserta didik yang membutuhkan pemeriksaan serta perawatan medis di Puskesmas, sekaligus berkoordinasi dengan tenaga kesehatan terkait kondisi siswa.' },
     { k: 'menjaga siswa sakit di rumah sakit', r: 'RHK 4', t: 'fleksibel', d: 'Melaksanakan pendampingan dan penjagaan intensif bagi peserta didik yang menjalani perawatan di rumah sakit serta melaporkan perkembangan kondisi kesehatannya kepada pimpinan dan orang tua.' },
     { k: 'mengantarkan berobat', r: 'RHK 4', t: 'fleksibel', d: 'Mengantarkan peserta didik yang mengalami gangguan kesehatan untuk berobat ke fasilitas kesehatan terdekat guna mendapatkan penanganan medis yang tepat.' },
-    { k: 'mengikuti upacara', r: 'RHK 3', t: 'pagi', d: 'Mendampingi dan menertibkan barisan peserta didik dalam mengikuti upacara bendera di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara khidmat untuk menanamkan jiwa nasionalisme dan kedisiplinan.' },
+    { k: 'mengikuti upacara', a: ['mendampingi ikut upacara'], r: 'RHK 3', t: 'pagi', d: 'Mendampingi dan menertibkan barisan peserta didik dalam mengikuti upacara bendera di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara khidmat untuk menanamkan jiwa nasionalisme dan kedisiplinan.' },
+    { k: 'memastikan siswa tidur tepat waktu', a: ['tidur pada tempatnya', 'tidur sesuai waktunya'], r: 'RHK 3', t: 'malam', d: 'Melaksanakan pengawasan malam di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna memastikan seluruh peserta didik sudah berada di tempat tidur masing-masing dan beristirahat tepat waktu.' },
+    { k: 'memastikan asrama aman', r: 'RHK 3', t: 'malam', d: 'Melaksanakan patroli dan pengecekan rutin di lingkungan asrama untuk memastikan pintu, jendela, serta kondisi asrama dalam keadaan aman, tertib, dan kondusif bagi istirahat peserta didik.' },
+    { k: 'bangun tidur', r: 'RHK 3', t: 'subuh', d: 'Mendampingi dan membiasakan peserta didik bangun tidur tepat waktu pada dini/pagi hari dengan tertib, merapikan tempat tidur, serta bersiap melaksanakan ibadah dan aktivitas harian.' },
+    { k: 'membangunkan untuk makan sahur', r: 'RHK 3', t: 'subuh', d: 'Membangunkan peserta didik pada waktu dini hari dengan penuh kehangatan dan ketertiban untuk bersiap melaksanakan makan sahur bersama di ruang makan asrama.' },
+    { k: 'membangunkan untuk sholat subuh', r: 'RHK 3', t: 'subuh', d: 'Membangunkan peserta didik pada waktu fajar serta mengarahkan untuk segera berwudhu guna melaksanakan sholat Subuh berjamaah tepat waktu.' },
+    { k: 'menuju masjid untuk sholat', r: 'RHK 3', t: 'fleksibel', d: 'Mengawal dan mendampingi barisan peserta didik menuju masjid asrama secara tertib dan rapi untuk melaksanakan sholat fardhu berjamaah.' },
+    { k: 'mendampingi ikut lomba', r: 'RHK 1', t: 'fleksibel', d: 'Mendampingi, membimbing, dan memberikan dukungan moril kepada peserta didik yang mengikuti kegiatan perlombaan guna menumbuhkan rasa percaya diri dan sportivitas.' },
   ];
   items.push(...curatedSrtEntries);
 
