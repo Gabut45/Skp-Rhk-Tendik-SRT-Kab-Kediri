@@ -189,14 +189,14 @@ export default createEndpoint({
 
     const merged = Array.from(byFingerprint.values());
 
-    // Sort by tanggal DESC (terbaru di atas) then waktuMulai DESC
+    // Sort by tanggal DESC (terbaru di atas) then waktuMulai ASC (kronologis dari pagi ke malam)
     const sorted = merged.sort((a, b) => {
       const dateA = a.tanggal || '';
       const dateB = b.tanggal || '';
       if (dateA !== dateB) return dateB.localeCompare(dateA);
-      const timeA = a.waktuMulai || '00:00';
-      const timeB = b.waktuMulai || '00:00';
-      return timeB.localeCompare(timeA);
+      const timeA = a.waktuMulai || '99:99';
+      const timeB = b.waktuMulai || '99:99';
+      return timeA.localeCompare(timeB);
     });
 
     const isSummary = Boolean(input.summaryOnly);
