@@ -111,14 +111,27 @@ export default function DaftarKegiatanPage() {
 
       let combined = Array.from(byFingerprint.values()).filter(r => !isClientRecordDeleted(r));
 
-      // Sort by date DESC then time DESC for comfortable overview
+      // Sort by date DESC (terbaru di atas), lalu pertahankan urutan input asli Wali Asuh
       combined.sort((a, b) => {
         const dateA = a.tanggal || '';
         const dateB = b.tanggal || '';
         if (dateA !== dateB) return dateB.localeCompare(dateA);
-        const timeA = a.waktuMulai || '';
-        const timeB = b.waktuMulai || '';
-        return timeB.localeCompare(timeA);
+
+        const urA = typeof a.urutan === 'number' && !isNaN(a.urutan) ? a.urutan : null;
+        const urB = typeof b.urutan === 'number' && !isNaN(b.urutan) ? b.urutan : null;
+        if (urA !== null && urB !== null && urA !== urB) {
+          return urA - urB;
+        }
+
+        const idA = typeof a.idKegiatan === 'number' && !isNaN(a.idKegiatan) ? a.idKegiatan : null;
+        const idB = typeof b.idKegiatan === 'number' && !isNaN(b.idKegiatan) ? b.idKegiatan : null;
+        if (idA !== null && idB !== null && idA !== idB) {
+          return idA - idB;
+        }
+
+        const timeA = a.waktuMulai || '99:99';
+        const timeB = b.waktuMulai || '99:99';
+        return timeA.localeCompare(timeB);
       });
 
       setRecords(combined);

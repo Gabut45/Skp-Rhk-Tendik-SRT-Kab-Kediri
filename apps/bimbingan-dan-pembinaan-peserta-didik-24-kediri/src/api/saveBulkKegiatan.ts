@@ -20,6 +20,7 @@ export default createEndpoint({
       deskripsiKegiatan: z.string(),
       rhkKategori: z.string(),
       fotoKegiatan: z.array(z.string()).optional(),
+      urutan: z.number().optional(),
     })),
   }),
   outputSchema: z.object({
@@ -75,6 +76,7 @@ export default createEndpoint({
       deskripsiKegiatan: string;
       rhkKategori: string;
       fotoKegiatan: string[];
+      urutan: number;
     }> = [];
     for (let idx = 0; idx < input.kegiatan.length; idx++) {
       const k = input.kegiatan[idx];
@@ -94,6 +96,7 @@ export default createEndpoint({
         deskripsiKegiatan: k.deskripsiKegiatan,
         rhkKategori: k.rhkKategori || 'RHK 3',
         fotoKegiatan: uploadedPhotos,
+        urutan: k.urutan ?? idx,
       });
     }
 
@@ -162,8 +165,9 @@ export default createEndpoint({
     if (cpanelSynced || savedCpanelCount > 0) {
       try {
         await zite.kegiatanHarian.bulkCreate({
-          records: preparedKegiatan.map(k => ({
+          records: preparedKegiatan.map((k, idx) => ({
             id: k.id,
+            idKegiatan: k.urutan ?? idx,
             namaPelapor: input.namaPelapor,
             nip: input.nip,
             tanggal: input.tanggal,

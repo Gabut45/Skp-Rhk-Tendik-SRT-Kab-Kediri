@@ -242,7 +242,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $params['pelapor'] = $pelapor;
         }
 
-        $sql .= " ORDER BY tanggal DESC, waktu_mulai DESC";
+        $hasUrutan = false;
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            $hasUrutan = !empty($colCheck);
+        } catch (Exception $e) {}
+
+        $sql .= $hasUrutan
+            ? " ORDER BY tanggal DESC, COALESCE(urutan, 999999) ASC, id_kegiatan ASC"
+            : " ORDER BY tanggal DESC, id_kegiatan ASC";
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
@@ -361,16 +369,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processedTtd = json_encode([['url' => $ttdUrl]]);
         }
 
-        $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
-            (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja)
-            VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit)
-            ON DUPLICATE KEY UPDATE 
-            deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
-            rhk_kategori = VALUES(rhk_kategori),
-            foto_kegiatan = VALUES(foto_kegiatan)");
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            if (empty($colCheck)) {
+                $pdo->exec("ALTER TABLE kegiatan_harian ADD COLUMN urutan INT NULL DEFAULT NULL");
+            }
+        } catch (Exception $e) {}
+
+        $hasUrutan = false;
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            $hasUrutan = !empty($colCheck);
+        } catch (Exception $e) {}
+
+        if ($hasUrutan) {
+            $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
+                (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja, urutan)
+                VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit, :urutan)
+                ON DUPLICATE KEY UPDATE 
+                waktu_mulai = VALUES(waktu_mulai),
+                waktu_selesai = VALUES(waktu_selesai),
+                kata_kunci_kegiatan = VALUES(kata_kunci_kegiatan),
+                deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
+                rhk_kategori = VALUES(rhk_kategori),
+                foto_kegiatan = VALUES(foto_kegiatan),
+                urutan = VALUES(urutan)");
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
+                (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja)
+                VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit)
+                ON DUPLICATE KEY UPDATE 
+                waktu_mulai = VALUES(waktu_mulai),
+                waktu_selesai = VALUES(waktu_selesai),
+                kata_kunci_kegiatan = VALUES(kata_kunci_kegiatan),
+                deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
+                rhk_kategori = VALUES(rhk_kategori),
+                foto_kegiatan = VALUES(foto_kegiatan)");
+        }
 
         $savedCount = 0;
-        foreach ($items as $it) {
+        foreach ($items as $idx => $it) {
             $id = $it['id'] ?? uniqid('keg_', true);
             $processedPhotos = [];
             if (!empty($it['fotoKegiatan']) && is_array($it['fotoKegiatan'])) {
@@ -384,7 +422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $fotoJson = json_encode($processedPhotos);
 
-            $stmt->execute([
+            $execParams = [
                 ':id' => $id,
                 ':nama' => $namaPelapor,
                 ':nip' => $nip,
@@ -397,7 +435,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':foto' => $fotoJson,
                 ':ttd' => $processedTtd,
                 ':unit' => $unitKerja
-            ]);
+            ];
+            if ($hasUrutan) {
+                $execParams[':urutan'] = isset($it['urutan']) ? intval($it['urutan']) : $idx;
+            }
+            $stmt->execute($execParams);
             $savedCount++;
         }
 
@@ -469,7 +511,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $decoded = json_decode($fotoCol, true);
         if (is_array($decoded)) {
             foreach ($decoded as $u) {
-                deletePhysicalFileByUrl($u);
+                $url = is_string($u) ? $u : ($u['url'] ?? '');
+                deletePhysicalFileByUrl($url);
             }
         } elseif (is_string($fotoCol)) {
             deletePhysicalFileByUrl($fotoCol);

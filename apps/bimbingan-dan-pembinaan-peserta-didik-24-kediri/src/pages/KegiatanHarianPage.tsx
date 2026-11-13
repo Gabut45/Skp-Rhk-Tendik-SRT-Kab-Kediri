@@ -232,7 +232,7 @@ export default function KegiatanHarianPage() {
         preparedList.push({ ...item, photos: uploadedPhotos });
       }
 
-      const payloadKegiatan = preparedList.map(k => ({
+      const payloadKegiatan = preparedList.map((k, idx) => ({
         id: k.id,
         waktuMulai: k.waktuMulai,
         waktuSelesai: k.waktuSelesai,
@@ -240,6 +240,7 @@ export default function KegiatanHarianPage() {
         deskripsiKegiatan: k.deskripsi,
         rhkKategori: k.rhk || 'RHK 3',
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
+        urutan: idx,
       }));
 
       // 1. Simpan ke database MySQL & upload foto ke File Manager cPanel (uploads/YYYY/MM/...)

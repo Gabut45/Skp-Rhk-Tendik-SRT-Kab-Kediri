@@ -70,6 +70,8 @@ async function fetchFromCpanel(input: {
 
           return {
             id: String(r.id || `keg_${r.id_kegiatan}`),
+            idKegiatan: r.id_kegiatan !== undefined && r.id_kegiatan !== null && r.id_kegiatan !== '' ? Number(r.id_kegiatan) : undefined,
+            urutan: r.urutan !== undefined && r.urutan !== null && r.urutan !== '' ? Number(r.urutan) : undefined,
             namaPelapor: r.nama_pelapor || r.namaPelapor,
             nip: r.nip,
             tanggal: r.tanggal,
@@ -107,6 +109,8 @@ export default createEndpoint({
   outputSchema: z.object({
     records: z.array(z.object({
       id: z.string(),
+      idKegiatan: z.number().optional(),
+      urutan: z.number().optional(),
       namaPelapor: z.string().optional(),
       nip: z.string().optional(),
       tanggal: z.string().optional(),
@@ -189,11 +193,24 @@ export default createEndpoint({
 
     const merged = Array.from(byFingerprint.values());
 
-    // Sort by tanggal DESC (terbaru di atas) then waktuMulai ASC (kronologis dari pagi ke malam)
+    // Sort by tanggal DESC (terbaru di atas), lalu pertahankan urutan input asli Wali Asuh (urutan / idKegiatan ASC)
     const sorted = merged.sort((a, b) => {
       const dateA = a.tanggal || '';
       const dateB = b.tanggal || '';
       if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+      const urA = typeof a.urutan === 'number' && !isNaN(a.urutan) ? a.urutan : null;
+      const urB = typeof b.urutan === 'number' && !isNaN(b.urutan) ? b.urutan : null;
+      if (urA !== null && urB !== null && urA !== urB) {
+        return urA - urB;
+      }
+
+      const idA = typeof a.idKegiatan === 'number' && !isNaN(a.idKegiatan) ? a.idKegiatan : null;
+      const idB = typeof b.idKegiatan === 'number' && !isNaN(b.idKegiatan) ? b.idKegiatan : null;
+      if (idA !== null && idB !== null && idA !== idB) {
+        return idA - idB;
+      }
+
       const timeA = a.waktuMulai || '99:99';
       const timeB = b.waktuMulai || '99:99';
       return timeA.localeCompare(timeB);
@@ -211,6 +228,8 @@ export default createEndpoint({
         }
         return {
           id: r.id,
+          idKegiatan: typeof r.idKegiatan === 'number' && !isNaN(r.idKegiatan) ? r.idKegiatan : undefined,
+          urutan: typeof r.urutan === 'number' && !isNaN(r.urutan) ? r.urutan : undefined,
           namaPelapor: r.namaPelapor,
           nip: r.nip,
           tanggal: r.tanggal,
