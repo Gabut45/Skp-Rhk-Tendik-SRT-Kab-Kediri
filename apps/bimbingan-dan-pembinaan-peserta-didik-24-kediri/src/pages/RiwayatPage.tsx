@@ -527,6 +527,7 @@ export default function RiwayatPage() {
       deskripsi: item.deskripsi,
       rhk: item.rhk,
       photos: item.photos,
+      copiedPhotoUrls: item.photos,
     }));
 
     sessionStorage.setItem('__copiedKegiatan', JSON.stringify(items));

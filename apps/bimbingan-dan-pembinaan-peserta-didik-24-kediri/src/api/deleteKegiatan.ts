@@ -125,6 +125,7 @@ export default createEndpoint({
                   idsToDeleteSet.add(matchId);
                   if (r.id_kegiatan) idsToDeleteSet.add(String(r.id_kegiatan));
                 } else if (
+                  !r.id &&
                   input.waktuMulai &&
                   (r.waktu_mulai === input.waktuMulai || r.waktuMulai === input.waktuMulai)
                 ) {
@@ -167,7 +168,6 @@ export default createEndpoint({
             id: input.id,
             ids: idsArray.length > 0 ? idsArray : undefined,
             id_numeric: numericId,
-            waktu_mulai: input.waktuMulai,
           }),
         });
         if (res.ok) {

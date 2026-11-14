@@ -21,6 +21,7 @@ export interface KegiatanItem {
   deskripsi: string;
   rhk: string;
   photos: string[];
+  copiedPhotoUrls?: string[];
 }
 
 interface KegiatanFormProps {

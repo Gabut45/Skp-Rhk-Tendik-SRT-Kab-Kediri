@@ -20,6 +20,7 @@ export default createEndpoint({
       deskripsiKegiatan: z.string(),
       rhkKategori: z.string(),
       fotoKegiatan: z.array(z.string()).optional(),
+      copiedPhotoUrls: z.array(z.string()).optional(),
       urutan: z.number().optional(),
     })),
   }),
@@ -28,17 +29,23 @@ export default createEndpoint({
     count: z.number(),
     cpanelSynced: z.boolean().optional(),
     message: z.string().optional(),
+    savedItems: z.array(z.object({
+      id: z.string(),
+      fotoKegiatan: z.array(z.string()),
+    })).optional(),
   }),
   async execute({ input }) {
     setDeletedAll(false);
     const cpanelUrl = input.cpanelUrl || DEFAULT_CPANEL_URL;
     const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=save_bulk`;
     const uploadPhotoUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=upload_foto`;
+    const clonePhotoUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=clone_foto`;
+    const getImageUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=get_image`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (input.cpanelKey) headers['X-API-KEY'] = input.cpanelKey;
 
     // Helper: pastikan foto base64 diupload ke File Manager cPanel sehingga database hanya menyimpan URL singkat
-    const ensureUploadedPhoto = async (photoStr: string, fallbackName: string): Promise<string> => {
+    const ensureUploadedPhoto = async (photoStr: string, _fallbackName: string): Promise<string> => {
       if (!photoStr || typeof photoStr !== 'string') return '';
       if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) return photoStr;
       if (photoStr.startsWith('data:image/')) {
@@ -61,13 +68,75 @@ export default createEndpoint({
       return photoStr;
     };
 
+    // Helper: duplikasi file fisik foto hasil salinan agar berdiri sendiri dan tidak ikut terhapus jika pemilik asli menghapus miliknya
+    const cloneExistingPhoto = async (photoUrl: string, fallbackName: string): Promise<string> => {
+      if (!photoUrl || typeof photoUrl !== 'string') return '';
+      if (photoUrl.startsWith('data:image/')) {
+        return ensureUploadedPhoto(photoUrl, fallbackName);
+      }
+
+      // 1. Duplikasi langsung di server cPanel via action=clone_foto (instan)
+      try {
+        const res = await fetch(clonePhotoUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ url: photoUrl, subfolder: 'uploads' }),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.url && typeof json.url === 'string' && json.url !== photoUrl) {
+            return json.url;
+          }
+        }
+      } catch (e) {
+        console.warn('[saveBulkKegiatan] clone_foto warning:', e);
+      }
+
+      // 2. Fallback: unduh blob foto (langsung atau via proxy get_image) lalu unggah ulang sebagai file baru
+      if (typeof window !== 'undefined' && typeof FileReader !== 'undefined') {
+        const tryFetchBlob = async (urlToFetch: string): Promise<Blob | null> => {
+          try {
+            const r = await fetch(urlToFetch);
+            if (r.ok) {
+              const b = await r.blob();
+              if (b && b.size > 0 && b.type.startsWith('image/')) return b;
+            }
+          } catch {}
+          return null;
+        };
+
+        let blob = await tryFetchBlob(photoUrl);
+        if (!blob) {
+          blob = await tryFetchBlob(`${getImageUrl}&file=${encodeURIComponent(photoUrl)}`);
+        }
+        if (blob) {
+          try {
+            const base64Data = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = () => reject(reader.error);
+              reader.readAsDataURL(blob as Blob);
+            });
+            const uploadedNewUrl = await ensureUploadedPhoto(base64Data, fallbackName);
+            if (uploadedNewUrl && uploadedNewUrl.startsWith('http') && uploadedNewUrl !== photoUrl) {
+              return uploadedNewUrl;
+            }
+          } catch (e) {
+            console.warn('[saveBulkKegiatan] Fallback clone upload warning:', e);
+          }
+        }
+      }
+
+      return photoUrl;
+    };
+
     // 1. Pastikan tanda tangan jika berupa base64 tersimpan di File Manager
     let finalTtd = input.tandaTangan;
     if (finalTtd && finalTtd.startsWith('data:image/')) {
       finalTtd = await ensureUploadedPhoto(finalTtd, 'ttd');
     }
 
-    // 2. Siapkan list kegiatan dengan semua foto terunggah ke File Manager
+    // 2. Siapkan list kegiatan dengan semua foto terunggah/terduplikasi ke File Manager
     const preparedKegiatan: Array<{
       id: string;
       waktuMulai: string;
@@ -81,11 +150,14 @@ export default createEndpoint({
     for (let idx = 0; idx < input.kegiatan.length; idx++) {
       const k = input.kegiatan[idx];
       const rawPhotos = k.fotoKegiatan || [];
+      const copiedSet = new Set((k.copiedPhotoUrls || []).filter(Boolean));
       const uploadedPhotos: string[] = [];
       for (const p of rawPhotos) {
         if (!p || typeof p !== 'string' || p.trim().length < 5 || p.startsWith('data:,')) continue;
-        const uploaded = await ensureUploadedPhoto(p, `keg_${idx}`);
-        if (uploaded) uploadedPhotos.push(uploaded);
+        const resolved = copiedSet.has(p)
+          ? await cloneExistingPhoto(p, `keg_${idx}`)
+          : await ensureUploadedPhoto(p, `keg_${idx}`);
+        if (resolved) uploadedPhotos.push(resolved);
       }
 
       preparedKegiatan.push({
@@ -191,6 +263,10 @@ export default createEndpoint({
       success: isSuccess,
       count: savedCpanelCount,
       cpanelSynced,
+      savedItems: preparedKegiatan.map(k => ({
+        id: k.id,
+        fotoKegiatan: k.fotoKegiatan,
+      })),
       message: cpanelSynced
         ? `${savedCpanelCount} kegiatan & seluruh foto dokumentasi berhasil tersimpan permanen di Database Server cPanel!`
         : (savedCpanelCount > 0

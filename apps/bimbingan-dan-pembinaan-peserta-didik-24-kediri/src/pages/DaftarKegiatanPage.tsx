@@ -300,6 +300,7 @@ export default function DaftarKegiatanPage() {
 
     const items = selected.map(r => {
       const full = fullRecordsMap.get(r.id) || r;
+      const photos = (full.fotoKegiatan || []).map(f => f.url).filter(Boolean);
       return {
         id: crypto.randomUUID(),
         waktuMulai: full.waktuMulai || '',
@@ -307,7 +308,8 @@ export default function DaftarKegiatanPage() {
         kataKunci: full.kataKunciKegiatan || '',
         deskripsi: full.deskripsiKegiatan || '',
         rhk: full.rhkKategori || '',
-        photos: (full.fotoKegiatan || []).map(f => f.url).filter(Boolean),
+        photos,
+        copiedPhotoUrls: photos,
       };
     });
 
@@ -352,6 +354,7 @@ export default function DaftarKegiatanPage() {
       deskripsi: r.deskripsiKegiatan || '',
       rhk: r.rhkKategori || '',
       photos,
+      copiedPhotoUrls: photos,
     };
     sessionStorage.setItem('__copiedKegiatan', JSON.stringify([item]));
     toast.success('1 kegiatan disalin ke form Input Kegiatan');

@@ -240,10 +240,11 @@ export default function KegiatanHarianPage() {
         deskripsiKegiatan: k.deskripsi,
         rhkKategori: k.rhk || 'RHK 3',
         fotoKegiatan: k.photos.length > 0 ? k.photos : undefined,
+        copiedPhotoUrls: k.copiedPhotoUrls && k.copiedPhotoUrls.length > 0 ? k.copiedPhotoUrls : undefined,
         urutan: idx,
       }));
 
-      // 1. Simpan ke database MySQL & upload foto ke File Manager cPanel (uploads/YYYY/MM/...)
+      // 1. Simpan ke database MySQL & upload/duplikasi foto ke File Manager cPanel (uploads/YYYY/MM/...)
       const saveRes = await saveBulkKegiatan({
         namaPelapor,
         nip,
@@ -260,45 +261,62 @@ export default function KegiatanHarianPage() {
 
       setAppDeletedAll(false);
 
+      const savedMap = new Map<string, string[]>();
+      if (Array.isArray(saveRes.savedItems)) {
+        for (const si of saveRes.savedItems) {
+          savedMap.set(si.id, si.fotoKegiatan);
+        }
+      }
+
       // 2. Ambil data tersimpan dari cPanel agar mendapatkan URL foto File Manager (https://.../uploads/...)
-      const kegData = await getKegiatan({
-        tanggalMulai: tanggal,
-        tanggalSelesai: tanggal,
-        namaPelapor: namaPelapor,
-        cpanelUrl,
-        cpanelKey,
+      let updatedList = preparedList.map((localItem) => {
+        const clonedOrSavedUrls = savedMap.get(localItem.id);
+        return {
+          ...localItem,
+          photos: clonedOrSavedUrls && clonedOrSavedUrls.length > 0 ? clonedOrSavedUrls : localItem.photos,
+          copiedPhotoUrls: undefined,
+        };
       });
 
-      if (kegData && Array.isArray(kegData.records) && kegData.records.length > 0) {
-        // Cocokkan kembali URL foto File Manager ke setiap kegiatan
-        const updatedList = preparedList.map((localItem) => {
-          const matched = kegData.records.find(
-            (r: any) =>
-              (r.waktuMulai === localItem.waktuMulai || r.id === localItem.id) &&
-              (r.deskripsiKegiatan === localItem.deskripsi || r.waktuSelesai === localItem.waktuSelesai)
-          );
-          if (matched && matched.fotoKegiatan && matched.fotoKegiatan.length > 0) {
-            const urls = matched.fotoKegiatan
-              .map((p: any) => (typeof p === 'string' ? p : p?.url || ''))
-              .filter((u: string) => Boolean(u && u.startsWith('http')));
-            if (urls.length > 0) {
-              return { ...localItem, photos: urls };
-            }
-          }
-          return localItem;
+      try {
+        const kegData = await getKegiatan({
+          tanggalMulai: tanggal,
+          tanggalSelesai: tanggal,
+          namaPelapor: namaPelapor,
+          cpanelUrl,
+          cpanelKey,
         });
 
-        // Update state form agar memegang URL foto File Manager
-        setKegiatanList((prev) =>
-          prev.map((item) => {
-            const up = updatedList.find((u) => u.id === item.id);
-            return up || item;
-          })
-        );
+        if (kegData && Array.isArray(kegData.records) && kegData.records.length > 0) {
+          updatedList = updatedList.map((localItem) => {
+            const matched = kegData.records.find(
+              (r: any) =>
+                r.id === localItem.id ||
+                (r.waktuMulai === localItem.waktuMulai &&
+                  (r.deskripsiKegiatan === localItem.deskripsi || r.waktuSelesai === localItem.waktuSelesai))
+            );
+            if (matched && matched.fotoKegiatan && matched.fotoKegiatan.length > 0) {
+              const urls = matched.fotoKegiatan
+                .map((p: any) => (typeof p === 'string' ? p : p?.url || ''))
+                .filter((u: string) => Boolean(u && u.startsWith('http')));
+              if (urls.length > 0) {
+                return { ...localItem, photos: urls, copiedPhotoUrls: undefined };
+              }
+            }
+            return localItem;
+          });
+        }
+      } catch { /* fallback ke savedItems */ }
 
-        return updatedList;
-      }
-      return preparedList;
+      // Update state form agar memegang URL foto File Manager yang baru & berdiri sendiri
+      setKegiatanList((prev) =>
+        prev.map((item) => {
+          const up = updatedList.find((u) => u.id === item.id);
+          return up || item;
+        })
+      );
+
+      return updatedList;
     } catch (err: any) {
       console.warn('Sync kegiatan ke cPanel warning:', err);
       throw err;
