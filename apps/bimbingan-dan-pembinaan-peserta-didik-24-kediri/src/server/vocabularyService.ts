@@ -50,7 +50,7 @@ function initStorage() {
 
 initStorage();
 
-const MAX_LEARNED_CAPACITY = 400000;
+const MAX_LEARNED_CAPACITY = 1000000;
 let _saveDebounceTimer: NodeJS.Timeout | null = null;
 
 function saveToDisk() {
@@ -70,7 +70,7 @@ function saveToDisk() {
 
 /**
  * Save newly generated AI description into server vocabulary bank
- * Automatically records every Gemini AI generation up to 50,000 entries.
+ * Automatically records every Gemini AI generation up to 1,000,000 entries.
  */
 export function saveLearnedVocabularyServer(
   kataKunci: string,
@@ -105,7 +105,7 @@ export function saveLearnedVocabularyServer(
   // Add to beginning of memory list
   inMemoryVocabulary.unshift(newItem);
 
-  // Limit memory to 50,000 learned entries
+  // Limit memory to MAX_LEARNED_CAPACITY (1,000,000 learned entries)
   if (inMemoryVocabulary.length > MAX_LEARNED_CAPACITY) {
     inMemoryVocabulary = inMemoryVocabulary.slice(0, MAX_LEARNED_CAPACITY);
   }
@@ -116,50 +116,75 @@ export function saveLearnedVocabularyServer(
 
 /**
  * Look up matching description from Server's vocabulary:
- * Priority 1: Learned items from previous Gemini generations
- * Priority 2: Pre-seeded comprehensive realistic vocabulary bank
- * Priority 3: Polished contextual Indonesian civil-service synthesizer
+ * Priority 1: Exact match in learned database or curated SRT bank
+ * Priority 2: Specific curated phrase or best partial learned match (longest match wins)
+ * Priority 3: Massive pre-seeded bank & contextual Indonesian civil-service synthesizer
  */
 export function lookupServerVocabulary(rawKeyword: string): {
   deskripsi: string;
   rhk: string;
   matchedFrom: 'learned_database' | 'preseeded_bank' | 'synthesizer';
 } {
-  const clean = rawKeyword.toLowerCase().trim();
+  const clean = rawKeyword.toLowerCase().replace(/\s+/g, ' ').trim();
   const timeContext = detectTimeContext(clean);
 
-  // 1. Search learned database
+  // 1a. Exact match in learned database
   if (inMemoryVocabulary.length > 0) {
-    // Exact keyword matches
     const exactMatches = inMemoryVocabulary.filter(
       item => item.kataKunci.toLowerCase() === clean
     );
     if (exactMatches.length > 0) {
-      const item = exactMatches[Math.floor(Math.random() * exactMatches.length)];
-      return { deskripsi: item.deskripsi, rhk: item.rhk, matchedFrom: 'learned_database' };
-    }
-
-    // Partial keyword matches
-    const partialMatches = inMemoryVocabulary.filter(item => {
-      const itemKw = item.kataKunci.toLowerCase();
-      return clean.includes(itemKw) || itemKw.includes(clean);
-    });
-
-    if (partialMatches.length > 0) {
-      // Filter by time context if applicable
-      const compatible = partialMatches.filter(item => {
+      const compatible = exactMatches.filter(item => {
         const itemTime = detectTimeContext(item.deskripsi);
-        if (timeContext && itemTime && timeContext !== itemTime) return false;
-        return true;
+        return !timeContext || !itemTime || timeContext === itemTime;
       });
-      const pool = compatible.length > 0 ? compatible : partialMatches;
+      const pool = compatible.length > 0 ? compatible : exactMatches;
       const item = pool[Math.floor(Math.random() * pool.length)];
       return { deskripsi: item.deskripsi, rhk: item.rhk, matchedFrom: 'learned_database' };
     }
   }
 
-  // 2. Search pre-seeded realistic vocabulary bank
+  // 1b. Exact or curated multi-word match in VOCABULARY_BANK
+  for (const entry of VOCABULARY_BANK) {
+    const isExactKw = clean === entry.keyword.toLowerCase();
+    const isExactAlias = entry.aliases?.some(al => clean === al.toLowerCase());
+    if (isExactKw || isExactAlias) {
+      const bankExact = searchVocabularyBank(clean);
+      if (bankExact) {
+        return {
+          deskripsi: bankExact.deskripsi,
+          rhk: bankExact.rhk,
+          matchedFrom: 'preseeded_bank',
+        };
+      }
+    }
+  }
+
+  // 2. Partial match in learned database (sorted by specificity/length) vs pre-seeded bank
   const bankMatch = searchVocabularyBank(clean);
+  if (inMemoryVocabulary.length > 0) {
+    const partialMatches = inMemoryVocabulary
+      .filter(item => {
+        const itemKw = item.kataKunci.toLowerCase();
+        return clean.includes(itemKw) || itemKw.includes(clean);
+      })
+      .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
+
+    if (partialMatches.length > 0) {
+      const compatible = partialMatches.filter(item => {
+        const itemTime = detectTimeContext(item.deskripsi);
+        if (timeContext && itemTime && timeContext !== itemTime) return false;
+        return true;
+      });
+      const bestLearned = (compatible.length > 0 ? compatible : partialMatches)[0];
+      const bankMatchLen = bankMatch?.matchedKeyword?.length || 0;
+      if (bestLearned.kataKunci.length >= bankMatchLen) {
+        return { deskripsi: bestLearned.deskripsi, rhk: bestLearned.rhk, matchedFrom: 'learned_database' };
+      }
+    }
+  }
+
+  // 3. Pre-seeded bank & synthesizer
   if (bankMatch) {
     return {
       deskripsi: bankMatch.deskripsi,
@@ -168,7 +193,6 @@ export function lookupServerVocabulary(rawKeyword: string): {
     };
   }
 
-  // 3. Synthesize flawless Indonesian civil-service description
   const synthesized = synthesizeFallbackDeskripsi(rawKeyword);
   return {
     deskripsi: synthesized.deskripsi,

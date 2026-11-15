@@ -139,21 +139,24 @@ export async function handleGenerateDeskripsiServer(rawKeyword: string): Promise
   // 1. Coba gunakan Gemini API jika key valid
   if (hasValidGeminiKey()) {
     try {
-      const prompt = `Anda adalah sistem AI perumus deskripsi Sasaran Kinerja Pegawai (SKP) / Rencana Hasil Kerja (RHK) Tenaga Kependidikan / Wali Asuh di Sekolah Rakyat Terintegrasi Kab Kediri.
+      const prompt = `Anda adalah sistem AI perumus deskripsi Sasaran Kinerja Pegawai (SKP) / Rencana Hasil Kerja (RHK) Tenaga Kependidikan / Wali Asuh di Sekolah Rakyat Terintegrasi 1 Kabupaten Kediri.
 Kata Kunci Kegiatan: "${trimmed}"
 
 Instruksi:
-1. Buat kalimat deskripsi kegiatan formal PNS/PPPK yang SANGAT PERSIS DAN RELEVAN dengan kata kunci.
-   - PENTING: Perhatikan kata waktu (pagi, sarapan, siang, sore, malam, subuh). JANGAN PERNAH tertukar! Jika kata kunci berisi "makan malam", deskripsi WAJIB tentang makan malam (JANGAN menyebut makan pagi/sarapan). Jika kata kunci "makan pagi" atau "sarapan", deskripsi WAJIB tentang makan pagi (JANGAN menyebut makan malam). Begitu pula sholat, apel, piket, dan kegiatan lainnya.
-2. Gunakan kalimat kerja operasional kedinasan (contoh: "Melaksanakan pendampingan...", "Membimbing dan mengawasi...", "Mendampingi peserta didik..."). Panjang 1-2 kalimat padat berkualitas.
+1. Buat kalimat deskripsi kegiatan formal ASN/PPPK/Wali Asuh yang SANGAT PERSIS, NATURAL, PROFESIONAL, DAN RELEVAN dengan kata kunci serta konteks asrama/sekolah di Sekolah Rakyat Terintegrasi 1 Kab. Kediri.
+   - PENTING: Perhatikan kata waktu (pagi, sarapan, siang, sore, malam, subuh). JANGAN PERNAH tertukar! Jika kata kunci berisi "makan malam" atau "apel malam", deskripsi WAJIB tentang malam hari. Jika "apel pagi" atau "sarapan", WAJIB tentang pagi hari.
+   - Jika terdapat salah ketik ringan pada kata kunci (misalnya "sakut" = sakit, "mendamaikan baris berbaris" = menertibkan & mendampingi kegiatan baris-berbaris, "menjadi ekstrakurikuler perhotelan" = mendampingi/memfasilitasi kegiatan ekstrakurikuler perhotelan), pahami maksud sebenarnya dan tuliskan deskripsi berbahasa Indonesia baku yang sangat profesional.
+   - Perhatikan lokasi & konteks khusus bila disebutkan: kelas, aula, masjid, asrama, UKS, Puskesmas, Rumah Sakit, Outing Class, pembagian raport, kunjungan orang tua, menonton bersama.
+   - Untuk kegiatan ekstrakurikuler/kokurikuler/keahlian (seperti IPSI/pencak silat, membatik, peternakan, perhotelan, pertanian, tata boga, tata kecantikan, LKBB), sebutkan aktivitas pembinaan keterampilan atau karakter spesifik bidang tersebut secara profesional.
+2. Gunakan kalimat kerja operasional kedinasan (contoh: "Melaksanakan pendampingan...", "Mendampingi dan membimbing...", "Menjaga ketertiban...", "Bertindak sigap melerai dan memediasi..."). Panjang 1-2 kalimat padat, jelas, dan berkualitas.
 3. Tentukan RHK yang paling sesuai:
-   - RHK 1: Bimbingan dan Pengajaran Peserta Didik (belajar, tugas sekolah, review pelajaran, laptop belajar, refleksi harian, jurnal)
-   - RHK 2: Kemandirian Peserta Didik (cuci pakaian/laundry, cuci piring, piket kebersihan, merapikan kamar/kasur, memasak mandiri)
-   - RHK 3: Pendampingan, Bimbingan, Motivasi, dan Pembinaan Peserta Didik (membangunkan tidur, persiapan sekolah, antar-jemput, penyambutan pulang sekolah, makan pagi/siang/malam, sholat berjamaah, istirahat siang, tidur malam, upacara bendera)
-   - RHK 4: Bimbingan Spiritual dan Emosional (mengaji/tadarus Al-Quran, kajian agama, setoran hafalan, apel pagi/malam, kedisiplinan/tata tertib, konseling, kesehatan/merawat siswa sakit, olahraga/senam pagi/sore, kunjungan ortu)
-   - RHK 5: Pendampingan Peserta Didik Berkebutuhan Khusus
-   - RHK 6: Pengembangan Kompetensi Tenaga Kependidikan
-   - RHK 7: Tugas Tambahan dari Kepala Sekolah`;
+   - RHK 1: Bimbingan, Pengajaran & Pengembangan Keahlian (mendampingi belajar, tugas sekolah/PR, review pelajaran, pembagian raport, outing class, kokurikuler membatik, keahlian tata boga, ekstrakurikuler peternakan/perhotelan/pertanian/kecantikan/coding, refleksi harian)
+   - RHK 2: Kemandirian & Tata Graha Peserta Didik (menyapu kelas/aula/lingkungan, membersihkan kelas/aula/masjid, cuci pakaian/laundry, cuci piring, piket kebersihan, merapikan kamar/kasur/almari, memasak mandiri)
+   - RHK 3: Pendampingan, Bimbingan, Motivasi & Rutinitas Harian Asrama (membangunkan tidur, persiapan sekolah, antar-jemput, makan pagi/siang/malam, sholat berjamaah di masjid/mushola, istirahat di asrama, mendampingi menonton, tidur malam, upacara bendera)
+   - RHK 4: Bimbingan Spiritual, Emosional, Kedisiplinan & Kesehatan (mengaji/tadarus/yasin/diba', kajian agama, apel pagi/malam, ekstrakurikuler IPSI, baris-berbaris/LKBB, menjaga ketertiban kunjungan & kunjungan orang tua, melerai siswa & mendamaikan siswa yang bertengkar, merawat/mendampingi siswa sakit di UKS, istirahat di UKS, memeriksakan siswa, mengantar berobat, menjaga siswa sakit di puskesmas/rumah sakit, olahraga/senam)
+   - RHK 5: Pendampingan Peserta Didik Berkebutuhan Khusus (ABK / Inklusi)
+   - RHK 6: Pengembangan Kompetensi Tenaga Kependidikan (pelatihan, workshop, bimtek, webinar)
+   - RHK 7: Tugas Tambahan dari Pimpinan / Kepala Sekolah (kepanitiaan, satgas, penugasan dinas resmi)`;
 
       const modelsToTry = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
       let parsed: any = null;

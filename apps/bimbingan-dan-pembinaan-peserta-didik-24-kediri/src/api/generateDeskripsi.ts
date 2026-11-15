@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { createEndpoint } from 'zitejs/backend';
 import {
+  VOCABULARY_BANK,
   searchVocabularyBank,
   synthesizeFallbackDeskripsi,
   saveLearnedVocabularyLocal,
   getLearnedVocabularyLocal,
+  normalizeKeyword,
   detectTimeContext as detectTime,
 } from '../lib/vocabulary-database.ts';
 
@@ -682,59 +684,79 @@ export default createEndpoint({
     }
 
     // High precision fallback tiers:
-    // 1. Check central server MySQL database bank vocabulary (shared across all devices)
+    const normalizedInput = normalizeKeyword(raw);
+    const timeCtx = detectTime(normalizedInput);
+
+    // 1. Check exact curated match in VOCABULARY_BANK first so newly curated SRT entries aren't shadowed by broad historical records
+    const hasExactCurated = VOCABULARY_BANK.some(
+      entry =>
+        entry.keyword.toLowerCase() === normalizedInput ||
+        entry.aliases?.some(al => al.toLowerCase() === normalizedInput)
+    );
+    if (hasExactCurated) {
+      const bankMatch = searchVocabularyBank(raw);
+      if (bankMatch) {
+        return { deskripsi: bankMatch.deskripsi, rhk: bankMatch.rhk };
+      }
+    }
+
+    // 2. Check comprehensive pre-seeded vocabulary bank match info
+    const bankMatch = searchVocabularyBank(raw);
+
+    // 3. Check central server MySQL database bank vocabulary (shared across all devices)
     try {
       const serverRecords = await fetchServerDatabaseVocabulary();
-      const cleanRaw = raw.toLowerCase().trim();
-      const timeCtx = detectTime(cleanRaw);
-
-      const matchedServer = serverRecords.filter(item => {
-        const kw = item.kataKunci.toLowerCase();
-        const desc = item.deskripsi.toLowerCase();
-        return (kw && (cleanRaw.includes(kw) || kw.includes(cleanRaw))) ||
-               desc.includes(cleanRaw);
-      });
+      const matchedServer = serverRecords
+        .filter(item => {
+          const kw = item.kataKunci.toLowerCase();
+          return kw && (normalizedInput.includes(kw) || kw.includes(normalizedInput));
+        })
+        .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
 
       if (matchedServer.length > 0) {
         const pool = matchedServer.filter(item => {
           const t = detectTime(item.deskripsi);
           return !timeCtx || !t || timeCtx === t;
         });
-        const selected = (pool.length > 0 ? pool : matchedServer)[0];
-        return { deskripsi: selected.deskripsi, rhk: selected.rhk };
+        const bestServer = (pool.length > 0 ? pool : matchedServer)[0];
+        if (!bankMatch || bestServer.kataKunci.length >= bankMatch.matchedKeyword.length) {
+          return { deskripsi: bestServer.deskripsi, rhk: bestServer.rhk };
+        }
       }
     } catch {
       // ignore & proceed to next fallback
     }
 
-    // 2. Check local learned cache in browser
+    // 4. Check local learned cache in browser
     try {
       const learned = getLearnedVocabularyLocal();
-      const cleanRaw = raw.toLowerCase().trim();
-      const timeCtx = detectTime(cleanRaw);
-      const matchedLearned = learned.filter(item => {
-        const kw = item.kataKunci.toLowerCase();
-        return cleanRaw.includes(kw) || kw.includes(cleanRaw);
-      });
+      const matchedLearned = learned
+        .filter(item => {
+          const kw = item.kataKunci.toLowerCase();
+          return normalizedInput.includes(kw) || kw.includes(normalizedInput);
+        })
+        .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
+
       if (matchedLearned.length > 0) {
         const pool = matchedLearned.filter(item => {
           const t = detectTime(item.deskripsi);
           return !timeCtx || !t || timeCtx === t;
         });
-        const selected = (pool.length > 0 ? pool : matchedLearned)[0];
-        return { deskripsi: selected.deskripsi, rhk: selected.rhk };
+        const bestLearned = (pool.length > 0 ? pool : matchedLearned)[0];
+        if (!bankMatch || bestLearned.kataKunci.length >= bankMatch.matchedKeyword.length) {
+          return { deskripsi: bestLearned.deskripsi, rhk: bestLearned.rhk };
+        }
       }
     } catch {
       // ignore
     }
 
-    // 2. Check comprehensive pre-seeded vocabulary bank
-    const bankMatch = searchVocabularyBank(raw);
+    // 5. Return comprehensive pre-seeded vocabulary bank match
     if (bankMatch) {
       return { deskripsi: bankMatch.deskripsi, rhk: bankMatch.rhk };
     }
 
-    // 3. Fallback to existing detailed templates or synthesizer
+    // 6. Fallback to existing detailed templates or synthesizer
     return generateSmartFallback(raw);
   },
 });

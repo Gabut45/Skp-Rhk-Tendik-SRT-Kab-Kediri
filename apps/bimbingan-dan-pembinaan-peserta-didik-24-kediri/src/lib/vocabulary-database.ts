@@ -293,6 +293,66 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     ],
   },
   {
+    keyword: 'mendampingi siswa menyapu',
+    aliases: ['menyapu bersama siswa', 'mendampingi menyapu', 'siswa menyapu'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membimbing peserta didik melaksanakan kegiatan menyapu lantai ruangan maupun area sekitar Sekolah Rakyat Terintegrasi 1 Kab. Kediri agar lingkungan tetap bersih, rapi, dan sehat.',
+      'Mengawasi peserta didik saat melaksanakan piket menyapu bersama secara tertib, mengarahkan penyapuan hingga sudut ruangan serta pengumpulan sampah ke tempat pembuangan secara bertanggung jawab.',
+    ],
+  },
+  {
+    keyword: 'menyapu aula',
+    aliases: ['mendampingi siswa menyapu aula', 'menyapu gedung aula', 'sapu aula', 'piket menyapu aula'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membimbing peserta didik melaksanakan kegiatan menyapu lantai aula Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara menyeluruh agar aula selalu bersih, bebas debu, dan siap digunakan untuk kegiatan bersama.',
+      'Melaksanakan pengawasan piket kebersihan menyapu aula asrama bersama peserta didik secara tertib serta memastikan sampah terkumpul rapi di tempat sampah.',
+    ],
+  },
+  {
+    keyword: 'membersihkan aula',
+    aliases: ['bersih aula', 'bersih-bersih aula', 'piket aula', 'membersihkan gedung aula'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik melaksanakan kegiatan membersihkan aula Sekolah Rakyat Terintegrasi 1 Kab. Kediri, meliputi menyapu dan mengepel lantai, menata kursi serta meja, dan memastikan ruangan kembali bersih dan nyaman.',
+      'Mengoordinasikan peserta didik dalam kerja bakti membersihkan aula secara gotong royong guna menjaga kebersihan dan kelayakan fasilitas bersama asrama.',
+    ],
+  },
+  {
+    keyword: 'membersihkan masjid',
+    aliases: ['bersih masjid', 'membersihkan mushola', 'bersih-bersih masjid', 'kerja bakti masjid', 'piket masjid'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membimbing peserta didik membersihkan area masjid Sekolah Rakyat Terintegrasi 1 Kab. Kediri, mulai dari menata sajadah dan karpet shaf, menyapu serta mengepel lantai, hingga membersihkan area tempat wudhu agar tercipta suasana ibadah yang bersih dan khusyuk.',
+      'Melaksanakan kegiatan gotong royong membersihkan masjid bersama peserta didik guna menanamkan kecintaan menjaga kesucian rumah ibadah serta membiasakan pola hidup bersih.',
+    ],
+  },
+  {
+    keyword: 'membersihkan kelas',
+    aliases: ['bersih kelas', 'piket kelas', 'bersih-bersih kelas', 'membersihkan ruang kelas'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik melaksanakan piket membersihkan ruang kelas Sekolah Rakyat Terintegrasi 1 Kab. Kediri, meliputi menyapu lantai, merapikan meja dan kursi belajar, membersihkan papan tulis, serta membuang sampah pada tempatnya.',
+      'Mengawasi dan membimbing siswa membersihkan ruang kelas agar lingkungan belajar senantiasa bersih, rapi, sehat, dan mendukung konsentrasi belajar peserta didik.',
+    ],
+  },
+  {
+    keyword: 'menyapu kelas',
+    aliases: ['mendampingi siswa menyapu kelas', 'sapu kelas', 'menyapu ruang kelas', 'piket menyapu kelas'],
+    rhk: 'RHK 2',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik melaksanakan tugas menyapu lantai ruang kelas secara bergiliran dan teliti agar ruang belajar tetap bersih, bebas debu, dan nyaman ditempati.',
+      'Membimbing peserta didik menyapu lantai kelas hingga kolong bangku dan sudut ruangan dengan tertib serta membuang kotoran ke tempat sampah yang tersedia.',
+    ],
+  },
+  {
     keyword: 'merapikan tempat tidur',
     aliases: ['rapikan kasur', 'lipat selimut', 'tata kamar', 'merapikan kasur'],
     rhk: 'RHK 2',
@@ -398,6 +458,106 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     ],
   },
   {
+    keyword: 'mendampingi belajar',
+    aliases: ['mendampingi siswa belajar', 'pendampingan belajar', 'membimbing belajar'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Melaksanakan pendampingan belajar bagi peserta didik di ruang belajar asrama maupun kelas Sekolah Rakyat Terintegrasi 1 Kab. Kediri, menciptakan suasana kondusif, membantu memahami materi pelajaran yang sulit, serta memotivasi ketekunan belajar siswa.',
+      'Mendampingi peserta didik dalam kegiatan belajar terstruktur, mengecek kelengkapan catatan dan pengerjaan tugas sekolah, serta memastikan seluruh siswa fokus mengikuti sesi belajar dengan baik.',
+    ],
+  },
+  {
+    keyword: 'pembagian raport',
+    aliases: ['pembagian rapor', 'pengambilan raport', 'penerimaan raport', 'mendampingi pembagian raport', 'pembagian hasil belajar'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan memfasilitasi kegiatan pembagian raport hasil belajar peserta didik kepada orang tua/wali murid di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib, membantu kelancaran registrasi tamu, serta berkoordinasi mengenai perkembangan akademik dan sikap anak asuh.',
+      'Melaksanakan pendampingan agenda pembagian raport semester dengan ramah dan teratur, mendukung komunikasi konstruktif antara wali kelas, wali asuh, dan orang tua demi peningkatan prestasi belajar siswa.',
+    ],
+  },
+  {
+    keyword: 'mendampingi outing class',
+    aliases: ['mendampingi kegiatan outing class'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi secara penuh seluruh peserta didik selama pelaksanaan kegiatan Outing Class dari keberangkatan hingga kepulangan, mengecek kelengkapan presensi siswa secara berkala, menjaga ketertiban di lokasi kunjungan, serta membimbing siswa mengamati materi belajar di lapangan.',
+      'Melaksanakan tugas pengawalan dan pendampingan Outing Class bersama peserta didik Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna memastikan keamanan, kedisiplinan, dan terserapnya pengalaman pembelajaran luar kelas secara optimal.',
+    ],
+  },
+  {
+    keyword: 'outing class',
+    aliases: ['kegiatan outing class', 'pembelajaran luar kelas'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik dalam kegiatan Outing Class (pembelajaran di luar kelas) Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara terarah, menjaga keselamatan dan ketertiban rombongan, serta memfasilitasi pengamatan materi edukatif di lapangan.',
+      'Melaksanakan pendampingan kegiatan Outing Class guna memperluas wawasan kontekstual peserta didik dengan tetap mengutamakan ketertiban, kekompakan, dan keamanan siswa.',
+    ],
+  },
+  {
+    keyword: 'mendampingi kokurikuler membatik',
+    aliases: ['kokurikuler membatik', 'ekstrakurikuler membatik', 'kegiatan membatik', 'membatik'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membimbing peserta didik dalam kegiatan kokurikuler membatik di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, mulai dari pembuatan pola motif, pencantingan malam dengan memperhatikan keselamatan kerja, hingga proses pewarnaan kain guna menumbuhkan kreativitas dan pelestarian budaya.',
+      'Melaksanakan pendampingan praktik kokurikuler membatik bersama peserta didik, mengawasi ketertiban penggunaan peralatan membatik, serta memotivasi ketelatenan dan apresiasi seni kriya siswa.',
+    ],
+  },
+  {
+    keyword: 'mendampingi ekstrakurikuler peternakan',
+    aliases: ['ekstrakurikuler peternakan', 'ekstra peternakan', 'ekskul peternakan', 'mendampingi ekstra peternakan', 'keahlian peternakan'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik dalam kegiatan ekstrakurikuler peternakan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing teknik perawatan hewan ternak, pengaturan pakan, menjaga kebersihan area kandang, serta menanamkan rasa tanggung jawab dan keterampilan agribisnis.',
+      'Melaksanakan pengawasan dan pendampingan praktik ekstrakurikuler peternakan peserta didik agar seluruh rangkaian perawatan ternak berjalan aman, higienis, dan membekali siswa keterampilan vokasional nyata.',
+    ],
+  },
+  {
+    keyword: 'mendampingi ekstrakurikuler perhotelan',
+    aliases: ['menjadi ekstrakurikuler perhotelan', 'ekstrakurikuler perhotelan', 'ekstra perhotelan', 'ekskul perhotelan', 'mendampingi ekstra perhotelan', 'keahlian perhotelan'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membina peserta didik dalam kegiatan ekstrakurikuler perhotelan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, melatih keterampilan tata graha (housekeeping), penataan kamar yang rapi, etika keramahan pelayanan tamu (hospitality), serta kedisiplinan standar profesi.',
+      'Melaksanakan pendampingan praktik keahlian ekstrakurikuler perhotelan guna membekali peserta didik keterampilan layanan akomodasi yang teliti, santun, dan profesional.',
+    ],
+  },
+  {
+    keyword: 'mendampingi ekstrakurikuler pertanian',
+    aliases: ['ekstrakurikuler pertanian', 'ekstra pertanian', 'ekskul pertanian', 'mendampingi ekstra pertanian', 'keahlian pertanian'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik dalam kegiatan ekstrakurikuler pertanian di lahan praktik Sekolah Rakyat Terintegrasi 1 Kab. Kediri, meliputi pengolahan media tanam, penyemaian bibit, penyiraman, pemupukan, dan pemeliharaan tanaman guna menumbuhkan keterampilan budidaya serta kemandirian pangan.',
+      'Melaksanakan pengawasan dan bimbingan praktik ekstrakurikuler pertanian peserta didik agar siswa terampil, tekun, dan peduli terhadap kelestarian lingkungan.',
+    ],
+  },
+  {
+    keyword: 'keahlian tata boga',
+    aliases: ['mendampingi keahlian tata boga', 'ekstrakurikuler tata boga', 'ekstra tata boga', 'ekskul tata boga', 'mendampingi ekstra tata boga', 'tata boga'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik dalam pembelajaran dan praktik keahlian tata boga di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing teknik persiapan bahan pangan, pengolahan serta penyajian hidangan yang higienis dan menarik, sekaligus mengawasi keselamatan penggunaan peralatan dapur.',
+      'Melaksanakan pendampingan pengembangan keahlian tata boga peserta didik guna mengasah keterampilan kuliner, kerja sama tim dapur, serta kedisiplinan kebersihan area praktik pasca-memasak.',
+    ],
+  },
+  {
+    keyword: 'mendampingi ekstrakurikuler kecantikan',
+    aliases: ['ekstrakurikuler kecantikan', 'ekstra kecantikan', 'ekskul kecantikan', 'keahlian kecantikan', 'tata kecantikan', 'mendampingi keahlian kecantikan'],
+    rhk: 'RHK 1',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik dalam kegiatan ekstrakurikuler tata kecantikan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing praktik perawatan diri dan tata rias secara higienis, rapi, serta memastikan penggunaan alat dan bahan sesuai prosedur keamanan.',
+      'Melaksanakan pengawasan dan pendampingan ekstrakurikuler kecantikan guna mengasah ketelitian, estetika, serta keterampilan vokasional peserta didik secara positif dan profesional.',
+    ],
+  },
+  {
     keyword: 'bimbingan akademik',
     aliases: ['konsultasi pelajaran', 'review materi', 'bimbingan ujian', 'persiapan ujian'],
     rhk: 'RHK 1',
@@ -413,24 +573,54 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
   // ==========================================
   {
     keyword: 'apel pagi',
-    aliases: ['briefing pagi', 'baris pagi', 'apel keberangkatan'],
+    aliases: ['briefing pagi', 'baris pagi', 'apel keberangkatan', 'mengikuti apel pagi', 'mendampingi apel pagi'],
     rhk: 'RHK 4',
     timeContext: 'pagi',
     templates: [
-      'Memimpin dan mendampingi kegiatan apel pagi peserta didik sebelum berangkat sekolah, mengecek kerapian seragam, atribut, kebersihan diri, serta memberikan motivasi semangat belajar.',
-      'Melaksanakan apel pagi di halaman asrama, melakukan presensi kehadiran siswa, menyampaikan arahan kedisiplinan harian, dan melepas siswa menuju ruang kelas.',
-      'Mendampingi apel pagi peserta didik dengan tertib, menanamkan sikap sigap, disiplin waktu, dan kepatuhan terhadap norma tata tertib sekolah.',
+      'Memimpin dan mendampingi kegiatan apel pagi peserta didik di halaman Sekolah Rakyat Terintegrasi 1 Kab. Kediri sebelum berangkat sekolah, memeriksa presensi kehadiran, kerapian seragam dan atribut, kebersihan diri, serta memberikan motivasi semangat belajar.',
+      'Melaksanakan apel pagi di halaman asrama, melakukan pengecekan barisan dan jumlah siswa, menyampaikan arahan kedisiplinan harian, dan mengoordinasikan keberangkatan siswa menuju ruang kelas.',
+      'Mendampingi apel pagi peserta didik secara tertib dan khidmat untuk menanamkan sikap sigap, disiplin waktu, dan kepatuhan terhadap norma tata tertib sekolah.',
     ],
   },
   {
     keyword: 'apel malam',
-    aliases: ['briefing malam', 'cek kehadiran malam', 'apel istirahat'],
+    aliases: ['briefing malam', 'cek kehadiran malam', 'apel istirahat', 'mengikuti apel malam', 'mendampingi apel malam'],
     rhk: 'RHK 4',
     timeContext: 'malam',
     templates: [
-      'Melaksanakan kegiatan apel malam bersama seluruh peserta didik di asrama, mengecek kelengkapan kehadiran siswa, mengevaluasi kegiatan hari ini, dan memberikan arahan istirahat tidur.',
-      'Memimpin apel malam di asrama sebagai sarana pembinaan kedisiplinan, pengecekan kondisi fisik dan psikis siswa, serta memastikan situasi asrama kondusif menjelang jam tidur.',
-      'Mengkoordinasikan apel malam santri/siswa, memastikan 100% siswa hadir lengkap di aula, menyampaikan informasi penting, dan memimpin doa penutup hari.',
+      'Melaksanakan kegiatan apel malam bersama seluruh peserta didik di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, mengecek kelengkapan kehadiran siswa, mengevaluasi rangkaian kegiatan sepanjang hari, serta memberikan arahan persiapan istirahat tidur.',
+      'Memimpin apel malam di asrama sebagai sarana pembinaan kedisiplinan, pengecekan kondisi fisik maupun psikis anak asuh, serta memastikan situasi asrama aman dan kondusif menjelang jam tidur.',
+      'Mengkoordinasikan apel malam peserta didik secara tertib, memastikan seluruh siswa hadir lengkap sesuai data kamar, menyampaikan informasi penting esok hari, dan memimpin doa penutup.',
+    ],
+  },
+  {
+    keyword: 'mendamaikan baris berbaris',
+    aliases: ['mendampingi baris berbaris', 'menertibkan baris berbaris', 'latihan baris berbaris', 'baris berbaris', 'pbb'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi, menertibkan, dan membina kekompakan peserta didik dalam kegiatan baris-berbaris di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan keselarasan langkah, sikap siap yang tegap, serta menjaga suasana latihan tetap rukun dan disiplin.',
+      'Melaksanakan pendampingan serta menertibkan barisan peserta didik selama latihan baris-berbaris agar tercipta keseragaman gerak, kerja sama tim yang harmonis, dan kedisiplinan tinggi.',
+    ],
+  },
+  {
+    keyword: 'mendampingi baris lkbb',
+    aliases: ['mendampingi lkbb(berbaris)', 'mendampingi lkbb', 'latihan lkbb', 'baris lkbb', 'lkbb'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan membimbing peserta didik dalam kegiatan Latihan Keterampilan Baris-Berbaris (LKBB) di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna melatih kedisiplinan, ketegasan sikap, ketahanan fisik, serta kekompakan formasi barisan.',
+      'Mengawasi dan memotivasi peserta didik saat latihan baris LKBB, membantu menyelaraskan ketepatan gerakan dasar PBB, respons terhadap aba-aba, dan menjaga ketertiban regu.',
+    ],
+  },
+  {
+    keyword: 'ekstrakurikuler ipsi',
+    aliases: ['ekstra ipsi', 'ekskul ipsi', 'mendampingi ekstrakurikuler ipsi', 'pencak silat ipsi', 'silat ipsi', 'ipsi'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan mengawasi peserta didik dalam kegiatan ekstrakurikuler Pencak Silat IPSI di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan latihan jurus dan fisik berlangsung aman serta menanamkan nilai sportivitas, pengendalian emosi, dan budi pekerti luhur.',
+      'Melaksanakan pendampingan latihan rutin ekstrakurikuler bela diri IPSI bersama pelatih, memantau kedisiplinan sikap serta menjaga aspek keselamatan peserta didik selama sesi latihan berlangsung.',
     ],
   },
   {
@@ -445,8 +635,28 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     ],
   },
   {
+    keyword: 'melerai siswa',
+    aliases: ['melerai siswa bertengkar', 'melerai pertengkaran', 'melerai perselisihan', 'melerai perkelahian siswa'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Bertindak sigap, tegas, dan persuasif dalam melerai peserta didik yang terlibat perselisihan di lingkungan asrama/sekolah, memisahkan pihak terkait ke area aman, menenangkan kondisi emosional siswa, dan menindaklanjuti dengan pembinaan damai.',
+      'Melaksanakan penanganan segera dengan melerai peserta didik yang berselisih paham agar situasi kembali aman dan kondusif, dilanjutkan mediasi serta edukasi tata tertib asrama.',
+    ],
+  },
+  {
+    keyword: 'mendamaikan siswa yang bertengkar',
+    aliases: ['mendamaikan siswa', 'mendamaikan siswa yang berselisih faham', 'mediasi siswa bertengkar', 'mendamaikan perselisihan siswa'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Melaksanakan mediasi dan pendampingan konseling secara adil, bijak, dan kekeluargaan untuk mendamaikan peserta didik yang bertengkar di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, menggali duduk persoalan secara objektif, serta membangun kesepakatan saling memaafkan dan hidup rukun.',
+      'Menangani perselisihan antar-peserta didik melalui pembinaan afektif dan mediasi damai agar konflik terselesaikan tuntas, memulihkan keharmonisan antarsantri, serta mencegah terulangnya pertengkaran.',
+    ],
+  },
+  {
     keyword: 'mediasi konflik',
-    aliases: ['penyelesaian masalah siswa', 'mediasi perselisihan', 'damai siswa', 'melerai pertengkaran'],
+    aliases: ['penyelesaian masalah siswa', 'mediasi perselisihan', 'damai siswa'],
     rhk: 'RHK 4',
     timeContext: 'fleksibel',
     templates: [
@@ -495,13 +705,23 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     ],
   },
   {
-    keyword: 'kunjungan orang tua',
-    aliases: ['sambang asrama', 'besuk siswa', 'pertemuan wali murid', 'wali santri datang'],
+    keyword: 'menjaga ketertiban kunjungan',
+    aliases: ['ketertiban kunjungan', 'menjaga ketertiban kunjungan orang tua', 'pengawasan kunjungan', 'tertib kunjungan'],
     rhk: 'RHK 4',
     timeContext: 'fleksibel',
     templates: [
-      'Mendampingi dan memfasilitasi kegiatan kunjungan/besuk orang tua peserta didik di asrama, memastikan tata tertib kunjungan dipatuhi, serta melaporkan perkembangan putra-putrinya.',
-      'Menerima kedatangan wali murid dalam agenda sambang asrama, berdialog mengenai progres pembinaan karakter dan kesehatan siswa secara ramah dan transparan.',
+      'Melaksanakan pengawasan dan menjaga ketertiban selama kegiatan kunjungan orang tua/wali di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, mengatur alur kedatangan tamu, memeriksa kesesuaian barang bawaan sesuai tata tertib asrama, serta memastikan suasana kunjungan aman dan kondusif.',
+      'Menjaga ketertiban dan kelancaran agenda kunjungan wali murid di lingkungan asrama, memastikan seluruh tamu mematuhi area serta jadwal kunjungan yang telah ditetapkan.',
+    ],
+  },
+  {
+    keyword: 'kunjungan orang tua',
+    aliases: ['sambang asrama', 'besuk siswa', 'pertemuan wali murid', 'wali santri datang', 'kunjungan wali murid'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan memfasilitasi kegiatan kunjungan orang tua/wali peserta didik di asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan tata tertib kunjungan dipatuhi, serta melaporkan perkembangan belajar, karakter, dan kesehatan putra-putrinya.',
+      'Menerima kedatangan orang tua dalam agenda kunjungan di asrama, menjalin komunikasi harmonis mengenai progres pembinaan peserta didik secara ramah dan transparan.',
     ],
   },
   {
@@ -518,6 +738,66 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
   // ==========================================
   // KELOMPOK 6: KESEHATAN, OLAHRAGA & FISIK (RHK 4)
   // ==========================================
+  {
+    keyword: 'mendampingi siswa sakit di uks',
+    aliases: ['menjaga siswa sakit di uks', 'merawat siswa sakit di uks', 'siswa sakit di uks', 'pendampingan siswa sakit di uks'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan memantau kondisi kesehatan peserta didik yang sedang sakit di ruang UKS Sekolah Rakyat Terintegrasi 1 Kab. Kediri, melakukan pemeriksaan suhu tubuh, memberikan pertolongan pertama, memastikan konsumsi obat serta makanan hangat, dan berkoordinasi dengan petugas kesehatan.',
+      'Melaksanakan pendampingan intensif terhadap peserta didik yang mengalami keluhan sakit di ruang UKS agar mendapatkan perawatan awal yang layak, istirahat yang nyaman, dan pemulihan kondisi kesehatan.',
+    ],
+  },
+  {
+    keyword: 'istirahat di uks',
+    aliases: ['menemani siswa istirahat di uks', 'istirahat sakit di uks', 'pemulihan di uks'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan memantau peserta didik yang sedang beristirahat pemulihan kondisi kesehatan di ruang UKS Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan ruangan tetap tenang, kebutuhan air minum dan makanan hangat terpenuhi, serta keluhan kesehatannya terpantau berkala.',
+      'Melaksanakan pengawasan terhadap peserta didik yang beristirahat di ruang UKS agar memperoleh pemulihan optimal dan segera berkoordinasi dengan tenaga medis apabila diperlukan penanganan lanjutan.',
+    ],
+  },
+  {
+    keyword: 'menjaga siswa sakit di rumah sakit',
+    aliases: ['menunggu siswa di rumah sakit', 'mendampingi siswa di rumah sakit', 'menjaga siswa rawat inap', 'siswa sakit di rumah sakit'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Melaksanakan tugas menjaga dan mendampingi peserta didik yang sedang menjalani perawatan medis/rawat inap di rumah sakit secara penuh perhatian, memantau perkembangan kondisi kesehatan, memenuhi kebutuhan harian siswa, serta melaporkan perkembangannya secara berkala kepada pimpinan sekolah dan orang tua.',
+      'Mendampingi peserta didik yang dirawat di rumah sakit dengan sigap dan empatik, membantu koordinasi pelayanan dengan tim medis rumah sakit, serta memberikan dukungan moril selama masa penyembuhan.',
+    ],
+  },
+  {
+    keyword: 'menjaga siswa sakit di puskesmas',
+    aliases: ['menjaga siswa sakut di puskesmas', 'mengantarkan periksa ke puskesmas', 'mendampingi siswa di puskesmas', 'siswa sakit di puskesmas', 'siswa sakut di puskesmas'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mengantar, menjaga, dan mendampingi peserta didik yang menjalani pemeriksaan serta perawatan medis di Puskesmas, memastikan prosedur layanan kesehatan berjalan lancar, menebus obat sesuai anjuran dokter, serta melaporkan kondisi siswa kepada pimpinan Sekolah Rakyat Terintegrasi 1 Kab. Kediri.',
+      'Melaksanakan pendampingan penuh tanggung jawab dalam menjaga peserta didik yang sakit di Puskesmas hingga kondisinya stabil dan aman untuk kembali beristirahat di asrama.',
+    ],
+  },
+  {
+    keyword: 'mengantar berobat',
+    aliases: ['mengantarkan berobat', 'antar berobat', 'mengantar siswa berobat'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mengantar dan mendampingi peserta didik yang mengalami keluhan kesehatan untuk berobat ke fasilitas kesehatan terdekat, memastikan siswa memperoleh pemeriksaan dokter, resep obat yang tepat, serta kembali ke asrama dengan aman.',
+      'Melaksanakan pengantaran dan pendampingan siswa berobat serta mengoordinasikan catatan tindak lanjut medis dan jadwal minum obat bersama petugas UKS asrama.',
+    ],
+  },
+  {
+    keyword: 'memeriksakan siswa',
+    aliases: ['memeriksakan kesehatan siswa', 'memeriksakan siswa sakit', 'periksa kesehatan siswa', 'mengantar periksa siswa'],
+    rhk: 'RHK 4',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan memeriksakan kondisi kesehatan peserta didik kepada petugas UKS maupun tenaga medis di fasilitas kesehatan terdekat guna memperoleh diagnosis awal, penanganan medis, dan pemberian obat yang sesuai.',
+      'Melaksanakan fasilitasi pemeriksaan kesehatan bagi peserta didik yang menunjukkan gejala kurang sehat agar segera ditangani secara tepat dan tidak mengganggu aktivitas belajar.',
+    ],
+  },
   {
     keyword: 'merawat siswa sakit',
     aliases: ['siswa sakit', 'penanganan sakit', 'pendampingan uks', 'pemberian obat', 'cek suhu'],
@@ -624,6 +904,26 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     ],
   },
   {
+    keyword: 'sholat di masjid',
+    aliases: ['sholat berjamaah di masjid', 'sholat di masjid asrama', 'menuju masjid untuk sholat'],
+    rhk: 'RHK 3',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi peserta didik melaksanakan ibadah sholat berjamaah di masjid Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan tertib dan khusyuk, mengawal keberangkatan menuju masjid, memastikan kesempurnaan wudhu, kerapian shaf, serta menjaga ketenangan selama beribadah.',
+      'Mengawal dan membimbing seluruh peserta didik melaksanakan sholat berjamaah di masjid secara tepat waktu guna menanamkan kedisiplinan ibadah dan akhlakul karimah.',
+    ],
+  },
+  {
+    keyword: 'istirahat di asrama',
+    aliases: ['istirahat asrama', 'pendampingan istirahat di asrama', 'jam istirahat di asrama'],
+    rhk: 'RHK 3',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan mengawasi waktu istirahat peserta didik di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan suasana kamar dan blok asrama tetap tenang, aman, tertib, dan kondusif guna memulihkan kebugaran fisik siswa.',
+      'Melaksanakan pengawasan jam istirahat peserta didik di asrama agar seluruh siswa memanfaatkan waktu istirahat dengan baik serta tidak menimbulkan kegaduhan yang mengganggu penghuni kamar lain.',
+    ],
+  },
+  {
     keyword: 'istirahat siang',
     aliases: ['tidur siang', 'istirahat kamar', 'rehat siang'],
     rhk: 'RHK 3',
@@ -631,6 +931,16 @@ export const VOCABULARY_BANK: VocabularyEntry[] = [
     templates: [
       'Mengawasi waktu istirahat siang peserta didik di kamar asrama masing-masing, menciptakan suasana hening dan kondusif untuk memulihkan kebugaran sebelum kegiatan sore.',
       'Mendampingi jam rehat siang peserta didik, memastikan seluruh siswa berada di kamar dan tidak membuat kegaduhan yang mengganggu ketenangan asrama.',
+    ],
+  },
+  {
+    keyword: 'mendampingi menonton',
+    aliases: ['menonton di aula', 'menonton bioskop di aula', 'mendampingi siswa menonton', 'menonton bersama', 'menonton film edukatif'],
+    rhk: 'RHK 3',
+    timeContext: 'fleksibel',
+    templates: [
+      'Mendampingi dan mengawasi peserta didik dalam kegiatan menonton tayangan/film edukatif bersama di aula maupun ruang bersama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memastikan konten tontonan mendidik, menjaga ketertiban tempat duduk, serta mengarahkan siswa memetik pesan moral positif.',
+      'Melaksanakan pendampingan kegiatan menonton bersama peserta didik sebagai sarana hiburan sehat, penguatan rasa kekeluargaan, dan penyegaran mental terarah di lingkungan asrama.',
     ],
   },
   {
@@ -743,7 +1053,7 @@ export function detectTimeContext(text: string): 'pagi' | 'siang' | 'sore' | 'ma
 
 // Helper: normalizer for common user typos in Indonesian civil-service keywords
 export function normalizeKeyword(raw: string): string {
-  let s = raw.toLowerCase().trim();
+  let s = raw.toLowerCase().replace(/\s+/g, ' ').trim();
   // Prefix typos
   s = s.replace(/\bmendampin[h|g]i\b/g, 'mendampingi');
   s = s.replace(/\bmendapngi\b/g, 'mendampingi');
@@ -767,6 +1077,9 @@ export function normalizeKeyword(raw: string): string {
   s = s.replace(/\bmahgrib\b/g, 'maghrib');
   s = s.replace(/\btahfid\b/g, 'tahfidz');
   s = s.replace(/\btahfiz\b/g, 'tahfidz');
+  s = s.replace(/\bsakut\b/g, 'sakit');
+  s = s.replace(/\bpuskemas\b/g, 'puskesmas');
+  s = s.replace(/\bekstrakulikuler\b/g, 'ekstrakurikuler');
   s = s.replace(/\bklas\b/g, 'kelas');
   s = s.replace(/\bkls\b/g, 'kelas');
   s = s.replace(/\basrma\b/g, 'asrama');
@@ -840,17 +1153,33 @@ export function detectRhkCategory(text: string): 'RHK 1' | 'RHK 2' | 'RHK 3' | '
     lower.includes('kasur') || lower.includes('ranjang') || lower.includes('seprai') ||
     lower.includes('sprei') || lower.includes('selimut') || lower.includes('kloset') ||
     lower.includes('kamar mandi') || lower.includes('piket kamar') || lower.includes('piket kebersihan') ||
-    lower.includes('tata graha') || lower.includes('loker') || lower.includes('sandal') ||
-    (lower.includes('sepatu') && !lower.includes('olahraga'))
+    lower.includes('menyapu') || lower.includes('sapu') || lower.includes('mengepel') ||
+    lower.includes('membersihkan') || lower.includes('bersih-bersih') || lower.includes('kerja bakti') ||
+    lower.includes('gotong royong') || lower.includes('tata graha') || lower.includes('loker') ||
+    lower.includes('sandal') || (lower.includes('sepatu') && !lower.includes('olahraga'))
   ) {
     return 'RHK 2';
   }
 
-  // 5. Olahraga & Kebugaran Jasmani (RHK 4 vs RHK 1)
+  // 5. Keterampilan Vokasi, Kokurikuler, Outing Class & Raport (RHK 1)
+  if (
+    lower.includes('membatik') || lower.includes('kokurikuler') ||
+    lower.includes('tata boga') || lower.includes('perhotelan') ||
+    lower.includes('pertanian') || lower.includes('peternakan') ||
+    lower.includes('kecantikan') || lower.includes('coding') ||
+    lower.includes('robotik') || lower.includes('outing class') ||
+    lower.includes('raport') || lower.includes('rapor')
+  ) {
+    return 'RHK 1';
+  }
+
+  // 6. Olahraga, Bela Diri IPSI, Baris-Berbaris/LKBB & Kebugaran Jasmani (RHK 4 vs RHK 1)
   if (
     lower.includes('olahraga') || lower.includes('senam') || lower.includes('futsal') ||
     lower.includes('voli') || lower.includes('bulutangkis') || lower.includes('badminton') ||
-    lower.includes('lari') || lower.includes('jogging') || lower.includes('kebugaran')
+    lower.includes('lari') || lower.includes('jogging') || lower.includes('kebugaran') ||
+    lower.includes('ipsi') || lower.includes('pencak silat') || lower.includes('silat') ||
+    lower.includes('lkbb') || lower.includes('baris berbaris') || lower.includes('baris-berbaris')
   ) {
     if (lower.includes('pjok') || lower.includes('pelajaran olahraga') || lower.includes('teori olahraga')) {
       return 'RHK 1';
@@ -858,23 +1187,27 @@ export function detectRhkCategory(text: string): 'RHK 1' | 'RHK 2' | 'RHK 3' | '
     return 'RHK 4';
   }
 
-  // 6. Spiritual, Rohani, Konseling & Kesehatan UKS (RHK 4)
+  // 7. Spiritual, Rohani, Konseling, Konflik, Apel, Kunjungan & Kesehatan UKS/RS/Puskesmas (RHK 4)
   if (
     lower.includes('mengaji') || lower.includes('ngaji') || lower.includes('tadarus') ||
     lower.includes('tahfidz') || lower.includes('tahsin') || lower.includes('hafalan') ||
     lower.includes('kajian') || lower.includes('spiritual') || lower.includes('rohani') ||
     lower.includes('doa bersama') || lower.includes('istighosah') || lower.includes('sakit') ||
-    lower.includes('uks') || lower.includes('kesehatan') || lower.includes('demam') ||
-    lower.includes('obat') || lower.includes('konseling') || lower.includes('afektif') ||
-    lower.includes('disiplin') || lower.includes('tata tertib') || lower.includes('razia') ||
-    lower.includes('homesick') || lower.includes('rindu') || lower.includes('kunjungan orang tua') ||
+    lower.includes('uks') || lower.includes('puskesmas') || lower.includes('rumah sakit') ||
+    lower.includes('berobat') || lower.includes('memeriksakan') || lower.includes('kesehatan') ||
+    lower.includes('demam') || lower.includes('obat') || lower.includes('konseling') ||
+    lower.includes('afektif') || lower.includes('disiplin') || lower.includes('tata tertib') ||
+    lower.includes('razia') || lower.includes('homesick') || lower.includes('rindu') ||
+    lower.includes('kunjungan orang tua') || lower.includes('ketertiban kunjungan') ||
     lower.includes('wali murid') || lower.includes('emosional') || lower.includes('perundungan') ||
-    lower.includes('bully')
+    lower.includes('bully') || lower.includes('melerai') || lower.includes('bertengkar') ||
+    lower.includes('mendamaikan') || lower.includes('berselisih') || lower.includes('apel') ||
+    lower.includes('pramuka') || lower.includes('rebana')
   ) {
     return 'RHK 4';
   }
 
-  // 7. Pembelajaran & Akademik (RHK 1)
+  // 8. Pembelajaran & Akademik (RHK 1)
   if (
     lower.includes('belajar') || lower.includes('tugas') || lower.includes('materi') ||
     lower.includes('akademik') || lower.includes('jurnal') || lower.includes('laptop') ||
@@ -882,12 +1215,12 @@ export function detectRhkCategory(text: string): 'RHK 1' | 'RHK 2' | 'RHK 3' | '
     lower.includes('baca buku') || lower.includes('pr') || lower.includes('ulangan') ||
     lower.includes('ujian') || lower.includes('matematika') || lower.includes('ipa') ||
     lower.includes('ips') || lower.includes('fisika') || lower.includes('kimia') ||
-    lower.includes('biologi') || lower.includes('bahasa')
+    lower.includes('biologi') || lower.includes('bahasa') || lower.includes('lomba')
   ) {
     return 'RHK 1';
   }
 
-  // 8. Rutinitas Asrama & Ibadah Wajib (RHK 3)
+  // 9. Rutinitas Asrama & Ibadah Wajib (RHK 3)
   return 'RHK 3';
 }
 
@@ -926,8 +1259,18 @@ function ensureLargeBankIndex() {
   _largeBankIndexed = true;
 }
 
+function matchPhrase(haystack: string, needle: string): boolean {
+  const n = needle.toLowerCase().trim();
+  if (!n) return false;
+  if (n.length <= 5) {
+    const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|\\s)${escaped}(?:$|\\s)`).test(haystack);
+  }
+  return haystack.includes(n);
+}
+
 /**
- * Searches the vocabulary bank with typo tolerance, RHK category enforcement, and situational target integration.
+ * Searches the vocabulary bank with typo tolerance, longest-phrase priority, RHK consistency, and situational target integration.
  */
 export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; rhk: string; matchedKeyword: string } | null {
   const normalized = normalizeKeyword(rawKeyword);
@@ -948,25 +1291,18 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     };
   }
 
-  // 1. Check standard comprehensive bank (filtering strictly by matching RHK)
-  const sortedBank = [...VOCABULARY_BANK].sort((a, b) => b.keyword.length - a.keyword.length);
-
-  for (const entry of sortedBank) {
-    if (entry.rhk !== expectedRhk) continue;
-
-    const isKeywordMatched = normalized.includes(entry.keyword);
-    const isAliasMatched = entry.aliases?.some(alias => normalized.includes(alias.toLowerCase()));
-
-    if (isKeywordMatched || isAliasMatched) {
+  // 0. Exact match in standard curated bank first (highest priority, full template variations)
+  for (const entry of VOCABULARY_BANK) {
+    const isExactKw = normalized === entry.keyword.toLowerCase();
+    const isExactAlias = entry.aliases?.some(al => normalized === al.toLowerCase());
+    if (isExactKw || isExactAlias) {
       const compatibleTemplates = entry.templates.filter(tpl => {
         const tplTime = detectTimeContext(tpl);
         if (timeContext && tplTime && timeContext !== tplTime) return false;
         return true;
       });
-
       const pool = compatibleTemplates.length > 0 ? compatibleTemplates : entry.templates;
       const selected = pool[Math.floor(Math.random() * pool.length)];
-
       return {
         deskripsi: selected,
         rhk: entry.rhk,
@@ -975,12 +1311,10 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     }
   }
 
-  // 2. Check massive 50,000+ vocabulary database
+  // 1a. Exact match in massive curated/pre-seeded bank
   ensureLargeBankIndex();
-
-  // 2a. Direct exact lookup
   const exactItem = _exactLargeMap.get(normalized);
-  if (exactItem && exactItem.r === expectedRhk) {
+  if (exactItem) {
     return {
       deskripsi: exactItem.d,
       rhk: exactItem.r,
@@ -988,7 +1322,50 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     };
   }
 
-  // 2b. Token / Word intersection search with strict RHK category matching
+  // 1b. Longest specific phrase match across standard curated bank (scored by matched phrase length, RHK match, and timeContext)
+  const phraseCandidates: { entry: VocabularyEntry; matchLen: number; rhkScore: number }[] = [];
+  for (const entry of VOCABULARY_BANK) {
+    let bestLen = 0;
+    if (matchPhrase(normalized, entry.keyword)) {
+      bestLen = Math.max(bestLen, entry.keyword.length);
+    }
+    if (entry.aliases) {
+      for (const alias of entry.aliases) {
+        if (matchPhrase(normalized, alias)) {
+          bestLen = Math.max(bestLen, alias.length);
+        }
+      }
+    }
+    if (bestLen > 0) {
+      phraseCandidates.push({
+        entry,
+        matchLen: bestLen,
+        rhkScore: entry.rhk === expectedRhk ? 1 : 0,
+      });
+    }
+  }
+
+  if (phraseCandidates.length > 0) {
+    phraseCandidates.sort((a, b) => {
+      if (b.matchLen !== a.matchLen) return b.matchLen - a.matchLen;
+      return b.rhkScore - a.rhkScore;
+    });
+    const best = phraseCandidates[0].entry;
+    const compatibleTemplates = best.templates.filter(tpl => {
+      const tplTime = detectTimeContext(tpl);
+      if (timeContext && tplTime && timeContext !== tplTime) return false;
+      return true;
+    });
+    const pool = compatibleTemplates.length > 0 ? compatibleTemplates : best.templates;
+    const selected = pool[Math.floor(Math.random() * pool.length)];
+    return {
+      deskripsi: selected,
+      rhk: best.rhk,
+      matchedKeyword: best.keyword,
+    };
+  }
+
+  // 2. Token / Word intersection search in massive pre-seeded database with strict RHK category matching
   const cleanTokens = normalized.split(/\s+/).filter(w => w.length > 2 && !['dan', 'yang', 'dari', 'untuk', 'pada', 'dengan'].includes(w));
   const candidates: CompactVocabItem[] = [];
 
@@ -996,7 +1373,6 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
     const matchedItems = _tokensMap.get(token);
     if (matchedItems) {
       for (const m of matchedItems) {
-        // STRICT SAFETY: candidate RHK MUST match expected RHK!
         if (m.r === expectedRhk && !candidates.includes(m)) {
           candidates.push(m);
         }
@@ -1005,7 +1381,6 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
   }
 
   if (candidates.length > 0) {
-    // Sort candidates by match quality
     candidates.sort((a, b) => {
       let scoreA = 0;
       let scoreB = 0;
@@ -1016,7 +1391,6 @@ export function searchVocabularyBank(rawKeyword: string): { deskripsi: string; r
       return scoreB - scoreA;
     });
 
-    // Time-context compatibility filter
     const compatible = candidates.filter(c => {
       if (!timeContext || !c.t || c.t === 'fleksibel') return true;
       return c.t === timeContext;
@@ -1107,8 +1481,57 @@ export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: st
     };
   }
 
-  // 2. Bimbingan Belajar & Akademik (RHK 1)
+  // 2. Bimbingan Belajar, Kokurikuler, Vokasi & Akademik (RHK 1)
   if (rhk === 'RHK 1') {
+    if (normalized.includes('raport') || normalized.includes('rapor')) {
+      return {
+        deskripsi: `Mendampingi dan memfasilitasi kegiatan pembagian raport hasil belajar ${targetPhrase} kepada orang tua/wali murid di Sekolah Rakyat Terintegrasi 1 Kab. Kediri secara tertib dan komunikatif.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('outing class')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan Outing Class (pembelajaran luar kelas) Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna memperluas wawasan belajar secara aman dan tertib.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('membatik')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan kokurikuler membatik di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing ketelatenan teknik membatik dan menjaga keselamatan kerja.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('tata boga')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam praktik keahlian tata boga di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing pengolahan makanan yang higienis dan keselamatan dapur.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('perhotelan')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan ekstrakurikuler keahlian perhotelan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna melatih tata graha dan etika pelayanan tamu.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('peternakan')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan ekstrakurikuler peternakan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, membimbing pemeliharaan ternak dan kebersihan kandang.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('pertanian')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan ekstrakurikuler pertanian di Sekolah Rakyat Terintegrasi 1 Kab. Kediri, mulai dari pengolahan media tanam hingga perawatan tanaman.`,
+        rhk: 'RHK 1',
+      };
+    }
+    if (normalized.includes('kecantikan')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan ekstrakurikuler tata kecantikan di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna mengasah keterampilan perawatan dan estetika secara higienis.`,
+        rhk: 'RHK 1',
+      };
+    }
+
     let subject = 'materi pelajaran';
     if (normalized.includes('matematika')) subject = 'Matematika';
     else if (normalized.includes('ipa') || normalized.includes('fisika') || normalized.includes('kimia') || normalized.includes('biologi')) subject = 'Ilmu Pengetahuan Alam (IPA)';
@@ -1129,7 +1552,13 @@ export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: st
   // 3. Kemandirian, Kebersihan & Tata Graha (RHK 2)
   if (rhk === 'RHK 2') {
     let cleanAction = 'kebersihan dan kerapian';
-    if (normalized.includes('cuci pakaian') || normalized.includes('laundry')) cleanAction = 'mencuci dan menjemur pakaian seragam secara mandiri';
+    if (normalized.includes('menyapu') && normalized.includes('aula')) cleanAction = 'menyapu dan membersihkan area aula';
+    else if (normalized.includes('menyapu') && normalized.includes('kelas')) cleanAction = 'menyapu lantai ruang kelas hingga bersih';
+    else if (normalized.includes('membersihkan') && normalized.includes('masjid')) cleanAction = 'membersihkan area masjid dan tempat wudhu';
+    else if (normalized.includes('membersihkan') && normalized.includes('aula')) cleanAction = 'membersihkan dan merapikan area aula';
+    else if (normalized.includes('membersihkan') && normalized.includes('kelas')) cleanAction = 'membersihkan ruang kelas dan merapikan bangku belajar';
+    else if (normalized.includes('menyapu')) cleanAction = 'menyapu lantai ruangan dan area sekitar hingga bersih';
+    else if (normalized.includes('cuci pakaian') || normalized.includes('laundry')) cleanAction = 'mencuci dan menjemur pakaian seragam secara mandiri';
     else if (normalized.includes('setrika')) cleanAction = 'menyetrika dan merapikan pakaian seragam ke dalam lemari';
     else if (normalized.includes('cuci piring') || normalized.includes('piring') || normalized.includes('ompreng')) cleanAction = 'mencuci dan merapikan peralatan makan mandiri';
     else if (normalized.includes('kamar mandi') || normalized.includes('kloset') || normalized.includes('toilet')) cleanAction = 'membersihkan dan menyikat sanitasi kamar mandi asrama';
@@ -1137,13 +1566,49 @@ export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: st
     else if (normalized.includes('sepatu') || normalized.includes('sandal')) cleanAction = 'mencuci dan menata alas kaki rapi pada rak sepatu';
 
     return {
-      deskripsi: `Mendampingi dan membimbing ${targetPhrase} melaksanakan piket kemandirian ${cleanAction} di lingkungan asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai integritas, kemandirian, dan tanggung jawab.`,
+      deskripsi: `Mendampingi dan membimbing ${targetPhrase} melaksanakan kegiatan kemandirian ${cleanAction} di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna menanamkan nilai kedisiplinan, kebersihan, dan tanggung jawab.`,
       rhk: 'RHK 2',
     };
   }
 
-  // 4. Spiritual, Rohani, Konseling & Kesehatan (RHK 4)
+  // 4. Spiritual, Rohani, Konseling, Ketertiban & Kesehatan (RHK 4)
   if (rhk === 'RHK 4') {
+    if (normalized.includes('ipsi') || normalized.includes('silat')) {
+      return {
+        deskripsi: `Mendampingi ${targetPhrase} dalam kegiatan ekstrakurikuler Pencak Silat IPSI di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna membina kebugaran fisik, sportivitas, dan pengendalian diri.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('lkbb') || normalized.includes('baris')) {
+      return {
+        deskripsi: `Mendampingi dan menertibkan ${targetPhrase} dalam latihan baris-berbaris / LKBB di Sekolah Rakyat Terintegrasi 1 Kab. Kediri guna melatih kedisiplinan, keselarasan gerak, dan kekompakan tim.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('melerai') || normalized.includes('bertengkar') || normalized.includes('mendamaikan') || normalized.includes('berselisih')) {
+      return {
+        deskripsi: `Melaksanakan tindakan cepat melerai serta memediasi secara bijak dan kekeluargaan untuk mendamaikan ${targetPhrase} yang berselisih di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri agar kembali rukun dan kondusif.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('rumah sakit')) {
+      return {
+        deskripsi: `Menjaga dan mendampingi ${targetPhrase} yang sedang menjalani perawatan medis di rumah sakit secara penuh perhatian serta melaporkan perkembangan kondisinya kepada pimpinan dan orang tua.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('puskesmas')) {
+      return {
+        deskripsi: `Mengantar, menjaga, dan mendampingi ${targetPhrase} yang memeriksakan kesehatan/dirawat di Puskesmas hingga memperoleh penanganan medis yang tepat.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('berobat') || normalized.includes('memeriksakan')) {
+      return {
+        deskripsi: `Mengantar serta mendampingi ${targetPhrase} untuk memeriksakan kesehatan dan berobat guna mendapatkan penanganan medis sedini mungkin.`,
+        rhk: 'RHK 4',
+      };
+    }
     if (normalized.includes('tahfidz') || normalized.includes('hafalan') || normalized.includes('tahsin') || normalized.includes('mengaji') || normalized.includes('tadarus')) {
       return {
         deskripsi: `Mendampingi dan menyimak kegiatan setoran hafalan Al-Qur'an (Tahfidz) ${targetPhrase} di mushola asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri dengan lancar, tertib, dan penuh kekhusyukan.`,
@@ -1152,7 +1617,20 @@ export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: st
     }
     if (normalized.includes('sakit') || normalized.includes('uks') || normalized.includes('kesehatan') || normalized.includes('demam') || normalized.includes('obat')) {
       return {
-        deskripsi: `Mendampingi dan memberikan perawatan bagi santri yang mengalami keluhan kesehatan ke ruang UKS asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memberikan pertolongan pertama, serta memantau kondisi fisik secara berkala.`,
+        deskripsi: `Mendampingi dan memantau ${targetPhrase} yang mengalami keluhan kesehatan di ruang UKS asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, memberikan pertolongan pertama, memastikan istirahat cukup, dan berkoordinasi dengan petugas kesehatan.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('kunjungan')) {
+      return {
+        deskripsi: `Menjaga ketertiban serta mendampingi agenda kunjungan orang tua/wali ${targetPhrase} di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri agar berlangsung tertib, aman, dan komunikatif.`,
+        rhk: 'RHK 4',
+      };
+    }
+    if (normalized.includes('apel')) {
+      const apelWaktu = timeContext === 'malam' ? 'apel malam' : timeContext === 'pagi' ? 'apel pagi' : 'apel';
+      return {
+        deskripsi: `Memimpin dan mendampingi pelaksanaan ${apelWaktu} ${targetPhrase} di lingkungan Sekolah Rakyat Terintegrasi 1 Kab. Kediri, melakukan presensi kehadiran, pengecekan kesiapan, serta menyampaikan arahan kedisiplinan.`,
         rhk: 'RHK 4',
       };
     }
@@ -1185,8 +1663,9 @@ export function synthesizeFallbackDeskripsi(rawKeyword: string): { deskripsi: st
     else if (normalized.includes('dhuha')) sholatName = 'sholat Dhuha';
     else if (normalized.includes('tahajud')) sholatName = 'sholat Tahajud';
 
+    const tempatSholat = normalized.includes('masjid') ? 'masjid' : 'mushola asrama';
     return {
-      deskripsi: `Mendampingi pelaksanaan ibadah ${sholatName} berjamaah bersama ${targetPhrase} di mushola asrama Sekolah Rakyat Terintegrasi 1 Kab. Kediri, dilanjutkan dengan wirid bersama dan pembinaan karakter santri secara khusyuk.`,
+      deskripsi: `Mendampingi pelaksanaan ibadah ${sholatName} berjamaah bersama ${targetPhrase} di ${tempatSholat} Sekolah Rakyat Terintegrasi 1 Kab. Kediri, dilanjutkan dengan wirid bersama dan pembinaan karakter santri secara khusyuk.`,
       rhk: 'RHK 3',
     };
   }
@@ -1264,8 +1743,8 @@ export function saveLearnedVocabularyLocal(kataKunci: string, deskripsi: string,
         rhk: rhk.trim(),
         timestamp: Date.now(),
       });
-      // Keep up to 200 items in browser cache
-      const trimmedList = list.slice(0, 200);
+      // Keep up to 1,000 items in browser cache
+      const trimmedList = list.slice(0, 1000);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmedList));
     }
   } catch {
