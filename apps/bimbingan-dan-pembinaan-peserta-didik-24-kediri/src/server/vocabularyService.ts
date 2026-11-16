@@ -8,6 +8,7 @@ import {
   detectRhkCategory,
   detectTimeContext,
   getVocabularyBreakdown,
+  normalizeKeyword,
 } from '../lib/vocabulary-database.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -126,12 +127,17 @@ export function lookupServerVocabulary(rawKeyword: string): {
   matchedFrom: 'learned_database' | 'preseeded_bank' | 'synthesizer';
 } {
   const clean = rawKeyword.toLowerCase().replace(/\s+/g, ' ').trim();
-  const timeContext = detectTimeContext(clean);
+  const normalized = normalizeKeyword(clean);
+  const timeContext = detectTimeContext(normalized);
+  const expectedRhk = detectRhkCategory(normalized);
 
   // 1a. Exact match in learned database
   if (inMemoryVocabulary.length > 0) {
     const exactMatches = inMemoryVocabulary.filter(
-      item => item.kataKunci.toLowerCase() === clean
+      item => {
+        const kw = item.kataKunci.toLowerCase();
+        return kw === clean || kw === normalized;
+      }
     );
     if (exactMatches.length > 0) {
       const compatible = exactMatches.filter(item => {
@@ -146,10 +152,13 @@ export function lookupServerVocabulary(rawKeyword: string): {
 
   // 1b. Exact or curated multi-word match in VOCABULARY_BANK
   for (const entry of VOCABULARY_BANK) {
-    const isExactKw = clean === entry.keyword.toLowerCase();
-    const isExactAlias = entry.aliases?.some(al => clean === al.toLowerCase());
+    const isExactKw = clean === entry.keyword.toLowerCase() || normalized === entry.keyword.toLowerCase();
+    const isExactAlias = entry.aliases?.some(al => {
+      const alLower = al.toLowerCase();
+      return clean === alLower || normalized === alLower;
+    });
     if (isExactKw || isExactAlias) {
-      const bankExact = searchVocabularyBank(clean);
+      const bankExact = searchVocabularyBank(rawKeyword);
       if (bankExact) {
         return {
           deskripsi: bankExact.deskripsi,
@@ -161,12 +170,12 @@ export function lookupServerVocabulary(rawKeyword: string): {
   }
 
   // 2. Partial match in learned database (sorted by specificity/length) vs pre-seeded bank
-  const bankMatch = searchVocabularyBank(clean);
+  const bankMatch = searchVocabularyBank(rawKeyword);
   if (inMemoryVocabulary.length > 0) {
     const partialMatches = inMemoryVocabulary
       .filter(item => {
         const itemKw = item.kataKunci.toLowerCase();
-        return clean.includes(itemKw) || itemKw.includes(clean);
+        return item.rhk === expectedRhk && (normalized.includes(itemKw) || itemKw.includes(normalized));
       })
       .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
 

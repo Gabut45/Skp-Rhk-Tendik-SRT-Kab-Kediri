@@ -509,48 +509,74 @@ const DETAILED_TEMPLATES: Record<string, { rhk: string; templates: string[]; tim
 
 function detectTimeContext(text: string): 'pagi' | 'siang' | 'sore' | 'malam' | 'subuh' | null {
   const lower = text.toLowerCase();
-  if (lower.includes('subuh') || lower.includes('dini hari')) return 'subuh';
-  if (lower.includes('malam') || lower.includes('isya') || lower.includes('maghrib') || lower.includes('magrib')) return 'malam';
-  if (lower.includes('sore') || lower.includes('ashar')) return 'sore';
-  if (lower.includes('siang') || lower.includes('dzuhur') || lower.includes('duhur')) return 'siang';
+  if (lower.includes('subuh') || lower.includes('dini hari') || lower.includes('fajar') || lower.includes('tahajud') || lower.includes('sahur')) return 'subuh';
+  if (lower.includes('malam') || lower.includes('isya') || lower.includes('maghrib') || lower.includes('magrib') || (lower.includes('tidur') && !lower.includes('tempat tidur'))) return 'malam';
+  if (lower.includes('sore') || lower.includes('ashar') || lower.includes('petang') || lower.includes('berbuka')) return 'sore';
+  if (lower.includes('siang') || lower.includes('dzuhur') || lower.includes('duhur') || lower.includes("jum'at") || lower.includes('jumat')) return 'siang';
   if (lower.includes('pagi') || lower.includes('sarapan') || lower.includes('dhuha')) return 'pagi';
   return null;
 }
 
 function detectRhkCategory(text: string): string {
-  const lower = text.toLowerCase();
+  const lower = normalizeKeyword(text);
   if (lower.includes('khusus') || lower.includes('disabilitas') || lower.includes('inklusi') || lower.includes('abk')) {
     return 'RHK 5';
   }
-  if (lower.includes('pelatihan') || lower.includes('workshop') || lower.includes('diklat') || lower.includes('webinar') || lower.includes('kompetensi')) {
+  if (
+    lower.includes('pelatihan') || lower.includes('workshop') || lower.includes('diklat') ||
+    lower.includes('webinar') || lower.includes('kompetensi') || lower.includes('bimtek') ||
+    lower.includes('studi banding') || lower.includes('studi tiru') || lower.includes('diseminasi')
+  ) {
     return 'RHK 6';
   }
-  if (lower.includes('tugas tambahan') || lower.includes('kepala sekolah') || lower.includes('panitia')) {
+  if (
+    lower.includes('tugas tambahan') || lower.includes('kepala sekolah') || lower.includes('tugas dinas') ||
+    lower.includes('panitia') || lower.includes('rapat') || lower.includes('zoom') ||
+    lower.includes('meeting') || lower.includes('laporan') || lower.includes('daftar hadir kunjungan') ||
+    lower.includes('barang kunjungan') || lower.includes('pengecekan barang') ||
+    lower.includes('petugas pemanggil') || lower.includes('pemberi pengumuman') || lower.includes('supervisi')
+  ) {
     return 'RHK 7';
   }
   if (
-    lower.includes('mengaji') || lower.includes('sholat') || lower.includes('kajian') ||
-    lower.includes('doa') || lower.includes('spiritual') || lower.includes('sakit') ||
-    lower.includes('kesehatan') || lower.includes('olahraga') || lower.includes('senam') ||
-    lower.includes('konseling') || lower.includes('disiplin') || lower.includes('tata tertib') ||
-    lower.includes('apel') || lower.includes('setor') || lower.includes('hafalan') ||
-    lower.includes('kunjungan') || lower.includes('emosional')
-  ) {
-    return 'RHK 4';
-  }
-  if (
-    lower.includes('cuci') || lower.includes('bersih') || lower.includes('rapikan') ||
+    lower.includes('cuci') || lower.includes('mencuci') || lower.includes('bersih') || lower.includes('rapikan') ||
     lower.includes('merapikan') || lower.includes('piket') || lower.includes('laundry') ||
     lower.includes('kemandirian') || lower.includes('kebersihan') || lower.includes('masak') ||
-    lower.includes('kasur') || lower.includes('seprai') || lower.includes('lemari')
+    lower.includes('kasur') || lower.includes('seprai') || lower.includes('lemari') || lower.includes('almari') ||
+    lower.includes('membersihkan') || lower.includes('menyapu') || lower.includes('mengepel') ||
+    lower.includes('setrika') || lower.includes('kamar mandi') || lower.includes('toilet') ||
+    lower.includes('potong rambut') || lower.includes('mandi pagi') || lower.includes('seragam bersih')
   ) {
     return 'RHK 2';
   }
   if (
-    lower.includes('belajar') || lower.includes('tugas') || lower.includes('materi') ||
+    lower.includes('mengaji') || lower.includes('yasin') || lower.includes('tahlil') ||
+    lower.includes('mahalul qiyam') || lower.includes('diba') || lower.includes('kajian') ||
+    lower.includes('kultum') || lower.includes('keputrian') || lower.includes('doa') ||
+    lower.includes('dzikir') || lower.includes('sholat dhuha') || lower.includes('spiritual') ||
+    lower.includes('sakit') || lower.includes('uks') || lower.includes('puskesmas') || lower.includes('rumah sakit') ||
+    lower.includes('kesehatan') || lower.includes('olahraga') || lower.includes('senam') ||
+    lower.includes('voli') || lower.includes('basket') || lower.includes('kasti') ||
+    lower.includes('bulu tangkis') || lower.includes('tenis meja') || lower.includes('pingpong') ||
+    lower.includes('rekreasi') || lower.includes('ipsi') || lower.includes('lkbb') ||
+    lower.includes('pramuka') || lower.includes('rebana') || lower.includes('konseling') ||
+    lower.includes('cerita siswa') || lower.includes('curhat') || lower.includes('disiplin') ||
+    lower.includes('pendisiplinan') || lower.includes('tata tertib') || lower.includes('apel') ||
+    lower.includes('setor') || lower.includes('hafalan') || lower.includes('kunjungan') ||
+    lower.includes('berkunjung ke rumah') || lower.includes('emosional') ||
+    lower.includes('melerai') || lower.includes('mendamaikan') || lower.includes('berselisih')
+  ) {
+    return 'RHK 4';
+  }
+  if (
+    lower.includes('belajar') || lower.includes('tugas') || lower.includes('pr') || lower.includes('materi') ||
     lower.includes('akademik') || lower.includes('jurnal') || lower.includes('laptop') ||
-    lower.includes('refleksi') || lower.includes('sharing') || lower.includes('diskusi pelajaran') ||
-    lower.includes('koordinasi') || lower.includes('rapat')
+    lower.includes('refleksi') || lower.includes('diskusi') || lower.includes('perpustakaan') ||
+    lower.includes('membaca') || lower.includes('raport') || lower.includes('rapor') ||
+    lower.includes('outing class') || lower.includes('membatik') || lower.includes('tata boga') ||
+    lower.includes('perhotelan') || lower.includes('pertanian') || lower.includes('peternakan') ||
+    lower.includes('kecantikan') || lower.includes('coding') || lower.includes('robotik') ||
+    lower.includes('ekstrakurikuler')
   ) {
     return 'RHK 1';
   }
@@ -704,12 +730,13 @@ export default createEndpoint({
     const bankMatch = searchVocabularyBank(raw);
 
     // 3. Check central server MySQL database bank vocabulary (shared across all devices)
+    const expectedRhk = detectRhkCategory(normalizedInput);
     try {
       const serverRecords = await fetchServerDatabaseVocabulary();
       const matchedServer = serverRecords
         .filter(item => {
           const kw = item.kataKunci.toLowerCase();
-          return kw && (normalizedInput.includes(kw) || kw.includes(normalizedInput));
+          return kw && item.rhk === expectedRhk && (normalizedInput.includes(kw) || kw.includes(normalizedInput));
         })
         .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
 
@@ -733,7 +760,7 @@ export default createEndpoint({
       const matchedLearned = learned
         .filter(item => {
           const kw = item.kataKunci.toLowerCase();
-          return normalizedInput.includes(kw) || kw.includes(normalizedInput);
+          return item.rhk === expectedRhk && (normalizedInput.includes(kw) || kw.includes(normalizedInput));
         })
         .sort((a, b) => b.kataKunci.length - a.kataKunci.length);
 
