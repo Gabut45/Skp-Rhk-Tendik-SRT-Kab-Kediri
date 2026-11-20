@@ -114,6 +114,15 @@ export function downloadWordFromHtml(html: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+export class PdfImageLoadError extends Error {
+  public failedCount: number;
+  constructor(message: string, failedCount: number) {
+    super(message);
+    this.name = 'PdfImageLoadError';
+    this.failedCount = failedCount;
+  }
+}
+
 /**
  * Directly generate and download a clean, high-quality .pdf file using jsPDF and html2canvas.
  * Features intelligent page-slicing that respects element boundaries (never cuts table rows or signature blocks).
@@ -331,30 +340,35 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
     });
   };
 
-  // Tier 1: Direct fetch with CORS mode (cPanel static uploads support Access-Control-Allow-Origin: *)
-  try {
-    const res = await fetch(s, { mode: 'cors' });
-    const ct = res.headers.get('content-type') || '';
-    if (res.ok && (ct.startsWith('image/') || ct.includes('octet-stream'))) {
-      const blob = await res.blob();
-      if (blob && blob.size > 50 && (blob.type.startsWith('image/') || ct.startsWith('image/'))) {
-        return await blobToDataUrl(blob);
-      }
+  const fetchWithRetry = async (targetUrl: string, mode?: RequestMode, retries = 1): Promise<string | null> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const urlToFetch = attempt === 0
+          ? targetUrl
+          : `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}_rt=${Date.now()}`;
+        const res = await fetch(urlToFetch, mode ? { mode } : undefined);
+        const ct = res.headers.get('content-type') || '';
+        if (res.ok && (ct.startsWith('image/') || ct.includes('octet-stream'))) {
+          const blob = await res.blob();
+          if (blob && blob.size > 50 && (blob.type.startsWith('image/') || ct.startsWith('image/'))) {
+            return await blobToDataUrl(blob);
+          }
+        }
+      } catch {}
     }
-  } catch {}
+    return null;
+  };
+
+  // Tier 1: Direct fetch with CORS mode (cPanel static uploads support Access-Control-Allow-Origin: *)
+  const tier1 = await fetchWithRetry(s, 'cors', 1);
+  if (tier1) return tier1;
 
   // Tier 2: cPanel API endpoint (?action=get_image&file=...)
   try {
     const cpanelApi = (typeof window !== 'undefined' ? localStorage.getItem('cpanel_api_url') : null) || 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
     const cpanelImgUrl = `${cpanelApi.split('?')[0]}?action=get_image&file=${encodeURIComponent(s)}`;
-    const res = await fetch(cpanelImgUrl);
-    const ct = res.headers.get('content-type') || '';
-    if (res.ok && (ct.startsWith('image/') || ct.includes('octet-stream'))) {
-      const blob = await res.blob();
-      if (blob && blob.size > 50) {
-        return await blobToDataUrl(blob);
-      }
-    }
+    const tier2 = await fetchWithRetry(cpanelImgUrl, undefined, 1);
+    if (tier2) return tier2;
   } catch {}
 
   // Tier 3: Offscreen Canvas conversion with crossOrigin Image loader
@@ -424,6 +438,8 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
   try {
     // 1. Process all images: ensure loaded, normalized to local base64, and give explicit pixel dimensions
     const imgs = Array.from(container.querySelectorAll('img'));
+    const failedImages: { src: string; label: string }[] = [];
+
     await Promise.all(
       imgs.map(async (img) => {
         try {
@@ -452,7 +468,7 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
             };
             loaderImg.onload = finish;
             loaderImg.onerror = finish;
-            setTimeout(finish, 4000);
+            setTimeout(finish, 4500);
             loaderImg.src = srcToUse;
             if (loaderImg.complete && loaderImg.naturalWidth > 0) {
               finish();
@@ -464,6 +480,7 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
 
           // If still an external HTTP URL but loaderImg successfully loaded into memory,
           // render it to a local canvas to extract pure Base64 so html2canvas never makes network requests
+          let canvasTainted = false;
           if (srcToUse.startsWith('http') && naturalW > 0 && naturalH > 0) {
             try {
               const tempCanvas = document.createElement('canvas');
@@ -478,6 +495,7 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
                 }
               }
             } catch (err) {
+              canvasTainted = true;
               console.warn('[download-helper] Canvas conversion note:', err);
             }
           }
@@ -495,6 +513,13 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
             img.closest('.signature-block') !== null ||
             (img.getAttribute('alt') || '').toLowerCase().includes('tanda tangan') ||
             (img.getAttribute('alt') || '').toLowerCase().includes('signature');
+
+          if (!isKopLogo && (naturalW === 0 || naturalH === 0 || (srcToUse.startsWith('http') && canvasTainted))) {
+            failedImages.push({
+              src: rawSrc,
+              label: isSig ? 'Tanda Tangan' : 'Foto Dokumentasi',
+            });
+          }
 
           const isSingle = img.classList.contains('photo-single-img');
 
@@ -546,7 +571,7 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
               img.style.backgroundColor = 'transparent';
             }
           } else {
-            // Robust fallback: JANGAN PERNAH menghapus foto hanya karena naturalWidth belum siap
+            // Robust fallback styling
             if (isKopLogo) {
               img.style.width = '68px';
               img.style.maxHeight = '90px';
@@ -572,6 +597,15 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
         }
       })
     );
+
+    if (failedImages.length > 0) {
+      const hasFoto = failedImages.some(f => f.label === 'Foto Dokumentasi');
+      const subject = hasFoto ? `${failedImages.length} foto dokumentasi` : 'gambar tanda tangan';
+      throw new PdfImageLoadError(
+        `Gagal memuat ${subject} dari server (file sudah terhapus di hosting atau koneksi server terputus). Periksa koneksi atau edit laporan untuk mengganti foto yang bermasalah agar PDF tidak tercetak sebagai bingkai kosong.`,
+        failedImages.length
+      );
+    }
 
     // Layout settle delay
     await new Promise((r) => setTimeout(r, 120));
@@ -706,6 +740,9 @@ async function resolveImageToDataUrl(rawSrc: string): Promise<string> {
 
     pdf.save(fname);
   } catch (err) {
+    if (err instanceof PdfImageLoadError) {
+      throw err;
+    }
     console.warn('Direct jsPDF save failed, opening print dialog fallback:', err);
     printHtml(cleanHtml);
     throw err;

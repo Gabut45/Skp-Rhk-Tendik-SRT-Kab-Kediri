@@ -22,7 +22,7 @@ import { toast } from 'sonner';
 import { RHK_DATA } from '@/lib/rhk-data';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, findPelaporByNama, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
@@ -33,6 +33,7 @@ import {
   purgeLocalDataForRiwayat,
   deleteCpanelRiwayat,
   deleteCpanelBulkKegiatan,
+  fetchCpanelRiwayat,
   getCpanelConfig,
 } from '@/lib/cpanel-client';
 
@@ -132,7 +133,7 @@ export default function LaporanRHKPage() {
     setTandaTangan(null);
   };
 
-  // Muat berkas laporan RHK yang ada dan pastikan tersinkronisasi dengan status hapus
+  // Muat berkas laporan RHK dari lokal dan server cPanel agar tersinkronisasi lintas perangkat
   const fetchRhkFiles = useCallback(async () => {
     if (isAppDeletedAll()) {
       setRhkRecords([]);
@@ -141,20 +142,54 @@ export default function LaporanRHKPage() {
 
     setLoadingRecords(true);
     try {
-      const deletedIdsArr = Array.from(getDeletedIds());
-      const res = await getRiwayat({
-        namaPelapor: namaPelapor && namaPelapor !== 'Semua Pelapor' ? namaPelapor : undefined,
-        deletedIds: deletedIdsArr,
-      });
+      const deletedSet = getDeletedIds();
+      const deletedIdsArr = Array.from(deletedSet);
+      const targetPelaporFilter = namaPelapor && namaPelapor !== 'Semua Pelapor' ? namaPelapor : undefined;
 
-      // Filter khusus berkas Laporan RHK yang belum dihapus
-      const filtered = res.records.filter(r => {
-        if (isClientRecordDeleted(r)) return false;
+      const [res, remoteRhk] = await Promise.all([
+        getRiwayat({
+          namaPelapor: targetPelaporFilter,
+          deletedIds: deletedIdsArr,
+        }).catch(() => ({ records: [] as FileRecord[] })),
+        fetchCpanelRiwayat({
+          namaPelapor: targetPelaporFilter,
+          jenisLaporan: 'Laporan RHK',
+        }).catch(() => []),
+      ]);
+
+      const mergedMap = new Map<string, FileRecord>();
+      const pushIfValid = (r: FileRecord) => {
+        if (!r || isClientRecordDeleted(r) || (r.id && deletedSet.has(r.id))) return;
         const isRhk = r.jenisLaporan === 'Laporan RHK' || (r.namaFile && r.namaFile.includes('RHK'));
-        return isRhk;
-      });
+        if (!isRhk) return;
+        const dedupeKey = `${(r.namaPelapor || '').toLowerCase()}::${(r.rhkNomor || '').toLowerCase()}::${r.tanggalMulai || ''}::${r.tanggalSelesai || ''}`;
+        const existing = mergedMap.get(dedupeKey);
+        if (!existing || (r.dibuatPada || '') > (existing.dibuatPada || '')) {
+          mergedMap.set(dedupeKey, r);
+        }
+      };
 
-      setRhkRecords(filtered);
+      for (const r of remoteRhk) {
+        pushIfValid({
+          id: r.id,
+          namaFile: r.namaFile,
+          jenisLaporan: r.jenisLaporan || 'Laporan RHK',
+          namaPelapor: r.namaPelapor,
+          pdfUrl: r.pdfUrl || '',
+          dibuatPada: r.dibuatPada || new Date().toISOString(),
+          tanggalMulai: r.tanggalMulai,
+          tanggalSelesai: r.tanggalSelesai,
+          rhkNomor: r.rhkNomor,
+        });
+      }
+      for (const r of res.records || []) {
+        pushIfValid(r);
+      }
+
+      const sorted = Array.from(mergedMap.values()).sort((a, b) =>
+        (b.dibuatPada || b.tanggalMulai || '').localeCompare(a.dibuatPada || a.tanggalMulai || '')
+      );
+      setRhkRecords(sorted);
     } catch (err) {
       console.warn('Gagal memuat berkas RHK:', err);
     } finally {
@@ -220,6 +255,7 @@ export default function LaporanRHKPage() {
       }
 
       const deletedIdsArr = Array.from(getDeletedIds());
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const result = await generatePdfRhk({
         rhkNomor,
         tanggalMulai,
@@ -229,6 +265,8 @@ export default function LaporanRHKPage() {
         tandaTangan: effectiveTtd || undefined,
         format: 'pdf',
         deletedIds: deletedIdsArr,
+        cpanelUrl,
+        cpanelKey,
       });
       await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, `${reportFilename}.pdf`);
       toast.success('File PDF berhasil dibuat & diunduh, dan tersimpan di Riwayat!');
@@ -254,6 +292,7 @@ export default function LaporanRHKPage() {
       }
 
       const deletedIdsArr = Array.from(getDeletedIds());
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const result = await generatePdfRhk({
         rhkNomor,
         tanggalMulai,
@@ -263,6 +302,8 @@ export default function LaporanRHKPage() {
         tandaTangan: effectiveTtd || undefined,
         format: 'word',
         deletedIds: deletedIdsArr,
+        cpanelUrl,
+        cpanelKey,
       });
       downloadWordFromHtml(result.wordHtml || previewWordHtml, `${reportFilename}.doc`);
       toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat!');
@@ -371,12 +412,13 @@ export default function LaporanRHKPage() {
       const targetTanggalMulai = r.tanggalMulai || tanggalMulai;
       const targetTanggalSelesai = r.tanggalSelesai || r.tanggalMulai || tanggalSelesai;
       const pelaporNama = r.namaPelapor || namaPelapor;
-      const savedTtd = getSavedTtd(pelaporNama);
+      const resolvedNip = findPelaporByNama(pelaporNama)?.nip || matchPelapor(pelaporNama)?.nip || nip || DEFAULT_PELAPOR.nip;
+      const savedTtd = getSavedTtd(pelaporNama) || (await getSavedTtdAsync(pelaporNama));
 
       const res = await previewRhk({
         rhkNomor: targetRhkNomor,
         namaPelapor: pelaporNama,
-        nip: DEFAULT_PELAPOR.nip,
+        nip: resolvedNip,
         tanggalMulai: targetTanggalMulai,
         tanggalSelesai: targetTanggalSelesai,
         tandaTangan: savedTtd || undefined,
@@ -397,15 +439,22 @@ export default function LaporanRHKPage() {
       const rhkMatch = (r.rhkNomor || r.namaFile || '').match(/(\d+)/);
       const targetRhkNomor = rhkMatch ? rhkMatch[1] : '1';
       const fname = (r.namaFile || `laporan-rhk-${r.tanggalMulai || 'periode'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const pelaporNama = r.namaPelapor || namaPelapor;
+      const resolvedNip = findPelaporByNama(pelaporNama)?.nip || matchPelapor(pelaporNama)?.nip || nip || DEFAULT_PELAPOR.nip;
+      const savedTtd = getSavedTtd(pelaporNama) || (await getSavedTtdAsync(pelaporNama));
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
       const res = await generatePdfRhk({
         rhkNomor: targetRhkNomor,
-        namaPelapor: r.namaPelapor || namaPelapor,
-        nip: DEFAULT_PELAPOR.nip,
+        namaPelapor: pelaporNama,
+        nip: resolvedNip,
         tanggalMulai: r.tanggalMulai || tanggalMulai,
-        tanggalSelesai: r.tanggalSelesai || tanggalSelesai,
+        tanggalSelesai: r.tanggalSelesai || r.tanggalMulai || tanggalSelesai,
+        tandaTangan: savedTtd || undefined,
         format: 'pdf',
         deletedIds: Array.from(getDeletedIds()),
+        cpanelUrl,
+        cpanelKey,
       });
 
       await downloadPdfFromHtml(res.pdfHtml, `${fname}.pdf`);
@@ -421,15 +470,22 @@ export default function LaporanRHKPage() {
       const rhkMatch = (r.rhkNomor || r.namaFile || '').match(/(\d+)/);
       const targetRhkNomor = rhkMatch ? rhkMatch[1] : '1';
       const fname = (r.namaFile || `laporan-rhk-${r.tanggalMulai || 'periode'}`).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const pelaporNama = r.namaPelapor || namaPelapor;
+      const resolvedNip = findPelaporByNama(pelaporNama)?.nip || matchPelapor(pelaporNama)?.nip || nip || DEFAULT_PELAPOR.nip;
+      const savedTtd = getSavedTtd(pelaporNama) || (await getSavedTtdAsync(pelaporNama));
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
       const res = await generatePdfRhk({
         rhkNomor: targetRhkNomor,
-        namaPelapor: r.namaPelapor || namaPelapor,
-        nip: DEFAULT_PELAPOR.nip,
+        namaPelapor: pelaporNama,
+        nip: resolvedNip,
         tanggalMulai: r.tanggalMulai || tanggalMulai,
-        tanggalSelesai: r.tanggalSelesai || tanggalSelesai,
+        tanggalSelesai: r.tanggalSelesai || r.tanggalMulai || tanggalSelesai,
+        tandaTangan: savedTtd || undefined,
         format: 'word',
         deletedIds: Array.from(getDeletedIds()),
+        cpanelUrl,
+        cpanelKey,
       });
 
       downloadWordFromHtml(res.wordHtml, `${fname}.doc`);

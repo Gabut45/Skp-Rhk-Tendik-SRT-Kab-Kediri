@@ -13,13 +13,14 @@ import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, syncServerPresets, isRecordOwnedByUser } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, syncServerPresets, isRecordOwnedByUser, findPelaporByNama, matchPelapor } from '@/lib/pelapor-data';
 import { useAuth } from '@/lib/auth-context';
 import PreviewDialog from '@/components/PreviewDialog';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 import {
   deleteCpanelBulkKegiatan,
   deleteCpanelRiwayat,
+  fetchCpanelRiwayat,
   getDeletedRiwayatKeys,
   markDeletedRiwayatKey,
   purgeLocalDataForRiwayat,
@@ -124,19 +125,23 @@ export default function RiwayatPage() {
       const targetTanggalMulai = r.tanggalMulai || today;
       const targetTanggalSelesai = r.tanggalSelesai || r.tanggalMulai || today;
       const pelaporNama = r.namaPelapor || DEFAULT_PELAPOR.nama;
+      const pelaporNip = findPelaporByNama(pelaporNama)?.nip || matchPelapor(pelaporNama)?.nip || DEFAULT_PELAPOR.nip;
       let savedTtd = getSavedTtd(pelaporNama);
       if (!savedTtd) {
         savedTtd = await getSavedTtdAsync(pelaporNama);
       }
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
 
       const rhkRes = await generatePdfRhk({
         rhkNomor: rhkNomor as any,
         namaPelapor: pelaporNama,
-        nip: DEFAULT_PELAPOR.nip,
+        nip: pelaporNip,
         tanggalMulai: targetTanggalMulai,
         tanggalSelesai: targetTanggalSelesai,
         tandaTangan: savedTtd || undefined,
         format: isWord ? 'word' : 'pdf',
+        cpanelUrl,
+        cpanelKey,
       });
       return isWord ? rhkRes.wordHtml : rhkRes.pdfHtml;
     }
@@ -310,15 +315,53 @@ export default function RiwayatPage() {
         unifiedRecords.push(officialRecord);
       }
 
-      // Ambil laporan RHK jika ada
+      // Ambil laporan RHK dari lokal dan server cPanel agar tersinkronisasi lintas perangkat
       try {
-        const riwayatData = await getRiwayat({
-          namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
-          tanggalMulai: filterTanggalMulai || undefined,
-          tanggalSelesai: filterTanggalSelesai || undefined,
-        });
-        const rhkReports = (riwayatData.records || []).filter(r => r.jenisLaporan === 'Laporan RHK');
-        for (const r of rhkReports) {
+        const deletedSet = getDeletedIds();
+        const targetPelapor = filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined;
+        const [riwayatData, remoteRhk] = await Promise.all([
+          getRiwayat({
+            namaPelapor: targetPelapor,
+            tanggalMulai: filterTanggalMulai || undefined,
+            tanggalSelesai: filterTanggalSelesai || undefined,
+          }).catch(() => ({ records: [] as FileRecord[] })),
+          fetchCpanelRiwayat({
+            namaPelapor: targetPelapor,
+            tanggalMulai: filterTanggalMulai || undefined,
+            tanggalSelesai: filterTanggalSelesai || undefined,
+            jenisLaporan: 'Laporan RHK',
+          }).catch(() => []),
+        ]);
+
+        const rhkMerged = new Map<string, FileRecord>();
+        const pushRhk = (r: FileRecord) => {
+          if (!r || r.jenisLaporan !== 'Laporan RHK') return;
+          if (isClientRecordDeleted(r) || (r.id && deletedSet.has(r.id))) return;
+          const k = `${(r.namaPelapor || '').toLowerCase()}::${(r.rhkNomor || '').toLowerCase()}::${r.tanggalMulai || ''}::${r.tanggalSelesai || ''}`;
+          const existing = rhkMerged.get(k);
+          if (!existing || (r.dibuatPada || '') > (existing.dibuatPada || '')) {
+            rhkMerged.set(k, r);
+          }
+        };
+
+        for (const r of remoteRhk) {
+          pushRhk({
+            id: r.id,
+            namaFile: r.namaFile,
+            jenisLaporan: r.jenisLaporan || 'Laporan RHK',
+            namaPelapor: r.namaPelapor,
+            pdfUrl: r.pdfUrl || '',
+            dibuatPada: r.dibuatPada || new Date().toISOString(),
+            tanggalMulai: r.tanggalMulai,
+            tanggalSelesai: r.tanggalSelesai,
+            rhkNomor: r.rhkNomor,
+          });
+        }
+        for (const r of riwayatData.records || []) {
+          pushRhk(r);
+        }
+
+        for (const r of rhkMerged.values()) {
           unifiedRecords.push(r);
         }
       } catch (err) {

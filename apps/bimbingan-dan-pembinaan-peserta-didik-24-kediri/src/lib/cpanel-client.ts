@@ -164,7 +164,7 @@ export async function fetchCpanelKegiatan(params?: {
 
       for (const r of data.records) {
         if (isClientRecordDeleted(r)) continue;
-        if (r.tanggal === '1970-01-01' || r.kata_kunci_kegiatan === '__PRESET_TTD__' || r.rhk_kategori === '__SYSTEM_CONFIG__') continue;
+        if (r.tanggal === '1970-01-01' || r.kata_kunci_kegiatan === '__PRESET_TTD__' || r.kata_kunci_kegiatan === '__USER_ACCOUNT__' || r.kata_kunci_kegiatan === '__RIWAYAT_RHK__' || r.rhk_kategori === '__SYSTEM_CONFIG__') continue;
         const id = String(r.id || `keg_${r.id_kegiatan}`);
 
         let fotoList: { url: string }[] = [];
@@ -532,10 +532,225 @@ export async function deleteCpanelRiwayat(params: {
       },
       body: JSON.stringify(params),
     });
+    // Bersihkan juga fallback __RIWAYAT_RHK__ jika ada
+    if (params.id) {
+      const fbId = params.id.startsWith('riwayat_rhk_') ? params.id : `riwayat_rhk_${params.id}`;
+      await fetch(buildCpanelUrl(url, 'delete_kegiatan'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(key ? { 'X-API-KEY': key } : {}),
+        },
+        body: JSON.stringify({ id: fbId }),
+      }).catch(() => {});
+    }
   } catch (err) {
     console.warn('[deleteCpanelRiwayat] Error:', err);
   }
   return true;
+}
+
+export interface CpanelRiwayatRecord {
+  id: string;
+  namaFile: string;
+  jenisLaporan: string;
+  namaPelapor: string;
+  pdfUrl?: string;
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
+  rhkNomor?: string;
+  dibuatPada?: string;
+}
+
+/**
+ * Ping server cPanel MySQL untuk memeriksa status koneksi secara real-time
+ */
+export async function pingCpanelServer(timeoutMs = 5000): Promise<{ online: boolean; serverTime?: string; latencyMs?: number }> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return { online: false };
+
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const targetUrl = buildCpanelUrl(url, 'ping');
+    const res = await fetch(targetUrl, {
+      headers: key ? { 'X-API-KEY': key } : {},
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return { online: false };
+    const json = await res.json();
+    if (json && json.success) {
+      return { online: true, serverTime: json.server_time, latencyMs: Date.now() - start };
+    }
+  } catch {}
+  return { online: false };
+}
+
+/**
+ * Simpan metadata Riwayat Laporan RHK ke database cPanel MySQL (beserta fallback aman jika PHP versi lama)
+ */
+export async function saveCpanelRiwayat(record: CpanelRiwayatRecord): Promise<boolean> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return false;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(key ? { 'X-API-KEY': key } : {}),
+  };
+
+  // 1. Coba endpoint resmi save_riwayat
+  try {
+    const res = await fetch(buildCpanelUrl(url, 'save_riwayat'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(record),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.success) {
+        return true;
+      }
+    }
+  } catch {}
+
+  // 2. Fallback: simpan metadata ke baris sistem 1970-01-01 di kegiatan_harian jika PHP belum di-update
+  try {
+    const cleanKey = `${record.namaPelapor}_${record.rhkNomor || 'RHK'}_${record.tanggalMulai || ''}_${record.tanggalSelesai || ''}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .slice(0, 48);
+    const fbId = record.id.startsWith('riwayat_rhk_') ? record.id : `riwayat_rhk_${cleanKey}`;
+
+    const payload = {
+      namaPelapor: record.namaPelapor || 'Wali Asuh',
+      nip: '',
+      tanggal: '1970-01-01',
+      unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+      kegiatan: [
+        {
+          id: fbId,
+          waktuMulai: '00:00',
+          waktuSelesai: '00:00',
+          kataKunciKegiatan: '__RIWAYAT_RHK__',
+          deskripsiKegiatan: JSON.stringify({ ...record, id: record.id || fbId }),
+          rhkKategori: '__SYSTEM_CONFIG__',
+        },
+      ],
+    };
+
+    const res = await fetch(buildCpanelUrl(url, 'save_bulk'), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      return Boolean(json && json.success);
+    }
+  } catch {}
+
+  return false;
+}
+
+/**
+ * Ambil daftar Riwayat Laporan RHK dari database server cPanel MySQL (sinkron lintas perangkat)
+ */
+export async function fetchCpanelRiwayat(params?: {
+  namaPelapor?: string;
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
+  jenisLaporan?: string;
+}): Promise<CpanelRiwayatRecord[]> {
+  const { url, key } = getCpanelConfig();
+  if (!url) return [];
+
+  const headers: Record<string, string> = {};
+  if (key) headers['X-API-KEY'] = key;
+
+  const deletedIds = getDeletedIds();
+  const collected: CpanelRiwayatRecord[] = [];
+  const seenKey = new Set<string>();
+
+  const pushUnique = (r: CpanelRiwayatRecord) => {
+    if (!r || !r.id || deletedIds.has(r.id)) return;
+    if (params?.namaPelapor && params.namaPelapor !== 'Semua Pelapor' && r.namaPelapor !== params.namaPelapor) return;
+    if (params?.jenisLaporan && r.jenisLaporan !== params.jenisLaporan) return;
+    if (params?.tanggalMulai && r.tanggalSelesai && r.tanggalSelesai < params.tanggalMulai) return;
+    if (params?.tanggalSelesai && r.tanggalMulai && r.tanggalMulai > params.tanggalSelesai) return;
+
+    const k = `${(r.namaPelapor || '').toLowerCase()}::${(r.rhkNomor || '').toLowerCase()}::${r.tanggalMulai || ''}::${r.tanggalSelesai || ''}`;
+    if (!seenKey.has(k)) {
+      seenKey.add(k);
+      collected.push(r);
+    }
+  };
+
+  // 1. Coba endpoint resmi get_riwayat
+  try {
+    const qp: Record<string, string> = {};
+    if (params?.namaPelapor && params.namaPelapor !== 'Semua Pelapor') qp.namaPelapor = params.namaPelapor;
+    if (params?.tanggalMulai) qp.tanggalMulai = params.tanggalMulai;
+    if (params?.tanggalSelesai) qp.tanggalSelesai = params.tanggalSelesai;
+    if (params?.jenisLaporan) qp.jenisLaporan = params.jenisLaporan;
+
+    const res = await fetch(buildCpanelUrl(url, 'get_riwayat', qp), { headers });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.success && Array.isArray(json.records)) {
+        for (const r of json.records) {
+          pushUnique({
+            id: String(r.id),
+            namaFile: r.namaFile || r.nama_file || 'Laporan RHK',
+            jenisLaporan: r.jenisLaporan || r.jenis_laporan || 'Laporan RHK',
+            namaPelapor: r.namaPelapor || r.nama_pelapor || '',
+            pdfUrl: r.pdfUrl || r.pdf_url || '',
+            tanggalMulai: r.tanggalMulai || r.tanggal_mulai || '',
+            tanggalSelesai: r.tanggalSelesai || r.tanggal_selesai || '',
+            rhkNomor: r.rhkNomor || r.rhk_nomor || '',
+            dibuatPada: r.dibuatPada || r.dibuat_pada || '',
+          });
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Cek juga fallback __RIWAYAT_RHK__ jika ada data dari PHP versi lama
+  try {
+    const fbUrl = buildCpanelUrl(url, 'get_kegiatan', {
+      tanggalMulai: '1970-01-01',
+      tanggalSelesai: '1970-01-01',
+    });
+    const res = await fetch(fbUrl, { headers });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.success && Array.isArray(json.records)) {
+        for (const r of json.records) {
+          if (r.kata_kunci_kegiatan === '__RIWAYAT_RHK__' && r.deskripsi_kegiatan) {
+            try {
+              const parsed = JSON.parse(r.deskripsi_kegiatan);
+              if (parsed && parsed.namaFile) {
+                pushUnique({
+                  id: String(parsed.id || r.id),
+                  namaFile: parsed.namaFile,
+                  jenisLaporan: parsed.jenisLaporan || 'Laporan RHK',
+                  namaPelapor: parsed.namaPelapor || r.nama_pelapor || '',
+                  pdfUrl: '',
+                  tanggalMulai: parsed.tanggalMulai || '',
+                  tanggalSelesai: parsed.tanggalSelesai || '',
+                  rhkNomor: parsed.rhkNomor || '',
+                  dibuatPada: parsed.dibuatPada || '',
+                });
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return collected;
 }
 
 /**
@@ -859,7 +1074,7 @@ export async function autoPushLocalKegiatanToCpanel(): Promise<{ pushedCount: nu
     const pendingItems = localItems.filter((item: any) => {
       if (!item || !item.id || !item.tanggal) return false;
       if (item.tanggal === '1970-01-01') return false;
-      if (item.kataKunciKegiatan === '__PRESET_TTD__' || item.kataKunciKegiatan === '__USER_ACCOUNT__') return false;
+      if (item.kataKunciKegiatan === '__PRESET_TTD__' || item.kataKunciKegiatan === '__USER_ACCOUNT__' || item.kataKunciKegiatan === '__RIWAYAT_RHK__') return false;
       if (deletedIds.has(item.id)) return false;
       return true;
     });

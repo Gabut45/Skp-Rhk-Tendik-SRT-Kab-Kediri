@@ -7,7 +7,7 @@ import { Badge } from '@project/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@project/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@project/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@project/components/ui/alert-dialog';
-import { Shield, ShieldCheck, UserPlus, Users, Key, Pencil, Trash2, Eye, EyeOff, Copy, Check, Database, Search, PenTool, UploadCloud, RefreshCw, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Shield, ShieldCheck, UserPlus, Users, Key, Pencil, Trash2, Eye, EyeOff, Copy, Check, Database, Search, PenTool, UploadCloud, RefreshCw, Loader2, ArchiveRestore } from 'lucide-react';
 import { useAuth, StoredAccount } from '@/lib/auth-context';
 import { PELAPOR_LIST, getServerPresetMap, saveServerPresetLocalCache, syncServerPresets, findInMapFuzzy } from '@/lib/pelapor-data';
 import { saveCpanelPresetTtd } from '@/lib/cpanel-client';
@@ -67,6 +67,7 @@ export default function KelolaPenggunaPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [cpanelModalOpen, setCpanelModalOpen] = useState(false);
+  const [cpanelDefaultTab, setCpanelDefaultTab] = useState<'guide' | 'files' | 'sync' | 'backup'>('guide');
 
   // Toggle show password per baris
   const toggleRowPassword = (id: string) => {
@@ -374,10 +375,24 @@ export default function KelolaPenggunaPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="outline"
-            onClick={() => setCpanelModalOpen(true)}
+            onClick={() => {
+              setCpanelDefaultTab('backup');
+              setCpanelModalOpen(true);
+            }}
+            className="gap-2 text-xs border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100"
+          >
+            <ArchiveRestore size={14} className="text-emerald-600" />
+            Backup &amp; Restore
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setCpanelDefaultTab('guide');
+              setCpanelModalOpen(true);
+            }}
             className="gap-2 text-xs border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
           >
             <Database size={14} className="text-amber-600" />
@@ -931,7 +946,7 @@ export default function KelolaPenggunaPage() {
       </AlertDialog>
 
       {/* Modal Database cPanel (Private untuk Super Admin) */}
-      <CpanelModal open={cpanelModalOpen} onOpenChange={setCpanelModalOpen} />
+      <CpanelModal open={cpanelModalOpen} onOpenChange={setCpanelModalOpen} defaultTab={cpanelDefaultTab} />
     </div>
   );
 }

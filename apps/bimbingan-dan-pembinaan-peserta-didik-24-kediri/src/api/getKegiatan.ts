@@ -150,7 +150,7 @@ export default createEndpoint({
     if (cpanelRecords && cpanelRecords.length > 0) {
       // Data server cPanel tersedia: gunakan cPanel 100% sebagai sumber data resmi bersama
       activeRecords = cpanelRecords.filter(r => {
-        if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
+        if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.kataKunciKegiatan === '__USER_ACCOUNT__' || r.kataKunciKegiatan === '__RIWAYAT_RHK__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
         if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) return false;
         return true;
       });
@@ -159,7 +159,7 @@ export default createEndpoint({
       try {
         const localResult = await zite.kegiatanHarian.findAll({ filters, limit: 1000000 });
         activeRecords = localResult.records.filter(r => {
-          if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
+          if (r.tanggal === '1970-01-01' || r.kataKunciKegiatan === '__PRESET_TTD__' || r.kataKunciKegiatan === '__USER_ACCOUNT__' || r.kataKunciKegiatan === '__RIWAYAT_RHK__' || r.rhkKategori === '__SYSTEM_CONFIG__') return false;
           if (input.rhkKategori && !r.rhkKategori?.includes(input.rhkKategori)) return false;
           return true;
         });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -22,13 +22,22 @@ import {
   Globe,
   Send,
   AlertTriangle,
-  Copy,
-  ExternalLink,
   FolderDown,
   UploadCloud,
   Loader2,
+  HardDriveDownload,
+  ArchiveRestore,
+  ShieldAlert,
 } from 'lucide-react';
 import { getKegiatan, getRiwayat } from 'zitejs/api';
+import {
+  createFullBackup,
+  downloadBackupJson,
+  restoreFromBackup,
+  getLatestAutoBackupMeta,
+  loadAutoBackupSnapshot,
+  type SkpBackupPayload,
+} from '@/lib/backup-helper';
 
 const SCHEMA_SQL = `-- ========================================================
 -- SKRIP DATABASE MYSQL / MARIADB UNTUK CPANEL
@@ -542,6 +551,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             exit;
         }
     }
+
+    if ($action === 'get_riwayat') {
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS riwayat_file (
+                id VARCHAR(64) NOT NULL PRIMARY KEY,
+                id_file INT AUTO_INCREMENT UNIQUE,
+                nama_file VARCHAR(255) NOT NULL,
+                jenis_laporan VARCHAR(64) NOT NULL,
+                nama_pelapor VARCHAR(255) NOT NULL,
+                pdf_url LONGTEXT,
+                tanggal_mulai DATE DEFAULT NULL,
+                tanggal_selesai DATE DEFAULT NULL,
+                rhk_nomor VARCHAR(64) DEFAULT NULL,
+                dibuat_pada TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_jenis (jenis_laporan),
+                INDEX idx_pelapor_file (nama_pelapor)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        } catch (Exception $e) {}
+
+        $pelapor = $_GET['namaPelapor'] ?? null;
+        $tglMulai = $_GET['tanggalMulai'] ?? null;
+        $tglSelesai = $_GET['tanggalSelesai'] ?? null;
+        $jenis = $_GET['jenisLaporan'] ?? null;
+
+        $sql = "SELECT id, nama_file as namaFile, jenis_laporan as jenisLaporan, nama_pelapor as namaPelapor, pdf_url as pdfUrl, tanggal_mulai as tanggalMulai, tanggal_selesai as tanggalSelesai, rhk_nomor as rhkNomor, dibuat_pada as dibuatPada FROM riwayat_file WHERE 1=1";
+        $params = [];
+
+        if ($pelapor && $pelapor !== 'Semua Pelapor') {
+            $sql .= " AND nama_pelapor = :pelapor";
+            $params[':pelapor'] = $pelapor;
+        }
+        if ($tglMulai) {
+            $sql .= " AND (tanggal_selesai >= :tm OR tanggal_mulai >= :tm)";
+            $params[':tm'] = $tglMulai;
+        }
+        if ($tglSelesai) {
+            $sql .= " AND (tanggal_mulai <= :ts OR tanggal_selesai <= :ts)";
+            $params[':ts'] = $tglSelesai;
+        }
+        if ($jenis) {
+            $sql .= " AND jenis_laporan = :jenis";
+            $params[':jenis'] = $jenis;
+        }
+
+        $sql .= " ORDER BY dibuat_pada DESC, id_file DESC";
+        try {
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $rows = $stmt->fetchAll();
+            echo json_encode(['success' => true, 'records' => $rows]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => true, 'records' => []]);
+        }
+        exit;
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -698,8 +762,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
         }
 
-        // 2. Jika Mode Edit/Replace: kumpulkan foto lama dan hapus seluruh baris kegiatan lama untuk tanggal & pelapor asal
+        // 2. Jika Mode Edit/Replace atau update Preset TTD: kumpulkan file lama agar file yatim bisa dihapus bersih
         $oldCandidateUrls = [];
+        foreach ($preparedItems as $pItem) {
+            $it = $pItem['it'];
+            if (($it['kataKunciKegiatan'] ?? '') === '__PRESET_TTD__') {
+                try {
+                    $selPreset = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE id = :id");
+                    $selPreset->execute([':id' => $pItem['id']]);
+                    while ($rPreset = $selPreset->fetch(PDO::FETCH_ASSOC)) {
+                        collectUrlsFromColumn($rPreset['foto_kegiatan'] ?? '', $oldCandidateUrls);
+                        collectUrlsFromColumn($rPreset['tanda_tangan'] ?? '', $oldCandidateUrls);
+                    }
+                } catch (Exception $e) {}
+            }
+        }
         if ($replaceExisting && !empty($origTanggal) && !empty($origPelapor) && $origTanggal !== '1970-01-01') {
             $selOld = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
             $selOld->execute([':tgl' => $origTanggal, ':pelapor' => $origPelapor]);
@@ -796,8 +873,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $savedCount++;
         }
 
-        // 3. Setelah data baru masuk ke database, hapus foto lama di File Manager yang sudah tidak dipakai baris mana pun
-        if ($replaceExisting && !empty($oldCandidateUrls)) {
+        // 3. Setelah data baru masuk ke database, hapus foto/TTD lama di File Manager yang sudah tidak dipakai baris mana pun
+        if (!empty($oldCandidateUrls)) {
             safeDeleteUnusedFiles($pdo, $oldCandidateUrls);
         }
 
@@ -861,43 +938,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $candidateUrls = [];
 
         if ($deleteAll) {
-            $q = $pdo->query("SELECT foto_kegiatan FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
-            while ($r = $q->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
-            $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
+            $q = $pdo->query("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
+            while ($r = $q->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
+            $pdo->exec("DELETE FROM kegiatan_harian WHERE COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
-            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id IN ($inClause)");
+            $sel = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE id IN ($inClause)");
             $sel->execute($delIds);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
             $numVal = $delNum ?? (is_numeric($delId) ? $delId : 0);
-            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
+            $sel = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $sel->execute([':id' => $delId, ':num' => $numVal]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $stmt->execute([':id' => $delId, ':num' => $numVal]);
         }
         if ($waktuMulai && $tgl && $pelapor && empty($delId) && empty($delIds)) {
-            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
+            $sel = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
         } elseif ($tgl && $pelapor && empty($delId) && empty($delIds)) {
-            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
+            $sel = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
         if ($tglMulai && $tglSelesai && $pelapor && empty($delId) && empty($delIds)) {
-            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
+            $sel = $pdo->prepare("SELECT foto_kegiatan, tanda_tangan FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
-            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
+                collectUrlsFromColumn($r['tanda_tangan'] ?? '', $candidateUrls);
+            }
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
@@ -931,6 +1026,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } catch (Exception $e) {}
             $pdo->exec("DELETE FROM riwayat_file");
+            try {
+                $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan = '__RIWAYAT_RHK__'");
+            } catch (Exception $e) {}
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
@@ -954,6 +1052,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Exception $e) {}
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id = :id");
             $stmt->execute([':id' => $delId]);
+            try {
+                $delFb = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :fbid AND kata_kunci_kegiatan = '__RIWAYAT_RHK__'");
+                $delFb->execute([':fbid' => 'riwayat_rhk_' . $delId]);
+            } catch (Exception $e) {}
         }
         if ($tgl && $pelapor) {
             try {
@@ -984,6 +1086,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'success' => true,
             'message' => 'Riwayat file berhasil dihapus secara permanen dari cPanel MySQL!'
         ]);
+        exit;
+    }
+
+    // Aksi: Simpan Riwayat Laporan (khususnya Laporan RHK agar sinkron lintas perangkat)
+    if ($action === 'save_riwayat') {
+        try {
+            $pdo->exec("CREATE TABLE IF NOT EXISTS riwayat_file (
+                id VARCHAR(64) NOT NULL PRIMARY KEY,
+                id_file INT AUTO_INCREMENT UNIQUE,
+                nama_file VARCHAR(255) NOT NULL,
+                jenis_laporan VARCHAR(64) NOT NULL,
+                nama_pelapor VARCHAR(255) NOT NULL,
+                pdf_url LONGTEXT,
+                tanggal_mulai DATE DEFAULT NULL,
+                tanggal_selesai DATE DEFAULT NULL,
+                rhk_nomor VARCHAR(64) DEFAULT NULL,
+                dibuat_pada TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_jenis (jenis_laporan),
+                INDEX idx_pelapor_file (nama_pelapor)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        } catch (Exception $e) {}
+
+        $rec = $data['record'] ?? $data;
+        $id = $rec['id'] ?? uniqid('riw_', true);
+        $namaFile = $rec['namaFile'] ?? ($rec['nama_file'] ?? 'Laporan RHK');
+        $jenisLaporan = $rec['jenisLaporan'] ?? ($rec['jenis_laporan'] ?? 'Laporan RHK');
+        $namaPelapor = $rec['namaPelapor'] ?? ($rec['nama_pelapor'] ?? '');
+        $pdfUrl = $rec['pdfUrl'] ?? ($rec['pdf_url'] ?? '');
+        $tglMulai = !empty($rec['tanggalMulai']) ? $rec['tanggalMulai'] : (!empty($rec['tanggal_mulai']) ? $rec['tanggal_mulai'] : null);
+        $tglSelesai = !empty($rec['tanggalSelesai']) ? $rec['tanggalSelesai'] : (!empty($rec['tanggal_selesai']) ? $rec['tanggal_selesai'] : $tglMulai);
+        $rhkNomor = $rec['rhkNomor'] ?? ($rec['rhk_nomor'] ?? null);
+
+        try {
+            if ($namaPelapor && $rhkNomor && $tglMulai && $tglSelesai) {
+                $delDup = $pdo->prepare("DELETE FROM riwayat_file WHERE id != :id AND jenis_laporan = :jenis AND nama_pelapor = :pelapor AND rhk_nomor = :rhk AND tanggal_mulai = :tm AND tanggal_selesai = :ts");
+                $delDup->execute([
+                    ':id' => $id,
+                    ':jenis' => $jenisLaporan,
+                    ':pelapor' => $namaPelapor,
+                    ':rhk' => $rhkNomor,
+                    ':tm' => $tglMulai,
+                    ':ts' => $tglSelesai,
+                ]);
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO riwayat_file
+                (id, nama_file, jenis_laporan, nama_pelapor, pdf_url, tanggal_mulai, tanggal_selesai, rhk_nomor)
+                VALUES (:id, :nama_file, :jenis, :pelapor, :pdf_url, :tm, :ts, :rhk)
+                ON DUPLICATE KEY UPDATE
+                nama_file = VALUES(nama_file),
+                jenis_laporan = VALUES(jenis_laporan),
+                nama_pelapor = VALUES(nama_pelapor),
+                pdf_url = VALUES(pdf_url),
+                tanggal_mulai = VALUES(tanggal_mulai),
+                tanggal_selesai = VALUES(tanggal_selesai),
+                rhk_nomor = VALUES(rhk_nomor),
+                dibuat_pada = CURRENT_TIMESTAMP");
+            $stmt->execute([
+                ':id' => $id,
+                ':nama_file' => $namaFile,
+                ':jenis' => $jenisLaporan,
+                ':pelapor' => $namaPelapor,
+                ':pdf_url' => $pdfUrl,
+                ':tm' => $tglMulai,
+                ':ts' => $tglSelesai,
+                ':rhk' => $rhkNomor,
+            ]);
+            echo json_encode(['success' => true, 'id' => $id, 'message' => 'Riwayat laporan tersimpan ke cPanel MySQL!']);
+        } catch (PDOException $e) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'message' => 'Gagal simpan riwayat: ' . $e->getMessage()]);
+        }
         exit;
     }
 
@@ -1047,10 +1221,13 @@ export const DEFAULT_CPANEL_URL = 'https://game.gabutgame.my.id/skp/api_kegiatan
 export default function CpanelModal({
   open,
   onOpenChange,
+  defaultTab = 'guide',
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultTab?: 'guide' | 'files' | 'sync' | 'backup';
 }) {
+  const [activeTab, setActiveTab] = useState<string>(defaultTab);
   const [apiUrl, setApiUrl] = useState(() => localStorage.getItem('cpanel_api_url') || DEFAULT_CPANEL_URL);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('cpanel_api_key') || '');
   const [autoSync, setAutoSync] = useState(() => localStorage.getItem('cpanel_auto_sync') !== 'false');
@@ -1059,6 +1236,103 @@ export default function CpanelModal({
   const [connectionStatus, setConnectionStatus] = useState<string | null>(null);
   const [migratingPhotos, setMigratingPhotos] = useState(false);
   const [migrationProgress, setMigrationProgress] = useState<string | null>(null);
+
+  // Backup & Restore state
+  const [includeImagesInBackup, setIncludeImagesInBackup] = useState(true);
+  const [backingUp, setBackingUp] = useState(false);
+  const [backupProgress, setBackupProgress] = useState<string | null>(null);
+  const [autoMeta, setAutoMeta] = useState<{ exportedAt: string; stats: SkpBackupPayload['stats'] } | null>(null);
+  const [parsedRestorePayload, setParsedRestorePayload] = useState<SkpBackupPayload | null>(null);
+  const [restoreFileName, setRestoreFileName] = useState('');
+  const [restoring, setRestoring] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<string | null>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab(defaultTab);
+      getLatestAutoBackupMeta().then(setAutoMeta).catch(() => {});
+    }
+  }, [open, defaultTab]);
+
+  const handleCreateBackup = async () => {
+    setBackingUp(true);
+    setBackupProgress('Menyiapkan paket backup...');
+    try {
+      const payload = await createFullBackup({
+        includeImages: includeImagesInBackup,
+        onProgress: setBackupProgress,
+      });
+      downloadBackupJson(payload);
+      setAutoMeta({ exportedAt: payload.exportedAt, stats: payload.stats });
+      setBackupProgress(
+        `Selesai! ${payload.stats.kegiatanCount} kegiatan, ${payload.stats.riwayatRhkCount} RHK, ${payload.stats.presetTtdCount} TTD, dan ${payload.stats.mediaCount} file foto berhasil diarsipkan.`
+      );
+      toast.success('File backup (.json) berhasil dibuat dan diunduh!');
+    } catch (err: any) {
+      setBackupProgress(`Gagal: ${err?.message || 'Error'}`);
+      toast.error('Gagal membuat backup: ' + (err?.message || 'Error'));
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const handleDownloadAutoSnapshot = async () => {
+    try {
+      const snap = await loadAutoBackupSnapshot();
+      if (!snap) {
+        toast.info('Snapshot otomatis belum tersedia di perangkat ini');
+        return;
+      }
+      downloadBackupJson(snap);
+      toast.success('Snapshot otomatis harian berhasil diunduh!');
+    } catch {
+      toast.error('Gagal mengunduh snapshot otomatis');
+    }
+  };
+
+  const handleSelectRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as SkpBackupPayload;
+      if (!parsed || !Array.isArray(parsed.kegiatan)) {
+        toast.error('File tidak valid. Pilih file backup .json dari aplikasi ini.');
+        return;
+      }
+      setParsedRestorePayload(parsed);
+      setRestoreFileName(file.name);
+      setRestoreProgress(null);
+    } catch {
+      toast.error('Gagal membaca file JSON backup');
+    } finally {
+      if (restoreInputRef.current) restoreInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!parsedRestorePayload) return;
+    setRestoring(true);
+    setRestoreProgress('Memulai pemulihan data ke server cPanel...');
+    try {
+      const res = await restoreFromBackup(parsedRestorePayload, setRestoreProgress);
+      try {
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('__cache_')) sessionStorage.removeItem(k);
+        });
+      } catch {}
+      setRestoreProgress(
+        `Pemulihan selesai! ${res.restoredKegiatan} kegiatan, ${res.restoredRiwayat} RHK, ${res.restoredPresets} TTD, dan ${res.restoredMedia} file foto dipulihkan.`
+      );
+      toast.success(`Berhasil memulihkan ${res.restoredKegiatan} kegiatan & ${res.restoredRiwayat} Laporan RHK!`);
+    } catch (err: any) {
+      setRestoreProgress(`Gagal memulihkan: ${err?.message || 'Error'}`);
+      toast.error('Gagal memulihkan backup: ' + (err?.message || 'Error'));
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   const handleMigratePhotos = async () => {
     if (!apiUrl.trim()) {
@@ -1285,11 +1559,12 @@ export default function CpanelModal({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="guide" className="w-full mt-2">
-          <TabsList className="grid grid-cols-3 w-full">
-            <TabsTrigger value="guide">1. Panduan Persiapan</TabsTrigger>
-            <TabsTrigger value="files">2. Skrip & Ekspor Data</TabsTrigger>
-            <TabsTrigger value="sync">3. Sinkronisasi Live</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-2">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full h-auto">
+            <TabsTrigger value="guide" className="text-xs py-1.5">1. Panduan</TabsTrigger>
+            <TabsTrigger value="files" className="text-xs py-1.5">2. Skrip & SQL</TabsTrigger>
+            <TabsTrigger value="sync" className="text-xs py-1.5">3. Sinkron Live</TabsTrigger>
+            <TabsTrigger value="backup" className="text-xs py-1.5">4. Backup & Restore</TabsTrigger>
           </TabsList>
 
           {/* TAB 1: PANDUAN */}
@@ -1529,6 +1804,163 @@ export default function CpanelModal({
                   </div>
                 )}
               </div>
+            </div>
+          </TabsContent>
+
+          {/* TAB 4: BACKUP & RESTORE */}
+          <TabsContent value="backup" className="space-y-4 pt-3">
+            {/* Snapshot Otomatis Harian */}
+            <div className="border rounded-xl p-3.5 bg-emerald-50/50 border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Snapshot Otomatis Harian (Lokal Perangkat Admin)
+                </p>
+                {autoMeta ? (
+                  <p className="text-[11px] text-emerald-800">
+                    Terakhir disimpan otomatis: <strong>{new Date(autoMeta.exportedAt).toLocaleString('id-ID')}</strong> ({autoMeta.stats.kegiatanCount} kegiatan, {autoMeta.stats.riwayatRhkCount} Laporan RHK)
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-emerald-800">
+                    Snapshot harian dibuat otomatis saat Super Admin membuka aplikasi untuk berjaga-jaga.
+                  </p>
+                )}
+              </div>
+              {autoMeta && (
+                <Button
+                  onClick={handleDownloadAutoSnapshot}
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1.5 border-emerald-300 bg-white text-emerald-900 hover:bg-emerald-100 shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Unduh Snapshot
+                </Button>
+              )}
+            </div>
+
+            {/* Buat Backup Manual Lengkap */}
+            <div className="border rounded-xl p-4 bg-card space-y-3">
+              <div className="flex items-start gap-2.5">
+                <HardDriveDownload className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-sm">1. Unduh Cadangan Data Lengkap (.json)</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Mengekspor seluruh kegiatan harian, riwayat Laporan RHK, preset tanda tangan, daftar akun wali asuh, serta opsi penyertaan file foto dokumentasi menjadi satu arsip JSON portabel.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="backup_include_images"
+                  checked={includeImagesInBackup}
+                  onChange={e => setIncludeImagesInBackup(e.target.checked)}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <Label htmlFor="backup_include_images" className="text-xs cursor-pointer font-medium">
+                  Sertakan file foto dokumentasi &amp; tanda tangan di dalam file backup (rekomendasi, ukuran file lebih besar)
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button onClick={handleCreateBackup} disabled={backingUp} size="sm" className="gap-1.5 text-xs">
+                  {backingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <HardDriveDownload className="w-3.5 h-3.5" />}
+                  {backingUp ? 'Membuat File Backup...' : 'Buat & Unduh Backup (.json)'}
+                </Button>
+              </div>
+
+              {backupProgress && (
+                <div className="text-[11px] font-mono bg-muted/60 border rounded p-2 text-foreground">
+                  {backupProgress}
+                </div>
+              )}
+            </div>
+
+            {/* Restore dari File Backup */}
+            <div className="border rounded-xl p-4 bg-amber-50/40 border-amber-200 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <ArchiveRestore className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-sm text-amber-950">2. Pulihkan (Restore) Data dari File Backup</h4>
+                  <p className="text-xs text-amber-900/80 mt-0.5">
+                    Unggah file <code>backup-kinerja-*.json</code> untuk mengembalikan data kegiatan, foto ke File Manager, riwayat RHK, dan preset tanda tangan ke server database cPanel.
+                  </p>
+                </div>
+              </div>
+
+              <input
+                ref={restoreInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleSelectRestoreFile}
+              />
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={restoring}
+                  onClick={() => restoreInputRef.current?.click()}
+                  className="text-xs gap-1.5 border-amber-300 bg-white hover:bg-amber-100 text-amber-950"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Pilih File Backup (.json)
+                </Button>
+                {restoreFileName && (
+                  <span className="text-xs font-mono text-amber-900 bg-white px-2 py-1 rounded border border-amber-200">
+                    {restoreFileName}
+                  </span>
+                )}
+              </div>
+
+              {parsedRestorePayload && (
+                <div className="bg-white border border-amber-200 rounded-lg p-3 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-950">
+                    <ShieldAlert className="w-4 h-4 text-amber-600" />
+                    Pratinjau Isi File Backup:
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div className="bg-muted/40 p-2 rounded">
+                      <span className="text-muted-foreground block">Kegiatan</span>
+                      <strong className="text-sm">{parsedRestorePayload.kegiatan?.length || 0}</strong>
+                    </div>
+                    <div className="bg-muted/40 p-2 rounded">
+                      <span className="text-muted-foreground block">Laporan RHK</span>
+                      <strong className="text-sm">{parsedRestorePayload.riwayatRhk?.length || 0}</strong>
+                    </div>
+                    <div className="bg-muted/40 p-2 rounded">
+                      <span className="text-muted-foreground block">Preset TTD</span>
+                      <strong className="text-sm">{Object.keys(parsedRestorePayload.presetTtd || {}).length}</strong>
+                    </div>
+                    <div className="bg-muted/40 p-2 rounded">
+                      <span className="text-muted-foreground block">Arsip Foto</span>
+                      <strong className="text-sm">{Object.keys(parsedRestorePayload.mediaArchive || {}).length}</strong>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Diekspor pada: {parsedRestorePayload.exportedAt ? new Date(parsedRestorePayload.exportedAt).toLocaleString('id-ID') : '-'}
+                  </p>
+                  <Button
+                    onClick={handleConfirmRestore}
+                    disabled={restoring}
+                    size="sm"
+                    className="gap-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArchiveRestore className="w-3.5 h-3.5" />}
+                    {restoring ? 'Memulihkan ke Server...' : 'Pulihkan Data ke Server Sekarang'}
+                  </Button>
+                </div>
+              )}
+
+              {restoreProgress && (
+                <div className="text-[11px] font-mono bg-white border border-amber-200 rounded p-2 text-amber-950">
+                  {restoreProgress}
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

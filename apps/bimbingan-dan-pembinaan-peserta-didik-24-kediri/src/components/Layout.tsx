@@ -10,12 +10,15 @@ import {
   Calendar,
   Database,
   ShieldCheck,
-  User as UserIcon,
   Sparkles,
+  Wifi,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { autoPushLocalKegiatanToCpanel } from '@/lib/cpanel-client';
+import { autoPushLocalKegiatanToCpanel, pingCpanelServer } from '@/lib/cpanel-client';
+import { runAutoDailyBackupSnapshot } from '@/lib/backup-helper';
 import { toast } from 'sonner';
 import CpanelModal from './CpanelModal';
 import GeminiKeyModal from './GeminiKeyModal';
@@ -33,6 +36,50 @@ export default function Layout() {
   const [cpanelOpen, setCpanelOpen] = useState(false);
   const [geminiModalOpen, setGeminiModalOpen] = useState(false);
   const { user, logout } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+
+  type ConnState = 'checking' | 'connected' | 'server_unreachable' | 'offline';
+  const [connState, setConnState] = useState<ConnState>(() =>
+    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'checking'
+  );
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const prevConnRef = useRef<ConnState>('checking');
+
+  const checkConnection = useCallback(async (showSpin = false) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      prevConnRef.current = 'offline';
+      setConnState('offline');
+      setLatencyMs(null);
+      return;
+    }
+    if (showSpin) setConnState('checking');
+    const res = await pingCpanelServer(5000);
+    if (res.online) {
+      const wasDown = prevConnRef.current === 'offline' || prevConnRef.current === 'server_unreachable';
+      prevConnRef.current = 'connected';
+      setConnState('connected');
+      setLatencyMs(res.latencyMs ?? null);
+      if (wasDown || showSpin) {
+        autoPushLocalKegiatanToCpanel()
+          .then(pushRes => {
+            if (pushRes && pushRes.pushedCount > 0) {
+              toast.success(pushRes.message, { duration: 5000 });
+            } else if (showSpin) {
+              toast.success(`Koneksi ke server cPanel aktif (${res.latencyMs || 0} ms)`);
+            }
+          })
+          .catch(() => {});
+      }
+    } else {
+      const nextState: ConnState = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'server_unreachable';
+      prevConnRef.current = nextState;
+      setConnState(nextState);
+      setLatencyMs(null);
+      if (showSpin) {
+        toast.warning('Server cPanel belum merespons. Data sementara tetap aman tersimpan di draft lokal.');
+      }
+    }
+  }, []);
 
   useEffect(() => {
     autoPushLocalKegiatanToCpanel().then(res => {
@@ -40,9 +87,37 @@ export default function Layout() {
         toast.success(res.message, { duration: 6000 });
       }
     }).catch(() => {});
-  }, []);
 
-  const isSuperAdmin = user?.role === 'super_admin';
+    checkConnection(false);
+
+    const handleOnline = () => checkConnection(false);
+    const handleOffline = () => {
+      prevConnRef.current = 'offline';
+      setConnState('offline');
+      setLatencyMs(null);
+    };
+    const handleFocus = () => checkConnection(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('focus', handleFocus);
+    const intervalId = window.setInterval(() => checkConnection(false), 45000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('focus', handleFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [checkConnection]);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const t = window.setTimeout(() => {
+      runAutoDailyBackupSnapshot().catch(() => {});
+    }, 5000);
+    return () => window.clearTimeout(t);
+  }, [isSuperAdmin]);
 
   const navItems = [
     ...baseNavItems,
@@ -90,6 +165,46 @@ export default function Layout() {
                 </NavLink>
               ))}
             </nav>
+
+            {/* Indikator Status Koneksi Real-Time */}
+            <button
+              onClick={() => checkConnection(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors border ${
+                connState === 'connected'
+                  ? 'bg-emerald-500/20 text-emerald-100 border-emerald-300/30 hover:bg-emerald-500/30'
+                  : connState === 'checking'
+                    ? 'bg-primary-foreground/15 text-primary-foreground border-primary-foreground/20'
+                    : connState === 'server_unreachable'
+                      ? 'bg-amber-500/25 text-amber-100 border-amber-300/40 hover:bg-amber-500/35'
+                      : 'bg-red-500/25 text-red-100 border-red-300/40 hover:bg-red-500/35'
+              }`}
+              title={
+                connState === 'connected'
+                  ? `Server cPanel MySQL terhubung (${latencyMs ?? '-'} ms). Klik untuk cek ulang.`
+                  : connState === 'checking'
+                    ? 'Memeriksa koneksi ke server cPanel...'
+                    : connState === 'server_unreachable'
+                      ? 'Internet aktif tetapi server cPanel lambat/terputus. Klik untuk coba hubungkan kembali.'
+                      : 'Perangkat sedang Offline. Ketikan tersimpan otomatis di draft lokal.'
+              }
+            >
+              {connState === 'checking' ? (
+                <RefreshCw size={12} className="animate-spin" />
+              ) : connState === 'connected' ? (
+                <Wifi size={12} className="text-emerald-300" />
+              ) : (
+                <WifiOff size={12} className={connState === 'offline' ? 'text-red-300' : 'text-amber-300'} />
+              )}
+              <span className="hidden xl:inline">
+                {connState === 'connected'
+                  ? 'Server Aktif'
+                  : connState === 'checking'
+                    ? 'Cek...'
+                    : connState === 'server_unreachable'
+                      ? 'Server Terputus'
+                      : 'Offline'}
+              </span>
+            </button>
 
             {/* Menu "Layanan AI Gemini" */}
             <button

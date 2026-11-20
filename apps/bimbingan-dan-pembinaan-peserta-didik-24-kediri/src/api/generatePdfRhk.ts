@@ -3,6 +3,7 @@ import { zite } from 'zitejs/db';
 import { createEndpoint } from 'zitejs/backend';
 import { ZitePdf } from 'zitejs/pdf';
 import { LOGO_BASE64 } from '@/lib/assets-base64';
+import { saveCpanelRiwayat } from '@/lib/cpanel-client';
 
 const LOGO_URL = LOGO_BASE64;
 
@@ -132,20 +133,25 @@ function buildDocTable(records: any[]): string {
 
 const DEFAULT_CPANEL_URL = 'https://game.gabutgame.my.id/skp/api_kegiatan.php';
 
-async function fetchCpanelForRhk(params: { tanggalMulai: string; tanggalSelesai: string; namaPelapor: string; rhkLabel: string }) {
+async function fetchCpanelForRhk(params: { tanggalMulai: string; tanggalSelesai: string; namaPelapor: string; rhkLabel: string; cpanelUrl?: string; cpanelKey?: string }) {
   try {
+    const baseUrl = params.cpanelUrl || DEFAULT_CPANEL_URL;
     const query = new URLSearchParams({
       action: 'get_kegiatan',
       tanggalMulai: params.tanggalMulai,
       tanggalSelesai: params.tanggalSelesai,
       namaPelapor: params.namaPelapor,
     });
-    const res = await fetch(`${DEFAULT_CPANEL_URL}?${query.toString()}`);
+    const targetUrl = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${query.toString()}`;
+    const headers: Record<string, string> = {};
+    if (params.cpanelKey) headers['X-API-KEY'] = params.cpanelKey;
+    const res = await fetch(targetUrl, { headers });
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.records)) {
         return data.records
           .filter((r: any) => {
+            if (r.tanggal === '1970-01-01' || r.kata_kunci_kegiatan === '__PRESET_TTD__' || r.kata_kunci_kegiatan === '__USER_ACCOUNT__' || r.kata_kunci_kegiatan === '__RIWAYAT_RHK__' || r.rhk_kategori === '__SYSTEM_CONFIG__') return false;
             const rhk = r.rhk_kategori || r.rhkKategori || '';
             return rhk.includes(params.rhkLabel);
           })
@@ -183,6 +189,8 @@ export default createEndpoint({
     tandaTangan: z.string().optional(),
     format: z.enum(['pdf', 'word']).optional(),
     deletedIds: z.array(z.string()).optional(),
+    cpanelUrl: z.string().optional(),
+    cpanelKey: z.string().optional(),
   }),
   outputSchema: z.object({ url: z.string(), id: z.string(), wordHtml: z.string(), pdfHtml: z.string(), kegiatanCount: z.number().optional() }),
   async execute({ input }) {
@@ -199,6 +207,8 @@ export default createEndpoint({
       tanggalSelesai: input.tanggalSelesai,
       namaPelapor: input.namaPelapor,
       rhkLabel,
+      cpanelUrl: input.cpanelUrl,
+      cpanelKey: input.cpanelKey,
     });
 
     const { records: localRecs } = isDeletedAll() ? { records: [] } : await zite.kegiatanHarian.findAll({
@@ -362,18 +372,32 @@ ${docTable}
     });
 
     const formatLabel = isWord ? 'WORD' : 'PDF';
+    const createdAt = new Date().toISOString();
+    const namaFile = `Laporan ${rhkLabel} - ${rhkInfo.judulLaporan} (${formatLabel})`;
     const riwayat = await zite.riwayatFile.create({
       record: {
-        namaFile: `Laporan ${rhkLabel} - ${rhkInfo.judulLaporan} (${formatLabel})`,
+        namaFile,
         jenisLaporan: 'Laporan RHK',
         namaPelapor: input.namaPelapor,
         pdfUrl: url,
-        dibuatPada: new Date().toISOString(),
+        dibuatPada: createdAt,
         tanggalMulai: input.tanggalMulai,
         tanggalSelesai: input.tanggalSelesai,
         rhkNomor: rhkLabel,
       },
     });
+
+    await saveCpanelRiwayat({
+      id: riwayat.id,
+      namaFile,
+      jenisLaporan: 'Laporan RHK',
+      namaPelapor: input.namaPelapor,
+      pdfUrl: '',
+      tanggalMulai: input.tanggalMulai,
+      tanggalSelesai: input.tanggalSelesai,
+      rhkNomor: rhkLabel,
+      dibuatPada: createdAt,
+    }).catch(() => false);
 
     return { url, id: riwayat.id, wordHtml, pdfHtml: html, kegiatanCount: records.length };
   },

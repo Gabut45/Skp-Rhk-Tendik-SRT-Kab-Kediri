@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@project/components/ui
 import { Input } from '@project/components/ui/input';
 import { Button } from '@project/components/ui/button';
 import { Label } from '@project/components/ui/label';
-import { Plus, Upload, X, Eye, Save, Loader2, PlusCircle, FileDown, Edit3 } from 'lucide-react';
+import { Plus, Upload, X, Eye, Save, Loader2, PlusCircle, FileDown, Edit3, RotateCcw, CheckCircle2 } from 'lucide-react';
 import { saveBulkKegiatan, previewHarian, generatePdfHarian, getKegiatan } from 'zitejs/api';
 import { uploadFile } from 'zitejs/upload';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
 import { setAppDeletedAll } from '@/lib/cpanel-client';
+import { saveKegiatanDraft, loadKegiatanDraft, clearKegiatanDraft } from '@/lib/draft-storage';
 
 interface EditContext {
   originTanggal: string;
@@ -88,17 +89,38 @@ export default function KegiatanHarianPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingWord, setDownloadingWord] = useState(false);
   const [quickPdf, setQuickPdf] = useState(false);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<string | null>(null);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(null);
+  const hasCheckedDraftRef = useRef(false);
+  const hasUserEditedRef = useRef(false);
   const ttdRef = useRef<HTMLInputElement>(null);
 
-  // Pick up copied kegiatan from Daftar Kegiatan or Riwayat (including Edit & Replace mode)
+  const draftUserKey = user?.username || user?.nama || 'guest';
+
+  const hasMeaningfulKegiatan = (list: KegiatanItem[]) =>
+    list.some(
+      k =>
+        Boolean(
+          k.deskripsi.trim() ||
+            k.kataKunci.trim() ||
+            k.waktuMulai.trim() ||
+            k.waktuSelesai.trim() ||
+            k.rhk.trim() ||
+            (k.photos && k.photos.length > 0)
+        )
+    );
+
+  // Pick up copied kegiatan from Daftar Kegiatan or Riwayat (including Edit & Replace mode), otherwise restore local draft
   useEffect(() => {
     const stored = sessionStorage.getItem('__copiedKegiatan');
     if (stored) {
+      hasCheckedDraftRef.current = true;
       try {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
           editContextRef.current = null;
           setEditContext(null);
+          setDraftRestoredAt(null);
           setKegiatanList(parsed as KegiatanItem[]);
           toast.success(`${parsed.length} kegiatan berhasil dimuat`);
         } else if (parsed && parsed.mode === 'edit' && Array.isArray(parsed.items) && parsed.items.length > 0) {
@@ -110,6 +132,7 @@ export default function KegiatanHarianPage() {
           };
           editContextRef.current = ctx;
           setEditContext(ctx);
+          setDraftRestoredAt(null);
           setTanggal(ctx.originTanggal);
           setNamaPelapor(ctx.originNamaPelapor);
           const matchedPel = findPelaporByNama(ctx.originNamaPelapor) || matchPelapor(ctx.originNamaPelapor);
@@ -126,8 +149,85 @@ export default function KegiatanHarianPage() {
         }
       } catch { /* ignore */ }
       sessionStorage.removeItem('__copiedKegiatan');
+      return;
     }
-  }, []);
+
+    if (!hasCheckedDraftRef.current && !editContextRef.current) {
+      hasCheckedDraftRef.current = true;
+      loadKegiatanDraft(draftUserKey)
+        .then(draft => {
+          if (
+            !hasUserEditedRef.current &&
+            !editContextRef.current &&
+            draft &&
+            Array.isArray(draft.kegiatanList) &&
+            hasMeaningfulKegiatan(draft.kegiatanList as KegiatanItem[])
+          ) {
+            if (draft.tanggal) setTanggal(draft.tanggal);
+            if (draft.namaPelapor) {
+              setNamaPelapor(draft.namaPelapor);
+              if (draft.nip) setNip(draft.nip);
+            }
+            setKegiatanList(draft.kegiatanList as KegiatanItem[]);
+            const timeLabel = draft.updatedAt
+              ? new Date(draft.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : 'sebelumnya';
+            setDraftRestoredAt(timeLabel);
+            setLastDraftSavedAt(timeLabel);
+            toast.info('Draft kegiatan yang belum tersimpan dipulihkan otomatis');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [draftUserKey]);
+
+  // Autosave draft lokal secara berkala (debounce 700ms) agar aman jika halaman refresh/putus koneksi
+  useEffect(() => {
+    if (!hasCheckedDraftRef.current) return;
+    if (editContextRef.current || editContext || saving || downloadingPdf || downloadingWord || quickPdf) return;
+
+    const timer = setTimeout(() => {
+      if (hasMeaningfulKegiatan(kegiatanList)) {
+        saveKegiatanDraft({
+          userKey: draftUserKey,
+          tanggal,
+          namaPelapor,
+          nip,
+          kegiatanList: kegiatanList.map(k => ({
+            id: k.id,
+            waktuMulai: k.waktuMulai,
+            waktuSelesai: k.waktuSelesai,
+            kataKunci: k.kataKunci,
+            deskripsi: k.deskripsi,
+            rhk: k.rhk,
+            photos: k.photos,
+            copiedPhotoUrls: k.copiedPhotoUrls,
+          })),
+          updatedAt: new Date().toISOString(),
+        }).then(() => {
+          setLastDraftSavedAt(
+            new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          );
+        });
+      } else {
+        clearKegiatanDraft(draftUserKey).then(() => {
+          setLastDraftSavedAt(null);
+        });
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [kegiatanList, tanggal, namaPelapor, nip, draftUserKey, editContext, saving, downloadingPdf, downloadingWord, quickPdf]);
+
+  const handleResetDraft = async () => {
+    await clearKegiatanDraft(draftUserKey);
+    hasUserEditedRef.current = false;
+    setDraftRestoredAt(null);
+    setLastDraftSavedAt(null);
+    setTanggal(today);
+    setKegiatanList(Array.from({ length: 4 }, createKegiatan));
+    toast.success('Form dikosongkan dan draft lokal dibersihkan');
+  };
 
   const cancelEditMode = () => {
     editContextRef.current = null;
@@ -175,10 +275,12 @@ export default function KegiatanHarianPage() {
   };
 
   const handleChange = useCallback((id: string, updates: Partial<KegiatanItem>) => {
+    hasUserEditedRef.current = true;
     setKegiatanList(prev => prev.map(k => k.id === id ? { ...k, ...updates } : k));
   }, []);
 
   const handleRemove = useCallback((id: string) => {
+    hasUserEditedRef.current = true;
     setKegiatanList(prev => prev.filter(k => k.id !== id));
   }, []);
 
@@ -411,6 +513,12 @@ export default function KegiatanHarianPage() {
 
       const updated = await syncKegiatanToCpanelAndGetUrls(filled);
 
+      if (!isEditReplace) {
+        await clearKegiatanDraft(draftUserKey);
+        setDraftRestoredAt(null);
+        setLastDraftSavedAt(null);
+      }
+
       toast.success(
         isEditReplace
           ? `Laporan berhasil diperbarui! ${updated.length} kegiatan & foto dokumentasi terbaru menggantikan data lama.`
@@ -463,6 +571,9 @@ export default function KegiatanHarianPage() {
         })),
       });
       await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, getReportFileName('pdf'));
+      await clearKegiatanDraft(draftUserKey);
+      setDraftRestoredAt(null);
+      setLastDraftSavedAt(null);
       toast.success('File PDF berhasil dibuat & diunduh, lengkap dengan foto dokumentasi!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -498,6 +609,9 @@ export default function KegiatanHarianPage() {
         })),
       });
       downloadWordFromHtml(result.wordHtml || previewWordHtml, getReportFileName('doc'));
+      await clearKegiatanDraft(draftUserKey);
+      setDraftRestoredAt(null);
+      setLastDraftSavedAt(null);
       toast.success('File Word (.doc) berhasil dibuat & diunduh, dan tersimpan di Riwayat File!');
     } catch (err: any) {
       toast.error('Gagal membuat Word: ' + (err?.message || 'Error'));
@@ -533,6 +647,9 @@ export default function KegiatanHarianPage() {
         })),
       });
       await downloadPdfFromHtml(result.pdfHtml || previewPdfHtml, getReportFileName('pdf'));
+      await clearKegiatanDraft(draftUserKey);
+      setDraftRestoredAt(null);
+      setLastDraftSavedAt(null);
       toast.success('File PDF berhasil dibuat & diunduh, lengkap dengan foto dokumentasi!');
     } catch (err: any) {
       toast.error('Gagal membuat PDF: ' + (err?.message || 'Error'));
@@ -546,9 +663,17 @@ export default function KegiatanHarianPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-foreground">Input Kegiatan Harian</h2>
-          <p className="text-sm text-muted-foreground">
-            Catat kegiatan harian — {kegiatanList.length} kegiatan
-          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm text-muted-foreground">
+              Catat kegiatan harian — {kegiatanList.length} kegiatan
+            </p>
+            {lastDraftSavedAt && !editContext && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-2 py-0.5">
+                <CheckCircle2 size={11} />
+                Draft tersimpan otomatis pukul {lastDraftSavedAt}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button onClick={handleQuickPdf} disabled={quickPdf} variant="outline" size="sm" className="gap-2">
@@ -565,6 +690,24 @@ export default function KegiatanHarianPage() {
           </Button>
         </div>
       </div>
+
+      {draftRestoredAt && !editContext && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-4 py-2.5 text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <p className="text-xs">
+            <strong>Draft Lokal Dipulihkan ({draftRestoredAt}):</strong> Ketikan & foto yang belum sempat disimpan ke server aman tersimpan di perangkat ini.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleResetDraft}
+            className="shrink-0 h-7 text-xs gap-1.5 border-emerald-300 bg-white hover:bg-emerald-100 text-emerald-900"
+          >
+            <RotateCcw size={12} />
+            Reset Form Kosong
+          </Button>
+        </div>
+      )}
 
       {editContext && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -606,7 +749,7 @@ export default function KegiatanHarianPage() {
           </div>
           <div className="space-y-2">
             <Label>Tanggal</Label>
-            <Input type="date" value={tanggal} onChange={e => setTanggal(e.target.value)} />
+            <Input type="date" value={tanggal} onChange={e => { hasUserEditedRef.current = true; setTanggal(e.target.value); }} />
           </div>
           <div className="space-y-2">
             <Label>Tanda Tangan</Label>
