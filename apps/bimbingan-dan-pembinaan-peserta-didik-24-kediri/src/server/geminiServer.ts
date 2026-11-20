@@ -309,6 +309,9 @@ export async function handleStreamTextServer(
  */
 export function setupGeminiLiveWebSocket(server: any, path = '/api/gemini/live'): WebSocketServer {
   const wss = new WebSocketServer({ server, path });
+  wss.on('error', (err) => {
+    console.error('[Gemini Live WebSocket Server Error]:', err);
+  });
 
   wss.on('connection', async (clientWs: WebSocket) => {
     if (!hasValidGeminiKey()) {

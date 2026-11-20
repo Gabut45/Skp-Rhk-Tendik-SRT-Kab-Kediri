@@ -32,12 +32,16 @@ try {
 }
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(bodyParser.json({ limit: '25mb' }));
 app.use(bodyParser.urlencoded({ limit: '25mb', extended: true }));
 
-// Health check
+// Cloud Run & API health checks
+app.get(['/health', '/healthz'], (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.get('/api/gemini/health', (_req, res) => {
   const keyValid = hasValidGeminiKey();
   res.json({
@@ -57,7 +61,11 @@ app.get('/api/proxy-image', async (req, res) => {
       return;
     }
 
-    const response = await fetch(targetUrl);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(targetUrl, { signal: controller.signal }).finally(() =>
+      clearTimeout(timeoutId)
+    );
     if (!response.ok) {
       res.status(response.status).send(`Failed to fetch image: ${response.statusText}`);
       return;
@@ -144,17 +152,44 @@ app.post('/api/gemini/stream', async (req, res) => {
   }
 });
 
-// Serve built frontend assets
-const distPath = path.resolve(__dirname, 'apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/dist');
+// Serve built frontend assets (support both workspace dist and root dist)
+const candidateDistPaths = [
+  path.resolve(__dirname, 'apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/dist'),
+  path.resolve(__dirname, 'dist'),
+  path.resolve(process.cwd(), 'apps/bimbingan-dan-pembinaan-peserta-didik-24-kediri/dist'),
+  path.resolve(process.cwd(), 'dist'),
+];
+const distPath =
+  candidateDistPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) ||
+  candidateDistPaths[0];
+
 app.use(express.static(distPath));
 
-app.get('*', (_req, res) => {
-  res.sendFile(path.resolve(distPath, 'index.html'));
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    next();
+    return;
+  }
+  const indexFile = path.resolve(distPath, 'index.html');
+  if (!fs.existsSync(indexFile)) {
+    res.status(503).send('Application build not found.');
+    return;
+  }
+  res.sendFile(indexFile, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).send('Failed to serve application.');
+    }
+  });
 });
 
 const server = http.createServer(app);
 setupGeminiLiveWebSocket(server);
 
+server.on('error', (err) => {
+  console.error('[Production Full-Stack Server] HTTP Server Error:', err);
+  process.exit(1);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Production Full-Stack Server] Running on http://0.0.0.0:${PORT}`);
+  console.log(`[Production Full-Stack Server] Running on http://0.0.0.0:${PORT} (dist: ${distPath})`);
 });
