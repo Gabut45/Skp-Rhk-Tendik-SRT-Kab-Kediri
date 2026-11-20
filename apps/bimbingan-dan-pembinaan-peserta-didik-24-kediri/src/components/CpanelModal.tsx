@@ -237,6 +237,128 @@ function saveBase64ToFile($base64Data, $subfolder = 'uploads') {
     return $base64Data;
 }
 
+// Duplikasi file fisik foto yang sudah ada di folder uploads/ menjadi file baru yang berdiri sendiri
+function cloneExistingFileUrl($fileUrl, $subfolder = 'uploads') {
+    if (empty($fileUrl) || !is_string($fileUrl)) return $fileUrl;
+    $trimmed = trim($fileUrl);
+    if (!$trimmed || strpos($trimmed, 'data:') === 0) return $fileUrl;
+
+    $parsedPath = parse_url($trimmed, PHP_URL_PATH);
+    if (!$parsedPath) $parsedPath = $trimmed;
+
+    $pos = strpos($parsedPath, '/uploads/');
+    if ($pos !== false) {
+        $rel = substr($parsedPath, $pos + 1);
+    } elseif (strpos($parsedPath, 'uploads/') === 0) {
+        $rel = $parsedPath;
+    } else {
+        return $fileUrl;
+    }
+    if (strpos($rel, '..') !== false) return $fileUrl;
+
+    $sourcePath = __DIR__ . '/' . $rel;
+    if (!is_file($sourcePath)) return $fileUrl;
+
+    $yearMonth = date('Y/m');
+    $targetDir = __DIR__ . '/' . $subfolder . '/' . $yearMonth;
+    if (!is_dir($targetDir)) {
+        @mkdir($targetDir, 0755, true);
+    }
+
+    $htPath = __DIR__ . '/uploads/.htaccess';
+    if (!file_exists($htPath)) {
+        $htData = "<IfModule mod_headers.c>\\n    Header set Access-Control-Allow-Origin *\\n    Header set Access-Control-Allow-Methods GET,OPTIONS\\n</IfModule>\\n";
+        @file_put_contents($htPath, $htData);
+    }
+
+    $ext = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'])) {
+        $ext = 'jpg';
+    }
+
+    $fileName = 'foto_' . date('Ymd_His') . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $destPath = $targetDir . '/' . $fileName;
+
+    if (@copy($sourcePath, $destPath)) {
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+        $protocol = $isHttps ? 'https://' : 'http://';
+        $host = $_SERVER['HTTP_HOST'];
+        $rawDir = dirname($_SERVER['SCRIPT_NAME']);
+        $cleanDir = str_replace(chr(92), '/', $rawDir);
+        $scriptDir = ($cleanDir === '/' || $cleanDir === '.') ? '' : rtrim($cleanDir, '/');
+        return $protocol . $host . $scriptDir . '/' . $subfolder . '/' . $yearMonth . '/' . $fileName;
+    }
+
+    return $fileUrl;
+}
+
+// Helper: Ekstrak path relatif uploads/... dari URL/string file
+function extractUploadsRelPath($fileUrl) {
+    if (!$fileUrl || !is_string($fileUrl)) return '';
+    $trimmed = trim($fileUrl);
+    if (!$trimmed || strpos($trimmed, 'data:') === 0) return '';
+    $parsedPath = parse_url($trimmed, PHP_URL_PATH);
+    if (!$parsedPath) $parsedPath = $trimmed;
+    $pos = strpos($parsedPath, '/uploads/');
+    if ($pos !== false) {
+        $rel = substr($parsedPath, $pos + 1); // uploads/...
+    } elseif (strpos($parsedPath, 'uploads/') === 0) {
+        $rel = $parsedPath;
+    } else {
+        return '';
+    }
+    if (strpos($rel, '..') !== false) return '';
+    return $rel;
+}
+
+function collectUrlsFromColumn($fotoCol, &$collector) {
+    if (!$fotoCol) return;
+    $decoded = json_decode($fotoCol, true);
+    if (is_array($decoded)) {
+        foreach ($decoded as $u) {
+            $url = is_string($u) ? $u : ($u['url'] ?? '');
+            if ($url) $collector[] = $url;
+        }
+    } elseif (is_string($fotoCol)) {
+        $collector[] = $fotoCol;
+    }
+}
+
+// Hapus file fisik HANYA jika tidak ada satupun baris lain di database yang masih mereferensikan file tersebut
+function safeDeleteUnusedFiles($pdo, $urls) {
+    if (empty($urls) || !is_array($urls)) return;
+    $uniqueRels = [];
+    foreach ($urls as $u) {
+        $rel = extractUploadsRelPath($u);
+        if ($rel !== '') {
+            $uniqueRels[$rel] = true;
+        }
+    }
+    foreach (array_keys($uniqueRels) as $rel) {
+        $usedInKeg = 0;
+        $usedInRiw = 0;
+        try {
+            $chkKeg = $pdo->prepare("SELECT COUNT(*) FROM kegiatan_harian WHERE INSTR(foto_kegiatan, :rel) > 0 OR INSTR(tanda_tangan, :rel) > 0");
+            $chkKeg->execute([':rel' => $rel]);
+            $usedInKeg = intval($chkKeg->fetchColumn());
+        } catch (Exception $e) {
+            $usedInKeg = 1; // gagal cek -> jangan hapus demi keamanan
+        }
+        try {
+            $chkRiw = $pdo->prepare("SELECT COUNT(*) FROM riwayat_file WHERE INSTR(pdf_url, :rel) > 0");
+            $chkRiw->execute([':rel' => $rel]);
+            $usedInRiw = intval($chkRiw->fetchColumn());
+        } catch (Exception $e) {}
+
+        if ($usedInKeg === 0 && $usedInRiw === 0) {
+            $fullPath = __DIR__ . '/' . $rel;
+            if (is_file($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
+    }
+}
+
 // ==========================================
 // 3. HANDLER REQUEST
 // ==========================================
@@ -370,7 +492,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $params['pelapor'] = $pelapor;
         }
 
-        $sql .= " ORDER BY tanggal ASC, waktu_mulai ASC LIMIT 500";
+        $hasUrutan = false;
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            $hasUrutan = !empty($colCheck);
+        } catch (Exception $e) {}
+
+        $sql .= $hasUrutan
+            ? " ORDER BY tanggal DESC, COALESCE(urutan, 999999) ASC, id_kegiatan ASC"
+            : " ORDER BY tanggal DESC, id_kegiatan ASC";
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll();
@@ -468,19 +598,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // Handler Duplikasi File Fisik Foto (untuk Fitur Salin Kegiatan agar foto berdiri sendiri)
+    if ($action === 'clone_foto') {
+        $subfolder = !empty($data['subfolder']) ? $data['subfolder'] : 'uploads';
+        $urlSingle = $data['url'] ?? ($data['foto'] ?? '');
+        $urlsBatch = $data['urls'] ?? null;
+
+        if (is_array($urlsBatch)) {
+            $clonedList = [];
+            foreach ($urlsBatch as $u) {
+                $clonedList[] = cloneExistingFileUrl($u, $subfolder);
+            }
+            echo json_encode([
+                'success' => true,
+                'urls' => $clonedList,
+            ]);
+            exit;
+        }
+
+        if (!empty($urlSingle)) {
+            $clonedUrl = cloneExistingFileUrl($urlSingle, $subfolder);
+            echo json_encode([
+                'success' => true,
+                'url' => $clonedUrl,
+            ]);
+            exit;
+        }
+
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'URL foto kosong']);
+        exit;
+    }
+
     if (!$data) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Data JSON tidak valid']);
         exit;
     }
 
-    // Aksi: Simpan Kegiatan Batch / Single
+    // Aksi: Simpan Kegiatan Batch / Single (mendukung Mode Replace untuk Edit Riwayat)
     if ($action === 'save_bulk' || isset($data['kegiatan'])) {
         $namaPelapor = $data['namaPelapor'] ?? '';
         $nip = $data['nip'] ?? '';
         $tanggal = $data['tanggal'] ?? date('Y-m-d');
         $unitKerja = $data['unitKerja'] ?? 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI';
         $items = $data['kegiatan'] ?? [];
+
+        $replaceExisting = !empty($data['replaceExisting']) || !empty($data['replaceMode']);
+        $origTanggal = !empty($data['replaceOriginTanggal']) ? $data['replaceOriginTanggal'] : $tanggal;
+        $origPelapor = !empty($data['replaceOriginNamaPelapor']) ? $data['replaceOriginNamaPelapor'] : $namaPelapor;
+        $origIds = (!empty($data['replaceOriginIds']) && is_array($data['replaceOriginIds'])) ? array_values(array_filter($data['replaceOriginIds'])) : [];
 
         // Simpan Tanda Tangan ke file di folder uploads/ttd/ jika format base64
         $processedTtd = null;
@@ -489,31 +656,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $processedTtd = json_encode([['url' => $ttdUrl]]);
         }
 
-        $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
-            (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja)
-            VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit)
-            ON DUPLICATE KEY UPDATE 
-            deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
-            rhk_kategori = VALUES(rhk_kategori),
-            foto_kegiatan = VALUES(foto_kegiatan)");
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            if (empty($colCheck)) {
+                $pdo->exec("ALTER TABLE kegiatan_harian ADD COLUMN urutan INT NULL DEFAULT NULL");
+            }
+        } catch (Exception $e) {}
 
-        $savedCount = 0;
-        foreach ($items as $it) {
+        $hasUrutan = false;
+        try {
+            $colCheck = $pdo->query("SHOW COLUMNS FROM kegiatan_harian LIKE 'urutan'")->fetch();
+            $hasUrutan = !empty($colCheck);
+        } catch (Exception $e) {}
+
+        // 1. Proses & upload/clone semua foto item baru TERLEBIH DAHULU sebelum menghapus data lama
+        $preparedItems = [];
+        foreach ($items as $idx => $it) {
             $id = $it['id'] ?? uniqid('keg_', true);
             $processedPhotos = [];
+            $plainUrls = [];
             if (!empty($it['fotoKegiatan']) && is_array($it['fotoKegiatan'])) {
+                $cloneAllItemPhotos = !empty($it['clonePhotos']);
                 foreach ($it['fotoKegiatan'] as $photo) {
                     $u = is_string($photo) ? $photo : ($photo['url'] ?? '');
+                    $shouldClone = $cloneAllItemPhotos || (is_array($photo) && !empty($photo['clone']));
                     if (!empty($u)) {
-                        $savedUrl = saveBase64ToFile($u, 'uploads');
+                        $savedUrl = $shouldClone
+                            ? cloneExistingFileUrl($u, 'uploads')
+                            : saveBase64ToFile($u, 'uploads');
                         $processedPhotos[] = ['url' => $savedUrl];
+                        $plainUrls[] = $savedUrl;
                     }
                 }
             }
-            $fotoJson = json_encode($processedPhotos);
+            $preparedItems[] = [
+                'id' => $id,
+                'idx' => $idx,
+                'it' => $it,
+                'fotoJson' => json_encode($processedPhotos),
+                'plainUrls' => $plainUrls,
+            ];
+        }
 
-            $stmt->execute([
-                ':id' => $id,
+        // 2. Jika Mode Edit/Replace: kumpulkan foto lama dan hapus seluruh baris kegiatan lama untuk tanggal & pelapor asal
+        $oldCandidateUrls = [];
+        if ($replaceExisting && !empty($origTanggal) && !empty($origPelapor) && $origTanggal !== '1970-01-01') {
+            $selOld = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
+            $selOld->execute([':tgl' => $origTanggal, ':pelapor' => $origPelapor]);
+            while ($rOld = $selOld->fetch(PDO::FETCH_ASSOC)) {
+                collectUrlsFromColumn($rOld['foto_kegiatan'] ?? '', $oldCandidateUrls);
+            }
+
+            if (!empty($origIds)) {
+                $inClause = implode(',', array_fill(0, count($origIds), '?'));
+                $selById = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id IN ($inClause) AND COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
+                $selById->execute($origIds);
+                while ($rId = $selById->fetch(PDO::FETCH_ASSOC)) {
+                    collectUrlsFromColumn($rId['foto_kegiatan'] ?? '', $oldCandidateUrls);
+                }
+            }
+
+            $delOld = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
+            $delOld->execute([':tgl' => $origTanggal, ':pelapor' => $origPelapor]);
+
+            if (!empty($origIds)) {
+                $inClause = implode(',', array_fill(0, count($origIds), '?'));
+                $delById = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause) AND COALESCE(kata_kunci_kegiatan, '') NOT IN ('__PRESET_TTD__', '__USER_ACCOUNT__') AND COALESCE(rhk_kategori, '') != '__SYSTEM_CONFIG__'");
+                $delById->execute($origIds);
+            }
+
+            // Bersihkan entri riwayat_file Kinerja Harian lama jika ada
+            try {
+                $selRiw = $pdo->prepare("SELECT pdf_url FROM riwayat_file WHERE jenis_laporan = 'Kinerja Harian' AND (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
+                $selRiw->execute([':tgl' => $origTanggal, ':pelapor' => $origPelapor]);
+                while ($rRiw = $selRiw->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($rRiw['pdf_url'])) $oldCandidateUrls[] = $rRiw['pdf_url'];
+                }
+                $delRiw = $pdo->prepare("DELETE FROM riwayat_file WHERE jenis_laporan = 'Kinerja Harian' AND (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
+                $delRiw->execute([':tgl' => $origTanggal, ':pelapor' => $origPelapor]);
+            } catch (Exception $e) {}
+        }
+
+        if ($hasUrutan) {
+            $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
+                (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja, urutan)
+                VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit, :urutan)
+                ON DUPLICATE KEY UPDATE 
+                nama_pelapor = VALUES(nama_pelapor),
+                nip = VALUES(nip),
+                tanggal = VALUES(tanggal),
+                waktu_mulai = VALUES(waktu_mulai),
+                waktu_selesai = VALUES(waktu_selesai),
+                kata_kunci_kegiatan = VALUES(kata_kunci_kegiatan),
+                deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
+                rhk_kategori = VALUES(rhk_kategori),
+                foto_kegiatan = VALUES(foto_kegiatan),
+                tanda_tangan = COALESCE(VALUES(tanda_tangan), tanda_tangan),
+                unit_kerja = VALUES(unit_kerja),
+                urutan = VALUES(urutan)");
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO kegiatan_harian 
+                (id, nama_pelapor, nip, tanggal, waktu_mulai, waktu_selesai, kata_kunci_kegiatan, deskripsi_kegiatan, rhk_kategori, foto_kegiatan, tanda_tangan, unit_kerja)
+                VALUES (:id, :nama, :nip, :tanggal, :mulai, :selesai, :kunci, :deskripsi, :rhk, :foto, :ttd, :unit)
+                ON DUPLICATE KEY UPDATE 
+                nama_pelapor = VALUES(nama_pelapor),
+                nip = VALUES(nip),
+                tanggal = VALUES(tanggal),
+                waktu_mulai = VALUES(waktu_mulai),
+                waktu_selesai = VALUES(waktu_selesai),
+                kata_kunci_kegiatan = VALUES(kata_kunci_kegiatan),
+                deskripsi_kegiatan = VALUES(deskripsi_kegiatan),
+                rhk_kategori = VALUES(rhk_kategori),
+                foto_kegiatan = VALUES(foto_kegiatan),
+                tanda_tangan = COALESCE(VALUES(tanda_tangan), tanda_tangan),
+                unit_kerja = VALUES(unit_kerja)");
+        }
+
+        $savedCount = 0;
+        foreach ($preparedItems as $pItem) {
+            $it = $pItem['it'];
+            $execParams = [
+                ':id' => $pItem['id'],
                 ':nama' => $namaPelapor,
                 ':nip' => $nip,
                 ':tanggal' => $tanggal,
@@ -522,17 +785,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':kunci' => $it['kataKunciKegiatan'] ?? '',
                 ':deskripsi' => $it['deskripsiKegiatan'] ?? '',
                 ':rhk' => $it['rhkKategori'] ?? 'RHK 3',
-                ':foto' => $fotoJson,
+                ':foto' => $pItem['fotoJson'],
                 ':ttd' => $processedTtd,
                 ':unit' => $unitKerja
-            ]);
+            ];
+            if ($hasUrutan) {
+                $execParams[':urutan'] = isset($it['urutan']) ? intval($it['urutan']) : $pItem['idx'];
+            }
+            $stmt->execute($execParams);
             $savedCount++;
+        }
+
+        // 3. Setelah data baru masuk ke database, hapus foto lama di File Manager yang sudah tidak dipakai baris mana pun
+        if ($replaceExisting && !empty($oldCandidateUrls)) {
+            safeDeleteUnusedFiles($pdo, $oldCandidateUrls);
         }
 
         echo json_encode([
             'success' => true,
             'message' => "$savedCount kegiatan berhasil disimpan ke MySQL cPanel!",
-            'count' => $savedCount
+            'count' => $savedCount,
+            'replaced' => $replaceExisting,
+            'savedItems' => array_map(function($p) {
+                return ['id' => $p['id'], 'fotoKegiatan' => $p['plainUrls']];
+            }, $preparedItems),
         ]);
         exit;
     }
@@ -570,7 +846,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit;
     }
-    // Aksi: Hapus Kegiatan (Permanen Selamanya)
+    // Aksi: Hapus Kegiatan (Permanen Selamanya + Hapus File Fisik Jika Tidak Dipakai Baris Lain)
     if ($action === 'delete_kegiatan') {
         $delId = $data['id'] ?? ($_GET['id'] ?? '');
         $delNum = $data['id_numeric'] ?? null;
@@ -582,30 +858,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
         $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
+        $candidateUrls = [];
+
         if ($deleteAll) {
+            $q = $pdo->query("SELECT foto_kegiatan FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
+            while ($r = $q->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $pdo->exec("DELETE FROM kegiatan_harian WHERE kata_kunci_kegiatan != '__PRESET_TTD__'");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id IN ($inClause)");
+            $sel->execute($delIds);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
             $numVal = $delNum ?? (is_numeric($delId) ? $delId : 0);
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
+            $sel->execute([':id' => $delId, ':num' => $numVal]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE id = :id OR id_kegiatan = :num");
             $stmt->execute([':id' => $delId, ':num' => $numVal]);
         }
-        if ($waktuMulai && $tgl && $pelapor) {
+        if ($waktuMulai && $tgl && $pelapor && empty($delId) && empty($delIds)) {
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
+            $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor AND (waktu_mulai = :wm OR waktu_mulai LIKE :wmp)");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor, ':wm' => $waktuMulai, ':wmp' => "$waktuMulai%"]);
-        } elseif ($tgl && $pelapor && empty($delId)) {
+        } elseif ($tgl && $pelapor && empty($delId) && empty($delIds)) {
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
+            $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal = :tgl AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
-        if ($tglMulai && $tglSelesai && $pelapor && empty($delId)) {
+        if ($tglMulai && $tglSelesai && $pelapor && empty($delId) && empty($delIds)) {
+            $sel = $pdo->prepare("SELECT foto_kegiatan FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
+            $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
+            while ($r = $sel->fetch(PDO::FETCH_ASSOC)) collectUrlsFromColumn($r['foto_kegiatan'] ?? '', $candidateUrls);
             $stmt = $pdo->prepare("DELETE FROM kegiatan_harian WHERE tanggal >= :tm AND tanggal <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
+
+        safeDeleteUnusedFiles($pdo, $candidateUrls);
+
         echo json_encode([
             'success' => true,
             'message' => 'Kegiatan berhasil dihapus secara permanen dari cPanel MySQL!'
@@ -613,7 +911,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    // Aksi: Hapus Riwayat File (Permanen Selamanya)
+    // Aksi: Hapus Riwayat File (Permanen Selamanya + Hapus File Fisik Jika Tidak Dipakai Baris Lain)
     if ($action === 'delete_riwayat') {
         $delId = $data['id'] ?? ($_GET['id'] ?? '');
         $delIds = $data['ids'] ?? [];
@@ -623,26 +921,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pelapor = $data['namaPelapor'] ?? ($data['nama_pelapor'] ?? ($_GET['namaPelapor'] ?? null));
         $deleteAll = !empty($data['delete_all']) || !empty($data['deleteAll']);
 
+        $candidateUrls = [];
+
         if ($deleteAll) {
+            try {
+                $q = $pdo->query("SELECT pdf_url FROM riwayat_file");
+                while ($r = $q->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($r['pdf_url'])) $candidateUrls[] = $r['pdf_url'];
+                }
+            } catch (Exception $e) {}
             $pdo->exec("DELETE FROM riwayat_file");
         }
         if (!empty($delIds) && is_array($delIds)) {
             $inClause = implode(',', array_fill(0, count($delIds), '?'));
+            try {
+                $sel = $pdo->prepare("SELECT pdf_url FROM riwayat_file WHERE id IN ($inClause)");
+                $sel->execute($delIds);
+                while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($r['pdf_url'])) $candidateUrls[] = $r['pdf_url'];
+                }
+            } catch (Exception $e) {}
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id IN ($inClause)");
             $stmt->execute($delIds);
         }
         if ($delId) {
+            try {
+                $sel = $pdo->prepare("SELECT pdf_url FROM riwayat_file WHERE id = :id");
+                $sel->execute([':id' => $delId]);
+                while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($r['pdf_url'])) $candidateUrls[] = $r['pdf_url'];
+                }
+            } catch (Exception $e) {}
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE id = :id");
             $stmt->execute([':id' => $delId]);
         }
         if ($tgl && $pelapor) {
+            try {
+                $sel = $pdo->prepare("SELECT pdf_url FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
+                $sel->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
+                while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($r['pdf_url'])) $candidateUrls[] = $r['pdf_url'];
+                }
+            } catch (Exception $e) {}
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE (tanggal_mulai = :tgl OR tanggal_selesai = :tgl) AND nama_pelapor = :pelapor");
             $stmt->execute([':tgl' => $tgl, ':pelapor' => $pelapor]);
         }
         if ($tglMulai && $tglSelesai && $pelapor) {
+            try {
+                $sel = $pdo->prepare("SELECT pdf_url FROM riwayat_file WHERE tanggal_mulai >= :tm AND tanggal_selesai <= :ts AND nama_pelapor = :pelapor");
+                $sel->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
+                while ($r = $sel->fetch(PDO::FETCH_ASSOC)) {
+                    if (!empty($r['pdf_url'])) $candidateUrls[] = $r['pdf_url'];
+                }
+            } catch (Exception $e) {}
             $stmt = $pdo->prepare("DELETE FROM riwayat_file WHERE tanggal_mulai >= :tm AND tanggal_selesai <= :ts AND nama_pelapor = :pelapor");
             $stmt->execute([':tm' => $tglMulai, ':ts' => $tglSelesai, ':pelapor' => $pelapor]);
         }
+
+        safeDeleteUnusedFiles($pdo, $candidateUrls);
+
         echo json_encode([
             'success' => true,
             'message' => 'Riwayat file berhasil dihapus secara permanen dari cPanel MySQL!'

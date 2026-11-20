@@ -12,6 +12,10 @@ export default createEndpoint({
     tandaTangan: z.string().optional(),
     cpanelUrl: z.string().optional(),
     cpanelKey: z.string().optional(),
+    replaceExisting: z.boolean().optional(),
+    replaceOriginTanggal: z.string().optional(),
+    replaceOriginNamaPelapor: z.string().optional(),
+    replaceOriginIds: z.array(z.string()).optional(),
     kegiatan: z.array(z.object({
       id: z.string().optional(),
       waktuMulai: z.string(),
@@ -28,6 +32,7 @@ export default createEndpoint({
     success: z.boolean(),
     count: z.number(),
     cpanelSynced: z.boolean().optional(),
+    replaced: z.boolean().optional(),
     message: z.string().optional(),
     savedItems: z.array(z.object({
       id: z.string(),
@@ -38,6 +43,7 @@ export default createEndpoint({
     setDeletedAll(false);
     const cpanelUrl = input.cpanelUrl || DEFAULT_CPANEL_URL;
     const targetUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=save_bulk`;
+    const deleteUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=delete_kegiatan`;
     const uploadPhotoUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=upload_foto`;
     const clonePhotoUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=clone_foto`;
     const getImageUrl = `${cpanelUrl}${cpanelUrl.includes('?') ? '&' : '?'}action=get_image`;
@@ -172,44 +178,66 @@ export default createEndpoint({
       });
     }
 
-    // 3. Simpan ke server cPanel MySQL secara aman per item/chunk
+    // 3. Simpan ke server cPanel MySQL
     let cpanelSynced = false;
     let savedCpanelCount = 0;
+    let serverReplaced = false;
     let syncError: string | null = null;
+    const isReplaceMode = Boolean(input.replaceExisting);
+    const origTanggal = input.replaceOriginTanggal || input.tanggal;
+    const origPelapor = input.replaceOriginNamaPelapor || input.namaPelapor;
+    const origIds = input.replaceOriginIds || [];
 
     try {
-      for (let i = 0; i < preparedKegiatan.length; i++) {
-        const item = preparedKegiatan[i];
-        const chunkPayload = {
+      if (isReplaceMode) {
+        // Mode Edit & Replace: kirim seluruh list dalam 1 request atomik agar server mengganti seluruh baris lama + membersihkan foto lama yang tidak dipakai lagi
+        const replacePayload = {
           namaPelapor: input.namaPelapor,
           nip: input.nip,
           tanggal: input.tanggal,
           tandaTangan: finalTtd,
           unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
-          kegiatan: [{
+          replaceExisting: true,
+          replaceOriginTanggal: origTanggal,
+          replaceOriginNamaPelapor: origPelapor,
+          replaceOriginIds: origIds,
+          kegiatan: preparedKegiatan.map((item) => ({
             ...item,
-            fotoKegiatan: item.fotoKegiatan.length > 0 ? item.fotoKegiatan : undefined,
-          }],
+            fotoKegiatan: item.fotoKegiatan,
+          })),
         };
 
-        let itemSuccess = false;
         let lastErr = '';
-
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const res = await fetch(targetUrl, {
               method: 'POST',
               headers,
-              body: JSON.stringify(chunkPayload),
+              body: JSON.stringify(replacePayload),
             });
 
             if (res.ok) {
               const json = await res.json();
               if (json.success) {
-                itemSuccess = true;
+                savedCpanelCount = preparedKegiatan.length;
+                cpanelSynced = true;
+                serverReplaced = Boolean(json.replaced);
+
+                // Fallback kompatibilitas jika server cPanel masih menjalankan api_kegiatan.php versi lama (belum mendukung flag replaceExisting)
+                if (!serverReplaced) {
+                  const newIdSet = new Set(preparedKegiatan.map(k => k.id));
+                  const removedIds = origIds.filter(id => !newIdSet.has(id));
+                  if (removedIds.length > 0) {
+                    await fetch(deleteUrl, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify({ ids: removedIds }),
+                    }).catch(() => {});
+                  }
+                }
                 break;
               } else {
-                lastErr = json.message || 'Server MySQL menolak penyimpanan';
+                lastErr = json.message || 'Server MySQL menolak pembaruan';
               }
             } else {
               lastErr = `HTTP ${res.status}: ${res.statusText}`;
@@ -220,22 +248,109 @@ export default createEndpoint({
           await new Promise(r => setTimeout(r, 200));
         }
 
-        if (itemSuccess) {
-          savedCpanelCount++;
-        } else {
-          syncError = `Kegiatan ke-${i + 1} (${item.waktuMulai}): ${lastErr}`;
+        if (!cpanelSynced && lastErr) {
+          syncError = lastErr;
         }
-      }
+      } else {
+        // Mode Input / Salin Baru: simpan per item/chunk agar tahan limit request
+        for (let i = 0; i < preparedKegiatan.length; i++) {
+          const item = preparedKegiatan[i];
+          const chunkPayload = {
+            namaPelapor: input.namaPelapor,
+            nip: input.nip,
+            tanggal: input.tanggal,
+            tandaTangan: finalTtd,
+            unitKerja: 'SEKOLAH RAKYAT TERINTEGRASI 1 KAB. KEDIRI',
+            kegiatan: [{
+              ...item,
+              fotoKegiatan: item.fotoKegiatan,
+            }],
+          };
 
-      cpanelSynced = (savedCpanelCount === preparedKegiatan.length);
+          let itemSuccess = false;
+          let lastErr = '';
+
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const res = await fetch(targetUrl, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(chunkPayload),
+              });
+
+              if (res.ok) {
+                const json = await res.json();
+                if (json.success) {
+                  itemSuccess = true;
+                  break;
+                } else {
+                  lastErr = json.message || 'Server MySQL menolak penyimpanan';
+                }
+              } else {
+                lastErr = `HTTP ${res.status}: ${res.statusText}`;
+              }
+            } catch (e: any) {
+              lastErr = e.message || 'Koneksi ke server terputus';
+            }
+            await new Promise(r => setTimeout(r, 200));
+          }
+
+          if (itemSuccess) {
+            savedCpanelCount++;
+          } else {
+            syncError = `Kegiatan ke-${i + 1} (${item.waktuMulai}): ${lastErr}`;
+          }
+        }
+
+        cpanelSynced = (savedCpanelCount === preparedKegiatan.length);
+      }
     } catch (err: any) {
       console.warn('[saveBulkKegiatan] cPanel sync warning:', err);
       syncError = err.message || 'Gagal tersambung ke server';
     }
 
-    // 4. Sinkronkan juga mirror lokal
+    // 4. Sinkronkan juga mirror lokal (hapus data lama dulu agar tidak menumpuk/duplikat saat Edit)
     if (cpanelSynced || savedCpanelCount > 0) {
       try {
+        const newIdSet = new Set(preparedKegiatan.map(k => k.id));
+        const origIdSet = new Set(origIds);
+
+        const { records: existingLocalKeg } = await zite.kegiatanHarian.findAll({ limit: 1000 });
+        for (const r of existingLocalKeg) {
+          if (
+            r.tanggal === '1970-01-01' ||
+            r.kataKunciKegiatan === '__PRESET_TTD__' ||
+            r.kataKunciKegiatan === '__USER_ACCOUNT__' ||
+            r.rhkKategori === '__SYSTEM_CONFIG__'
+          ) {
+            continue;
+          }
+          const matchesId = newIdSet.has(r.id) || (isReplaceMode && origIdSet.has(r.id));
+          const matchesOrigGroup =
+            isReplaceMode &&
+            ((r.tanggal === origTanggal && r.namaPelapor === origPelapor) ||
+              (r.tanggal === input.tanggal && r.namaPelapor === input.namaPelapor));
+          if (matchesId || matchesOrigGroup) {
+            await zite.kegiatanHarian.delete({ id: r.id }).catch(() => {});
+          }
+        }
+
+        if (isReplaceMode) {
+          const { records: existingLocalRiw } = await zite.riwayatFile.findAll({ limit: 500 });
+          for (const r of existingLocalRiw) {
+            if (r.jenisLaporan !== 'Kinerja Harian') continue;
+            const matchOrig =
+              r.namaPelapor === origPelapor &&
+              (r.tanggalMulai === origTanggal || r.tanggalSelesai === origTanggal);
+            const matchNew =
+              r.namaPelapor === input.namaPelapor &&
+              (r.tanggalMulai === input.tanggal || r.tanggalSelesai === input.tanggal);
+            if (matchOrig || matchNew) {
+              await zite.riwayatFile.delete({ id: r.id }).catch(() => {});
+            }
+          }
+        }
+
         await zite.kegiatanHarian.bulkCreate({
           records: preparedKegiatan.map((k, idx) => ({
             id: k.id,
@@ -263,12 +378,15 @@ export default createEndpoint({
       success: isSuccess,
       count: savedCpanelCount,
       cpanelSynced,
+      replaced: serverReplaced,
       savedItems: preparedKegiatan.map(k => ({
         id: k.id,
         fotoKegiatan: k.fotoKegiatan,
       })),
       message: cpanelSynced
-        ? `${savedCpanelCount} kegiatan & seluruh foto dokumentasi berhasil tersimpan permanen di Database Server cPanel!`
+        ? isReplaceMode
+          ? `${savedCpanelCount} kegiatan & dokumentasi terbaru berhasil menggantikan laporan lama secara permanen!`
+          : `${savedCpanelCount} kegiatan & seluruh foto dokumentasi berhasil tersimpan permanen di Database Server cPanel!`
         : (savedCpanelCount > 0
             ? `${savedCpanelCount} dari ${preparedKegiatan.length} kegiatan tersimpan di cPanel (${syncError})`
             : `Gagal menyimpan ke Database Server cPanel: ${syncError || 'Koneksi ke server cPanel gagal'}`),

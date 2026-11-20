@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@project/compo
 import { Label } from '@project/components/ui/label';
 import { Textarea } from '@project/components/ui/textarea';
 import { Input } from '@project/components/ui/input';
-import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { Trash2, Loader2, Pencil, Search, ArrowUp, ArrowDown, FileDown, FileText, Eye, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, X, FileEdit } from 'lucide-react';
 import { getRiwayat, deleteRiwayat, getKegiatan, deleteKegiatan, previewHarian, generatePdfRhk, type GetRiwayatOutputType, type GetKegiatanOutputType } from 'zitejs/api';
 import { toast } from 'sonner';
 import PelaporSelect from '@/components/PelaporSelect';
@@ -38,6 +38,7 @@ interface EditItem {
   id: string;
   waktuMulai: string;
   waktuSelesai: string;
+  kataKunci?: string;
   deskripsi: string;
   rhk: string;
   photos: string[];
@@ -142,10 +143,13 @@ export default function RiwayatPage() {
 
     // 3. Ambil data kegiatan dari database untuk merekonstruksi HTML laporan secara akurat
     const targetTanggal = r.tanggalMulai || today;
+    const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
     const kegData = await getKegiatan({
       tanggalMulai: targetTanggal,
       tanggalSelesai: r.tanggalSelesai || targetTanggal,
       namaPelapor: r.namaPelapor && r.namaPelapor !== 'Semua Pelapor' ? r.namaPelapor : undefined,
+      cpanelUrl,
+      cpanelKey,
     });
 
     if (kegData.records.length === 0) {
@@ -256,11 +260,14 @@ export default function RiwayatPage() {
 
       // Ambil ringkasan kegiatan langsung dari database server cPanel MySQL
       // (summaryOnly: true agar transfer data super cepat & ringan)
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const kegiatanData = await getKegiatan({
         namaPelapor: filterPelapor !== 'Semua Pelapor' ? filterPelapor : undefined,
         tanggalMulai: filterTanggalMulai || undefined,
         tanggalSelesai: filterTanggalSelesai || undefined,
         summaryOnly: true,
+        cpanelUrl,
+        cpanelKey,
       });
 
       const validKegiatan = kegiatanData.records || [];
@@ -489,18 +496,25 @@ export default function RiwayatPage() {
     setEditRecord(record);
     setLoadingEdit(true);
     try {
+      const { url: cpanelUrl, key: cpanelKey } = getCpanelConfig();
       const data = await getKegiatan({
         tanggalMulai: record.tanggalMulai || undefined,
         tanggalSelesai: record.tanggalSelesai || record.tanggalMulai || undefined,
         namaPelapor: record.namaPelapor && record.namaPelapor !== 'Semua Pelapor' ? record.namaPelapor : undefined,
+        summaryOnly: false,
+        cpanelUrl,
+        cpanelKey,
       });
       setEditItems(data.records.map(r => ({
         id: r.id,
         waktuMulai: r.waktuMulai || '',
         waktuSelesai: r.waktuSelesai || '',
+        kataKunci: r.kataKunciKegiatan || '',
         deskripsi: r.deskripsiKegiatan || '',
         rhk: r.rhkKategori || '',
-        photos: (r.fotoKegiatan || []).map(f => f.url),
+        photos: (r.fotoKegiatan || [])
+          .map(f => (typeof f === 'string' ? f : f?.url || ''))
+          .filter(Boolean),
       })));
     } catch {
       toast.error('Gagal memuat kegiatan');
@@ -516,6 +530,41 @@ export default function RiwayatPage() {
     ));
   };
 
+  const removeEditPhoto = (itemId: string, photoIdx: number) => {
+    setEditItems(prev => prev.map(item =>
+      item.id === itemId
+        ? { ...item, photos: item.photos.filter((_, idx) => idx !== photoIdx) }
+        : item
+    ));
+  };
+
+  const handleOpenInEditMode = () => {
+    if (!editRecord) return;
+    if (editItems.length === 0) return toast.error('Tidak ada kegiatan');
+
+    const payload = {
+      mode: 'edit',
+      originTanggal: editRecord.tanggalMulai || '',
+      originNamaPelapor: editRecord.namaPelapor || '',
+      originRecordId: editRecord.id,
+      originIds: editItems.map(i => i.id),
+      items: editItems.map(item => ({
+        id: item.id,
+        waktuMulai: item.waktuMulai,
+        waktuSelesai: item.waktuSelesai,
+        kataKunci: item.kataKunci || '',
+        deskripsi: item.deskripsi,
+        rhk: item.rhk,
+        photos: item.photos,
+      })),
+    };
+
+    sessionStorage.setItem('__copiedKegiatan', JSON.stringify(payload));
+    toast.success(`Membuka ${editItems.length} kegiatan dalam Mode Edit — perubahan yang disimpan akan menggantikan laporan lama (${editRecord.tanggalMulai})`);
+    setEditRecord(null);
+    navigate('/kegiatan-harian');
+  };
+
   const handleSaveAsCopy = () => {
     if (editItems.length === 0) return toast.error('Tidak ada kegiatan');
 
@@ -523,7 +572,7 @@ export default function RiwayatPage() {
       id: crypto.randomUUID(),
       waktuMulai: item.waktuMulai,
       waktuSelesai: item.waktuSelesai,
-      kataKunci: '',
+      kataKunci: item.kataKunci || '',
       deskripsi: item.deskripsi,
       rhk: item.rhk,
       photos: item.photos,
@@ -531,7 +580,7 @@ export default function RiwayatPage() {
     }));
 
     sessionStorage.setItem('__copiedKegiatan', JSON.stringify(items));
-    toast.success(`${items.length} kegiatan disalin ke Input Kegiatan — silakan ganti pelapor & upload foto baru`);
+    toast.success(`${items.length} kegiatan disalin ke Input Kegiatan sebagai laporan baru`);
     setEditRecord(null);
     navigate('/kegiatan-harian');
   };
@@ -935,7 +984,7 @@ export default function RiwayatPage() {
           <DialogHeader>
             <DialogTitle>Edit & Salin Kegiatan</DialogTitle>
             <p className="text-sm text-muted-foreground">
-              Edit kegiatan dari tanggal ini lalu salin ke Form Input untuk kebutuhan modifikasi atau pelaporan baru.
+              Buka laporan ini di halaman Input Kegiatan untuk mengganti teks, urutan, atau foto dokumentasi secara penuh, atau salin sebagai laporan baru.
             </p>
           </DialogHeader>
 
@@ -947,55 +996,89 @@ export default function RiwayatPage() {
             <p className="text-center text-muted-foreground py-8">Tidak ada kegiatan ditemukan untuk file ini</p>
           ) : (
             <div className="space-y-4 py-2">
-              {editItems.map((item, i) => (
-                <div key={item.id} className="border rounded-lg p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground">#{i + 1}</span>
-                    <span className="text-xs text-muted-foreground">{item.waktuMulai} - {item.waktuSelesai}</span>
-                    {item.rhk && <Badge variant="outline" className="text-[10px]">{item.rhk}</Badge>}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Mulai</Label>
-                      <Input value={item.waktuMulai} onChange={e => updateEditItem(item.id, 'waktuMulai', e.target.value)} className="h-8 text-sm" />
+              {editItems.map((item, i) => {
+                const canModifyPhotos = isSuperAdmin || isRecordOwnedByUser(user, editRecord?.namaPelapor);
+                return (
+                  <div key={item.id} className="border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground">#{i + 1}</span>
+                      <span className="text-xs text-muted-foreground">{item.waktuMulai} - {item.waktuSelesai}</span>
+                      {item.rhk && <Badge variant="outline" className="text-[10px]">{item.rhk}</Badge>}
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Selesai</Label>
-                      <Input value={item.waktuSelesai} onChange={e => updateEditItem(item.id, 'waktuSelesai', e.target.value)} className="h-8 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">RHK</Label>
-                      <Input value={item.rhk} onChange={e => updateEditItem(item.id, 'rhk', e.target.value)} className="h-8 text-sm" />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Deskripsi</Label>
-                    <Textarea
-                      rows={2}
-                      value={item.deskripsi}
-                      onChange={e => updateEditItem(item.id, 'deskripsi', e.target.value)}
-                      className="text-sm"
-                    />
-                  </div>
-                  {item.photos.length > 0 && (
-                    <div className="space-y-1">
-                      <Label className="text-xs">Foto ({item.photos.length})</Label>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {item.photos.map((url, pi) => (
-                          <img key={pi} src={url} alt={`Foto ${pi + 1}`} className="w-16 h-16 object-cover rounded border shrink-0" />
-                        ))}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Mulai</Label>
+                        <Input value={item.waktuMulai} onChange={e => updateEditItem(item.id, 'waktuMulai', e.target.value)} className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Selesai</Label>
+                        <Input value={item.waktuSelesai} onChange={e => updateEditItem(item.id, 'waktuSelesai', e.target.value)} className="h-8 text-sm" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">RHK</Label>
+                        <Input value={item.rhk} onChange={e => updateEditItem(item.id, 'rhk', e.target.value)} className="h-8 text-sm" />
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <div className="space-y-1">
+                      <Label className="text-xs">Deskripsi</Label>
+                      <Textarea
+                        rows={2}
+                        value={item.deskripsi}
+                        onChange={e => updateEditItem(item.id, 'deskripsi', e.target.value)}
+                        className="text-sm"
+                      />
+                    </div>
+                    {item.photos.length > 0 && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Foto ({item.photos.length})</Label>
+                        <div className="flex gap-2 overflow-x-auto pb-1">
+                          {item.photos.map((url, pi) => (
+                            <div key={pi} className="relative shrink-0 group">
+                              <img src={url} alt={`Foto ${pi + 1}`} className="w-16 h-16 object-cover rounded border" />
+                              {canModifyPhotos && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeEditPhoto(item.id, pi)}
+                                  title="Hapus foto ini"
+                                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center shadow hover:bg-destructive/90"
+                                >
+                                  <X size={11} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setEditRecord(null)}>Tutup</Button>
-                <Button onClick={handleSaveAsCopy} className="bg-primary text-primary-foreground">
-                  Salin ke Input Kegiatan
-                </Button>
-              </div>
+              {(() => {
+                const canReplaceEdit =
+                  editRecord?.jenisLaporan === 'Kinerja Harian' &&
+                  (isSuperAdmin || isRecordOwnedByUser(user, editRecord?.namaPelapor));
+                return (
+                  <div className="flex flex-wrap justify-end gap-2 pt-2 border-t">
+                    <Button variant="outline" onClick={() => setEditRecord(null)}>Tutup</Button>
+                    {canReplaceEdit ? (
+                      <>
+                        <Button variant="secondary" onClick={handleSaveAsCopy}>
+                          Salin Sebagai Laporan Baru
+                        </Button>
+                        <Button onClick={handleOpenInEditMode} className="bg-primary text-primary-foreground gap-1.5">
+                          <FileEdit size={15} />
+                          Edit & Perbarui Laporan Ini
+                        </Button>
+                      </>
+                    ) : (
+                      <Button onClick={handleSaveAsCopy} className="bg-primary text-primary-foreground">
+                        Salin ke Input Kegiatan
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </DialogContent>

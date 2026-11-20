@@ -245,6 +245,21 @@ export default createEndpoint({
     });
 
     const formatLabel = isWord ? 'WORD' : 'PDF';
+    try {
+      const { records: existingRiw } = await zite.riwayatFile.findAll({
+        filters: { namaPelapor: input.namaPelapor },
+        limit: 200,
+      });
+      for (const r of existingRiw) {
+        if (
+          r.jenisLaporan === 'Kinerja Harian' &&
+          (r.tanggalMulai === input.tanggal || r.tanggalSelesai === input.tanggal)
+        ) {
+          await zite.riwayatFile.delete({ id: r.id }).catch(() => {});
+        }
+      }
+    } catch {}
+
     const riwayat = await zite.riwayatFile.create({
       record: {
         namaFile: `Kinerja Harian - ${dateFormatted} - ${input.namaPelapor} (${formatLabel})`,

@@ -3,19 +3,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@project/components/ui
 import { Input } from '@project/components/ui/input';
 import { Button } from '@project/components/ui/button';
 import { Label } from '@project/components/ui/label';
-import { Plus, Upload, X, Eye, Save, Loader2, ArrowUp, ArrowDown, PlusCircle, FileDown } from 'lucide-react';
+import { Plus, Upload, X, Eye, Save, Loader2, PlusCircle, FileDown, Edit3 } from 'lucide-react';
 import { saveBulkKegiatan, previewHarian, generatePdfHarian, getKegiatan } from 'zitejs/api';
 import { uploadFile } from 'zitejs/upload';
 import { toast } from 'sonner';
 import KegiatanForm, { KegiatanItem } from '@/components/KegiatanForm';
 import PreviewDialog from '@/components/PreviewDialog';
 import PelaporSelect from '@/components/PelaporSelect';
-import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, syncServerPresets } from '@/lib/pelapor-data';
+import { DEFAULT_PELAPOR, getSavedTtd, getSavedTtdAsync, saveTtd, removeTtd, matchPelapor, findPelaporByNama } from '@/lib/pelapor-data';
 import { downloadPdfFromHtml, downloadWordFromHtml } from '@/lib/download-helper';
 
 import { useAuth } from '@/lib/auth-context';
 import { compressSignature } from '@/lib/compress-image';
 import { setAppDeletedAll } from '@/lib/cpanel-client';
+
+interface EditContext {
+  originTanggal: string;
+  originNamaPelapor: string;
+  originRecordId?: string;
+  originIds: string[];
+}
 
 function createKegiatan(): KegiatanItem {
   return { id: crypto.randomUUID(), waktuMulai: '', waktuSelesai: '', kataKunci: '', deskripsi: '', rhk: '', photos: [] };
@@ -44,8 +51,11 @@ export default function KegiatanHarianPage() {
   const [kegiatanList, setKegiatanList] = useState<KegiatanItem[]>(() =>
     Array.from({ length: 4 }, createKegiatan)
   );
+  const [editContext, setEditContext] = useState<EditContext | null>(null);
+  const editContextRef = useRef<EditContext | null>(null);
 
   useEffect(() => {
+    if (editContextRef.current) return;
     if (user) {
       const matched = matchPelapor(user.nama) || matchPelapor(user.username);
       if (matched) {
@@ -80,20 +90,55 @@ export default function KegiatanHarianPage() {
   const [quickPdf, setQuickPdf] = useState(false);
   const ttdRef = useRef<HTMLInputElement>(null);
 
-  // Pick up copied kegiatan from Daftar Kegiatan or Riwayat
+  // Pick up copied kegiatan from Daftar Kegiatan or Riwayat (including Edit & Replace mode)
   useEffect(() => {
     const stored = sessionStorage.getItem('__copiedKegiatan');
     if (stored) {
       try {
-        const items = JSON.parse(stored) as KegiatanItem[];
-        if (items.length > 0) {
-          setKegiatanList(items);
-          toast.success(`${items.length} kegiatan berhasil dimuat`);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          editContextRef.current = null;
+          setEditContext(null);
+          setKegiatanList(parsed as KegiatanItem[]);
+          toast.success(`${parsed.length} kegiatan berhasil dimuat`);
+        } else if (parsed && parsed.mode === 'edit' && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          const ctx: EditContext = {
+            originTanggal: parsed.originTanggal || today,
+            originNamaPelapor: parsed.originNamaPelapor || initialNama,
+            originRecordId: parsed.originRecordId,
+            originIds: Array.isArray(parsed.originIds) ? parsed.originIds : parsed.items.map((i: any) => i.id).filter(Boolean),
+          };
+          editContextRef.current = ctx;
+          setEditContext(ctx);
+          setTanggal(ctx.originTanggal);
+          setNamaPelapor(ctx.originNamaPelapor);
+          const matchedPel = findPelaporByNama(ctx.originNamaPelapor) || matchPelapor(ctx.originNamaPelapor);
+          if (matchedPel?.nip) setNip(matchedPel.nip);
+          const localTtd = getSavedTtd(ctx.originNamaPelapor);
+          setTandaTangan(localTtd || null);
+          if (!localTtd) {
+            getSavedTtdAsync(ctx.originNamaPelapor).then(t => {
+              if (t) setTandaTangan(t);
+            });
+          }
+          setKegiatanList(parsed.items as KegiatanItem[]);
+          toast.info(`Mode Edit Laporan (${ctx.originTanggal} — ${ctx.originNamaPelapor}) aktif. Ubah kegiatan/foto lalu klik Simpan.`);
         }
       } catch { /* ignore */ }
       sessionStorage.removeItem('__copiedKegiatan');
     }
   }, []);
+
+  const cancelEditMode = () => {
+    editContextRef.current = null;
+    setEditContext(null);
+    setKegiatanList(prev => prev.map(k => ({
+      ...k,
+      id: crypto.randomUUID(),
+      copiedPhotoUrls: k.photos.length > 0 ? [...k.photos] : undefined,
+    })));
+    toast.info('Mode Edit dibatalkan — disimpan sebagai laporan baru');
+  };
 
   const handlePelaporChange = async (nama: string, nipVal: string) => {
     setNamaPelapor(nama);
@@ -244,6 +289,8 @@ export default function KegiatanHarianPage() {
         urutan: idx,
       }));
 
+      const activeEditCtx = editContextRef.current || editContext;
+
       // 1. Simpan ke database MySQL & upload/duplikasi foto ke File Manager cPanel (uploads/YYYY/MM/...)
       const saveRes = await saveBulkKegiatan({
         namaPelapor,
@@ -252,6 +299,10 @@ export default function KegiatanHarianPage() {
         tandaTangan: effectiveTtd || undefined,
         cpanelUrl,
         cpanelKey,
+        replaceExisting: Boolean(activeEditCtx),
+        replaceOriginTanggal: activeEditCtx?.originTanggal,
+        replaceOriginNamaPelapor: activeEditCtx?.originNamaPelapor,
+        replaceOriginIds: activeEditCtx?.originIds,
         kegiatan: payloadKegiatan,
       });
 
@@ -261,6 +312,15 @@ export default function KegiatanHarianPage() {
 
       setAppDeletedAll(false);
 
+      // Bersihkan cache sesi agar halaman Riwayat & Daftar Kegiatan langsung memuat versi terbaru
+      try {
+        Object.keys(sessionStorage).forEach(k => {
+          if (k.startsWith('__cache_riwayat_') || k.startsWith('__cache_keg_')) {
+            sessionStorage.removeItem(k);
+          }
+        });
+      } catch {}
+
       const savedMap = new Map<string, string[]>();
       if (Array.isArray(saveRes.savedItems)) {
         for (const si of saveRes.savedItems) {
@@ -268,16 +328,18 @@ export default function KegiatanHarianPage() {
         }
       }
 
-      // 2. Ambil data tersimpan dari cPanel agar mendapatkan URL foto File Manager (https://.../uploads/...)
+      // 2. Ambil data tersimpan dari savedItems terlebih dahulu (presisi 1:1 per ID, termasuk jika semua foto dihapus menjadi [])
       let updatedList = preparedList.map((localItem) => {
         const clonedOrSavedUrls = savedMap.get(localItem.id);
         return {
           ...localItem,
-          photos: clonedOrSavedUrls && clonedOrSavedUrls.length > 0 ? clonedOrSavedUrls : localItem.photos,
+          photos: clonedOrSavedUrls !== undefined ? clonedOrSavedUrls : localItem.photos,
           copiedPhotoUrls: undefined,
         };
       });
 
+      // Verifikasi ulang dari server HANYA mencocokkan berdasarkan exact ID (r.id === localItem.id),
+      // JANGAN pernah mencocokkan berdasarkan waktuMulai/waktuSelesai agar baris lama tidak menimpa foto baru
       try {
         const kegData = await getKegiatan({
           tanggalMulai: tanggal,
@@ -288,25 +350,35 @@ export default function KegiatanHarianPage() {
         });
 
         if (kegData && Array.isArray(kegData.records) && kegData.records.length > 0) {
+          const serverById = new Map<string, any>();
+          for (const rec of kegData.records) {
+            if (rec?.id) serverById.set(String(rec.id), rec);
+          }
+
           updatedList = updatedList.map((localItem) => {
-            const matched = kegData.records.find(
-              (r: any) =>
-                r.id === localItem.id ||
-                (r.waktuMulai === localItem.waktuMulai &&
-                  (r.deskripsiKegiatan === localItem.deskripsi || r.waktuSelesai === localItem.waktuSelesai))
-            );
-            if (matched && matched.fotoKegiatan && matched.fotoKegiatan.length > 0) {
-              const urls = matched.fotoKegiatan
+            const matched = serverById.get(String(localItem.id));
+            if (matched) {
+              const urls = (matched.fotoKegiatan || [])
                 .map((p: any) => (typeof p === 'string' ? p : p?.url || ''))
                 .filter((u: string) => Boolean(u && u.startsWith('http')));
-              if (urls.length > 0) {
-                return { ...localItem, photos: urls, copiedPhotoUrls: undefined };
-              }
+              return { ...localItem, photos: urls, copiedPhotoUrls: undefined };
             }
             return localItem;
           });
         }
       } catch { /* fallback ke savedItems */ }
+
+      // Jika sedang dalam Mode Edit, perbarui editContext dengan ID & tanggal/pelapor terbaru agar penyimpanan/cetak ulang berikutnya tetap konsisten menggantikan versi ini
+      if (activeEditCtx) {
+        const nextCtx: EditContext = {
+          originTanggal: tanggal,
+          originNamaPelapor: namaPelapor,
+          originRecordId: activeEditCtx.originRecordId,
+          originIds: updatedList.map(u => u.id),
+        };
+        editContextRef.current = nextCtx;
+        setEditContext(nextCtx);
+      }
 
       // Update state form agar memegang URL foto File Manager yang baru & berdiri sendiri
       setKegiatanList((prev) =>
@@ -328,13 +400,21 @@ export default function KegiatanHarianPage() {
     if (filled.length === 0) return toast.error('Isi minimal 1 kegiatan lengkap');
     setSaving(true);
     try {
+      const isEditReplace = Boolean(editContextRef.current || editContext);
       const totalPhotos = filled.reduce((acc, k) => acc + (k.photos?.length || 0), 0);
-      toast.info(`Menyimpan kegiatan & mengunggah ${totalPhotos} foto ke File Manager cPanel...`, { duration: 2500 });
+      toast.info(
+        isEditReplace
+          ? `Memperbarui laporan & mengganti ${totalPhotos} foto dokumentasi terbaru ke cPanel...`
+          : `Menyimpan kegiatan & mengunggah ${totalPhotos} foto ke File Manager cPanel...`,
+        { duration: 2500 }
+      );
 
       const updated = await syncKegiatanToCpanelAndGetUrls(filled);
 
       toast.success(
-        `${updated.length} kegiatan & foto dokumentasi berhasil tersimpan di File Manager cPanel dan database!`,
+        isEditReplace
+          ? `Laporan berhasil diperbarui! ${updated.length} kegiatan & foto dokumentasi terbaru menggantikan data lama.`
+          : `${updated.length} kegiatan & foto dokumentasi berhasil tersimpan di File Manager cPanel dan database!`,
         { duration: 4000 }
       );
     } catch (err: any) {
@@ -481,10 +561,34 @@ export default function KegiatanHarianPage() {
           </Button>
           <Button onClick={handleSaveAll} disabled={saving} size="sm" className="gap-2">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            Simpan Semua
+            {editContext ? 'Simpan Perubahan' : 'Simpan Semua'}
           </Button>
         </div>
       </div>
+
+      {editContext && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5 text-sm">
+            <Edit3 size={18} className="text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Mode Edit & Perbarui Laporan Aktif</p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Anda sedang mengedit laporan tanggal <strong>{editContext.originTanggal}</strong> ({editContext.originNamaPelapor}).
+                Saat Anda menekan <strong>Simpan Perubahan</strong> atau <strong>Cetak PDF</strong>, seluruh data, urutan, dan foto lama akan digantikan dengan versi terbaru ini.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={cancelEditMode}
+            className="shrink-0 border-amber-400 bg-white hover:bg-amber-100 text-amber-950 text-xs"
+          >
+            Batal Mode Edit
+          </Button>
+        </div>
+      )}
 
       {/* Identity Card */}
       <Card>
@@ -574,7 +678,7 @@ export default function KegiatanHarianPage() {
         </Button>
         <Button onClick={handleSaveAll} disabled={saving} className="flex-1 gap-2 h-12 min-w-[140px]">
           {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          Simpan ({getFilledKegiatan().length})
+          {editContext ? `Simpan Perubahan (${getFilledKegiatan().length})` : `Simpan (${getFilledKegiatan().length})`}
         </Button>
       </div>
 
